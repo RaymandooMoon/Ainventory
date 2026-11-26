@@ -79,25 +79,55 @@ export function scheduleIdleTask(task: () => void, timeoutMs = 600): () => void 
 
 /**
  * Defers heavy setup (e.g. WebGL context creation, shader compilation, PMREM lighting)
- * until after the browser commits its first DOM paint frame.
+ * until after the browser commits its first DOM paint frame, with a 120ms timer safety
+ * net so iOS Safari Low Power Mode or throttled embedded iframes never stall boot.
  */
 export function scheduleAfterFirstPaint(task: () => void): () => void {
   if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
     const timer = setTimeout(task, 16);
     return () => clearTimeout(timer);
   }
-  let cancelled = false;
+  let done = false;
+  let raf1 = 0;
   let raf2 = 0;
-  const raf1 = window.requestAnimationFrame(() => {
-    if (cancelled) return;
+  let fallbackTimer = 0;
+
+  const cleanup = () => {
+    if (raf1) {
+      window.cancelAnimationFrame(raf1);
+      raf1 = 0;
+    }
+    if (raf2) {
+      window.cancelAnimationFrame(raf2);
+      raf2 = 0;
+    }
+    if (fallbackTimer) {
+      window.clearTimeout(fallbackTimer);
+      fallbackTimer = 0;
+    }
+  };
+
+  const runOnce = () => {
+    if (done) return;
+    done = true;
+    cleanup();
+    task();
+  };
+
+  raf1 = window.requestAnimationFrame(() => {
+    raf1 = 0;
+    if (done) return;
     raf2 = window.requestAnimationFrame(() => {
-      if (!cancelled) task();
+      raf2 = 0;
+      runOnce();
     });
   });
+
+  fallbackTimer = window.setTimeout(runOnce, 120);
+
   return () => {
-    cancelled = true;
-    window.cancelAnimationFrame(raf1);
-    if (raf2) window.cancelAnimationFrame(raf2);
+    done = true;
+    cleanup();
   };
 }
 

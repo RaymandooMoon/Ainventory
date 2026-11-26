@@ -671,11 +671,16 @@ export default function App() {
       ) {
         window.history.pushState({}, '', target.path);
       }
-      if (isEmbedMode && typeof window !== 'undefined' && window.parent !== window) {
+      if (
+        isEmbedMode &&
+        typeof window !== 'undefined' &&
+        window.parent !== window &&
+        target.key !== 'admin'
+      ) {
         window.parent.postMessage(
           {
             type: 'ainvtry-live-app-screen',
-            screen: target.key === 'calendar' || target.key === 'admin' ? 'outfits' : target.key,
+            screen: target.key,
           },
           window.location.origin
         );
@@ -738,6 +743,7 @@ export default function App() {
         } else if (
           detail.screen === 'outfits' ||
           detail.screen === 'closet' ||
+          detail.screen === 'calendar' ||
           detail.screen === 'stats'
         ) {
           setProfileModalOpen(false);

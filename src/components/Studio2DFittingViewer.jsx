@@ -117,6 +117,7 @@ import {
 import { computeVtonStageProgress } from '../utils/vtonStageProgress.ts';
 import { STYLING_DENSITY_OPTIONS } from '../services/stylingPreferenceStore.ts';
 import { buildOutfitRationaleNote } from '../utils/outfitRationaleEngine.ts';
+import { isIosSafariRuntime } from '../utils/iosSafariCompat.ts';
 import {
   scheduleAfterFirstPaint,
   staggeredImagePreload,
@@ -858,11 +859,27 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const pan = useMemo(() => ({ x: 0, y: 0 }), []);
   const [threeStageAvailable, setThreeStageAvailable] = useState(false);
   const [threeStageMountReady, setThreeStageMountReady] = useState(false);
+  const [embedVisible, setEmbedVisible] = useState(() =>
+    typeof window !== 'undefined' ? window.__AINVTRY_EMBED_VISIBLE__ !== false : true
+  );
 
   useEffect(() => {
     return scheduleAfterFirstPaint(() => {
       setThreeStageMountReady(true);
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onEmbedVisibility = (event) => {
+      const visible = event?.detail?.visible !== false;
+      setEmbedVisible(visible);
+      if (!visible && isIosSafariRuntime()) {
+        setThreeStageAvailable(false);
+      }
+    };
+    window.addEventListener('ainvtry:embed-visibility', onEmbedVisibility);
+    return () => window.removeEventListener('ainvtry:embed-visibility', onEmbedVisibility);
   }, []);
   const [floorPlacement, setFloorPlacement] = useState(() => ({
     effectiveBaseScale: 1,
@@ -3447,6 +3464,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
       {/* Layer 1B (z-12): Hybrid Three.js Spatial Lighting, Single GLSL Silhouette Cast Shadow + Contact AO & Volumetric Weather (Lazy-loaded after first paint) */}
       {threeStageMountReady &&
+        (embedVisible || !isIosSafariRuntime()) &&
         Boolean(resolvedAiImageUrl) &&
         stageMode === 'ai-vton' &&
         !canReturnToCharacter && (
@@ -3458,7 +3476,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               auraTier={resolvedBgItem?.tier || auraTier}
               theme={resolvedTheme}
               angleScrollDeg={angleScrollDeg}
-              paused={false}
+              paused={!embedVisible}
               hasCharacter={true}
               stageBackgroundId={resolvedBgItem.id}
               weather={weather}
@@ -4280,6 +4298,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   <StudioGarmentImage
                     item={layer.garment}
                     alt={displayGarmentName}
+                    eager
                     allowStorePhoto={Boolean(
                       layer.garment.image_url &&
                         (layer.garment.image_url.startsWith('data:') ||

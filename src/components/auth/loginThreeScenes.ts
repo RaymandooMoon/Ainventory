@@ -8,6 +8,7 @@ import {
   sampleDisplayRefreshHz,
   shouldCommitFrame,
 } from '../../utils/adaptiveFramePacer.ts';
+import { isIosSafariRuntime } from '../../utils/iosSafariCompat.ts';
 
 import {
   DEFAULT_LOGIN_THREE_VARIANT,
@@ -1038,13 +1039,14 @@ export function createLoginThreeController(
     onOverlayContextRestored,
   } = options;
   let reducedMotion = Boolean(options.reducedMotion);
+  const isIosSafari = isIosSafariRuntime();
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
       alpha: false,
-      powerPreference: 'high-performance',
+      powerPreference: isIosSafari ? 'default' : 'high-performance',
       preserveDrawingBuffer: false,
     });
   } catch {
@@ -1052,23 +1054,26 @@ export function createLoginThreeController(
   }
 
   const isSoftwareGl = isSoftwareWebGLRenderer(renderer);
-  const maxDpr = isSoftwareGl ? 1.0 : 1.75;
+  const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 1.25 : 1.75;
+  const backdropScale = isIosSafari ? 0.65 : 1.0;
   const initialDpr = Math.min(window.devicePixelRatio || 1, maxDpr);
   renderer.setPixelRatio(initialDpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
 
-  const useHalfFloat = !isSoftwareGl && supportsHalfFloatRenderTarget(renderer);
+  // On iOS Safari Metal/ANGLE, UnsignedByte encoded wave FBO halves VRAM and avoids HalfFloat linear-filter quirks
+  const useHalfFloat = !isSoftwareGl && !isIosSafari && supportsHalfFloatRenderTarget(renderer);
   const rtType = useHalfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType;
   const encodedByte = useHalfFloat ? 0.0 : 1.0;
 
   const initialW = Math.max(2, canvas.clientWidth || window.innerWidth || 1280);
   const initialH = Math.max(2, canvas.clientHeight || window.innerHeight || 720);
   const getSimDims = (w: number, h: number) => {
-    const scale = isSoftwareGl ? 0.28 : 0.44;
+    const scale = isSoftwareGl ? 0.28 : isIosSafari ? 0.32 : 0.44;
+    const maxDim = isSoftwareGl ? 256 : isIosSafari ? 288 : 460;
     return {
-      sw: clamp(Math.round(w * scale), 192, isSoftwareGl ? 256 : 460),
-      sh: clamp(Math.round(h * scale), 192, isSoftwareGl ? 256 : 460),
+      sw: clamp(Math.round(w * scale), 192, maxDim),
+      sh: clamp(Math.round(h * scale), 192, maxDim),
     };
   };
 
@@ -1091,8 +1096,8 @@ export function createLoginThreeController(
 
   // Live silk backdrop render target for real-time glass marble refraction
   const backdropRT = new THREE.WebGLRenderTarget(
-    Math.max(2, Math.round(initialW * initialDpr)),
-    Math.max(2, Math.round(initialH * initialDpr)),
+    Math.max(2, Math.round(initialW * initialDpr * backdropScale)),
+    Math.max(2, Math.round(initialH * initialDpr * backdropScale)),
     {
       type: THREE.UnsignedByteType,
       format: THREE.RGBAFormat,
@@ -1154,7 +1159,7 @@ export function createLoginThreeController(
   const clothCam = new THREE.PerspectiveCamera(42, initialW / initialH, 0.1, 40);
   clothCam.position.set(0, 0, 7.6);
 
-  const meshSegs = isSoftwareGl ? 52 : 120;
+  const meshSegs = isSoftwareGl ? 52 : isIosSafari ? 68 : 120;
   const clothGeo = new THREE.PlaneGeometry(20.0, 18.0, meshSegs, meshSegs);
   const initVarNum = options.initialVariant === 'aurora' ? 1 : 0;
 
@@ -1469,8 +1474,10 @@ export function createLoginThreeController(
     marbleCam.bottom = -1;
     marbleCam.updateProjectionMatrix();
 
-    const bw = Math.max(2, Math.round(width * dpr));
-    const bh = Math.max(2, Math.round(height * dpr));
+    const fbW = Math.max(2, Math.round(width * dpr));
+    const fbH = Math.max(2, Math.round(height * dpr));
+    const bw = Math.max(2, Math.round(fbW * backdropScale));
+    const bh = Math.max(2, Math.round(fbH * backdropScale));
     backdropRT.setSize(bw, bh);
 
     simMat.uniforms.uAspect.value = aspect;
@@ -1478,7 +1485,7 @@ export function createLoginThreeController(
     clothMat.uniforms.uMarbleRadius.value = marbleR;
     marbleMat.uniforms.uAspect.value = aspect;
     marbleMat.uniforms.uMarbleRadius.value = marbleR;
-    (marbleMat.uniforms.uResolution.value as THREE.Vector2).set(bw, bh);
+    (marbleMat.uniforms.uResolution.value as THREE.Vector2).set(fbW, fbH);
 
     // Keep marble cleanly inside resized viewport bounds (respecting optional floor/edge insets)
     const padX = marbleR * 2.35;

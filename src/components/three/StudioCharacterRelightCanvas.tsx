@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { isIosSafariRuntime } from '../../utils/iosSafariCompat.ts';
 import type { StageLightingFrame } from '../../utils/stageLightingEngine.ts';
 import {
   MORPH_FLOW_H,
@@ -733,14 +734,15 @@ export default function StudioCharacterRelightCanvas({
     if (!mount || typeof window === 'undefined') return;
 
     const isSoftwareGl = detectSoftwareWebGl();
+    const isIosSafari = isIosSafariRuntime();
     let renderer: THREE.WebGLRenderer | null = null;
     try {
       renderer = new THREE.WebGLRenderer({
         alpha: true,
-        antialias: !isSoftwareGl,
+        antialias: !isSoftwareGl && !isIosSafari,
         premultipliedAlpha: false,
-        powerPreference: 'high-performance',
-        preserveDrawingBuffer: false,
+        powerPreference: isIosSafari ? 'default' : 'high-performance',
+        preserveDrawingBuffer: true,
       });
     } catch {
       onReadyChangeRef.current?.(false);
@@ -750,7 +752,9 @@ export default function StudioCharacterRelightCanvas({
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(
+      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, isIosSafari ? 1.35 : 2)
+    );
 
     const canvas = renderer.domElement;
     canvas.className = 'studio-character-relight-webgl-canvas';
@@ -848,7 +852,10 @@ export default function StudioCharacterRelightCanvas({
     let smoothedExternalYawDeg = 0;
 
     let frameId = 0;
+    let rafFallbackId = 0;
     let timeoutId = 0;
+    let lastCssW = 0;
+    let lastCssH = 0;
     let renderBusy = false;
     let renderDirty = false;
     let lastTickMs = performance.now();
@@ -985,12 +992,18 @@ export default function StudioCharacterRelightCanvas({
       const rect = mount.getBoundingClientRect();
       const cssW = Math.max(2, Math.round(propsRef.current.widthPx || rect.width || 320));
       const cssH = Math.max(2, Math.round(propsRef.current.heightPx || rect.height || 480));
+      if (cssW === lastCssW && cssH === lastCssH) return;
+      lastCssW = cssW;
+      lastCssH = cssH;
       const aspect = cssW / cssH;
       renderer.setSize(cssW, cssH, false);
       camera.aspect = aspect;
       camera.updateProjectionMatrix();
       material.uniforms.uPlaneWidth.value = aspect;
       material.uniforms.uPlaneAspect.value = aspect;
+      if (hasReadyTexture && !contextLost) {
+        drawFrame(performance.now());
+      }
     };
 
     const applyLightingUniforms = () => {
@@ -1051,8 +1064,7 @@ export default function StudioCharacterRelightCanvas({
         if (isPrimary) {
           fallbackEntry = cached;
           if (!hasReadyTexture) {
-            hasReadyTexture = true;
-            onReadyChangeRef.current?.(true);
+            drawFrame(performance.now());
           }
           requestRender();
         }
@@ -1099,8 +1111,9 @@ export default function StudioCharacterRelightCanvas({
         if (propsRef.current.imageUrl === url || !fallbackEntry) {
           fallbackEntry = entry;
           if (!hasReadyTexture) {
-            hasReadyTexture = true;
-            onReadyChangeRef.current?.(true);
+            // Paint the first relit WebGL frame immediately before signaling ready to hide the 2D <img>
+            // so throttled rAF on iOS Safari iframes / Low Power Mode never leaves a blank stage.
+            drawFrame(performance.now());
           }
         }
         scheduleAdjacentPairPrewarm();
@@ -1147,10 +1160,11 @@ export default function StudioCharacterRelightCanvas({
       if (gl && typeof gl.fenceSync === 'function') {
         const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
         gl.flush();
+        const deadlineMs = performance.now() + 180;
         const poll = () => {
           if (disposed) return;
           const state = sync ? gl.getSyncParameter(sync, gl.SYNC_STATUS) : gl.SIGNALED;
-          if (state === gl.UNSIGNALED) {
+          if (state === gl.UNSIGNALED && performance.now() < deadlineMs) {
             timeoutId = window.setTimeout(poll, 5);
           } else {
             if (sync) gl.deleteSync(sync);
@@ -1314,6 +1328,11 @@ export default function StudioCharacterRelightCanvas({
 
       renderer.render(scene, camera);
 
+      if (!hasReadyTexture) {
+        hasReadyTexture = true;
+        onReadyChangeRef.current?.(true);
+      }
+
       const extYawMoving = Math.abs(smoothedExternalYawDeg - rawExtYaw) >= 0.04;
       return !angleStep.settled || extYawMoving;
     };
@@ -1325,7 +1344,18 @@ export default function StudioCharacterRelightCanvas({
         return;
       }
       renderBusy = true;
-      frameId = window.requestAnimationFrame((nowMs) => {
+      let fired = false;
+      const executeTick = (nowMs: number) => {
+        if (fired || disposed) return;
+        fired = true;
+        if (frameId) {
+          window.cancelAnimationFrame(frameId);
+          frameId = 0;
+        }
+        if (rafFallbackId) {
+          window.clearTimeout(rafFallbackId);
+          rafFallbackId = 0;
+        }
         renderDirty = false;
         const needsMore = drawFrame(nowMs);
         const done = () => {
@@ -1334,12 +1364,16 @@ export default function StudioCharacterRelightCanvas({
             requestRender();
           }
         };
-        if (isSoftwareGl) {
+        if (isSoftwareGl && hasReadyTexture) {
           afterDraw(done);
         } else {
           done();
         }
-      });
+      };
+      frameId = window.requestAnimationFrame(executeTick);
+      if (isIosSafari) {
+        rafFallbackId = window.setTimeout(() => executeTick(performance.now()), 80);
+      }
     };
 
     const syncScene = () => {
@@ -1359,6 +1393,8 @@ export default function StudioCharacterRelightCanvas({
     };
     const handleContextRestored = () => {
       contextLost = false;
+      lastCssW = 0;
+      lastCssH = 0;
       syncSize();
       syncScene();
     };
@@ -1383,6 +1419,7 @@ export default function StudioCharacterRelightCanvas({
       controllerRef.current = null;
       clearPrewarmTimers();
       if (frameId) window.cancelAnimationFrame(frameId);
+      if (rafFallbackId) window.clearTimeout(rafFallbackId);
       if (timeoutId) window.clearTimeout(timeoutId);
       resizeObserver?.disconnect();
       canvas.removeEventListener('webglcontextlost', handleContextLost);

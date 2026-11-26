@@ -24,6 +24,10 @@ import {
   type StageId,
   type StageInteractionState,
 } from '../three/stageTypes.ts';
+import {
+  safeReleasePointerCapture,
+  safeSetPointerCapture,
+} from '../utils/iosSafariCompat.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { scheduleAfterFirstPaint } from '../utils/resourcePriority.ts';
 import LiveAppStageOverlay from './LiveAppStageOverlay.tsx';
@@ -546,7 +550,7 @@ export default function AinvtrySiteApp() {
 
   const handleOpacityPointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
+    safeSetPointerCapture(e.currentTarget, e.pointerId);
     opacityDragRef.current = {
       pointerId: e.pointerId,
       startY: e.clientY,
@@ -575,9 +579,7 @@ export default function AinvtrySiteApp() {
       const drag = opacityDragRef.current;
       if (!drag || drag.pointerId !== e.pointerId) return;
       e.stopPropagation();
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
+      safeReleasePointerCapture(e.currentTarget, e.pointerId);
       const wasTap = drag.moved < 6;
       opacityDragRef.current = null;
       setIsDraggingOpacity(false);
@@ -932,6 +934,7 @@ export default function AinvtrySiteApp() {
                   className={`site-bottombar-link site-bottombar-newsletter ${
                     newsletterOpen ? 'is-active' : ''
                   }`}
+                  aria-label={copy.footer.newsletter}
                   aria-haspopup="dialog"
                   aria-expanded={newsletterOpen}
                   onClick={() => {
@@ -948,6 +951,7 @@ export default function AinvtrySiteApp() {
                 <button
                   type="button"
                   className="site-bottombar-link"
+                  aria-label={copy.footer.privacy}
                   onClick={() => setLegalDoc('privacy')}
                 >
                   <span className="site-bottombar-link-full">{copy.footer.privacy}</span>
@@ -958,6 +962,7 @@ export default function AinvtrySiteApp() {
                 <button
                   type="button"
                   className="site-bottombar-link"
+                  aria-label={copy.footer.terms}
                   onClick={() => setLegalDoc('terms')}
                 >
                   <span className="site-bottombar-link-full">{copy.footer.terms}</span>

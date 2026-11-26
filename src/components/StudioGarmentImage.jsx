@@ -7,6 +7,7 @@ import {
   resolveStudioSeedUrl,
 } from '../shared/garmentTaxonomy.js';
 import { localizeGarmentName } from '../utils/i18n.ts';
+import { supportsCanvasWebpEncode } from '../utils/iosSafariCompat.ts';
 import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import { resolveImageLoadingProps } from '../utils/resourcePriority.ts';
 
@@ -238,9 +239,11 @@ const CUTOUT_PROFILES = [
 ];
 
 function encodeCanvasObjectUrl(canvas) {
+  const mimeType = supportsCanvasWebpEncode() ? 'image/webp' : 'image/png';
+  const quality = mimeType === 'image/webp' ? 0.92 : undefined;
   return new Promise((resolve) => {
     if (typeof canvas.toBlob !== 'function' || typeof URL === 'undefined' || !URL.createObjectURL) {
-      const dataUrl = canvas.toDataURL('image/webp', 0.92);
+      const dataUrl = canvas.toDataURL(mimeType, quality);
       canvas.width = 0;
       canvas.height = 0;
       resolve(dataUrl);
@@ -252,14 +255,14 @@ function encodeCanvasObjectUrl(canvas) {
         if (blob) {
           outUrl = URL.createObjectURL(blob);
         } else {
-          outUrl = canvas.toDataURL('image/webp', 0.92);
+          outUrl = canvas.toDataURL(mimeType, quality);
         }
         canvas.width = 0;
         canvas.height = 0;
         resolve(outUrl);
       },
-      'image/webp',
-      0.92
+      mimeType,
+      quality
     );
   });
 }
@@ -787,11 +790,12 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
     Boolean(displaySrc && (displaySrc.startsWith('data:') || displaySrc.startsWith('blob:')));
 
   useEffect(() => {
+    if (!isNearViewport) return;
     const el = imgRef.current;
     if (el?.complete && el.naturalWidth > 0 && loadedSrc !== displaySrc) {
       setLoadedSrc(displaySrc);
     }
-  }, [displaySrc, loadedSrc]);
+  }, [displaySrc, loadedSrc, isNearViewport]);
 
   return (
     <div
@@ -820,7 +824,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
           ref={imgRef}
           src={displaySrc}
           alt={label}
-          loading={imagePriorityProps.loading}
+          loading="eager"
           decoding={imagePriorityProps.decoding}
           fetchPriority={imagePriorityProps.fetchPriority}
           onLoad={() => setLoadedSrc(displaySrc)}
@@ -837,7 +841,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
             objectFit: 'contain',
             display: 'block',
             opacity: isReady ? 1 : 0,
-            transition: 'opacity 0.28s var(--spring-ease)',
+            transition: eager ? 'none' : 'opacity 0.28s var(--spring-ease)',
             ...imgStyle,
           }}
         />

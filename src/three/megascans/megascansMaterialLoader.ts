@@ -216,18 +216,22 @@ async function decodeImageTexture(
     if (signal.aborted) return null;
 
     if (typeof createImageBitmap === 'function') {
-      const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY' });
-      if (signal.aborted) {
-        bitmap.close();
-        return null;
+      try {
+        const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY' });
+        if (signal.aborted) {
+          bitmap.close();
+          return null;
+        }
+        const tex = new THREE.Texture(bitmap);
+        tex.flipY = false; // Already flipped vertically via createImageBitmap
+        tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+        return tex;
+      } catch {
+        // Older/strict WebKit builds may reject imageOrientation; fall back to HTMLImageElement below
       }
-      const tex = new THREE.Texture(bitmap);
-      tex.flipY = false; // Already flipped vertically via createImageBitmap
-      tex.generateMipmaps = true;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
-      tex.magFilter = THREE.LinearFilter;
-      tex.needsUpdate = true;
-      return tex;
     }
 
     if (typeof Image === 'undefined' || typeof URL === 'undefined') {

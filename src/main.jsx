@@ -1,7 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { applyIosSafariDocumentFlag } from './utils/iosSafariCompat.ts'
 import './index.css'
 import App from './App.jsx'
+
+applyIosSafariDocumentFlag()
 
 // Tier 1 Google Maps Platform quota & auth failure listener
 if (typeof window !== 'undefined') {
