@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>iNVTRY (Ainvtry) — IR 사업계획서 v5.2 (Infographic · Live Demo · KO/EN · Light/Dark)</title>
+  <title>iNVTRY (Ainvtry) — IR 사업계획서 v5.3 (Live App · Official Site · Infographic · KO/EN · Light/Dark)</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23050507'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Georgia,serif' font-size='19' font-style='italic' fill='%23D6B889'%3Ei%3C/text%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -19,7 +19,7 @@
     <div class="ir-tb-group">
       <a id="ir-site-back" class="ir-tb-brand" href="/" aria-label="Ainvtry 공식 사이트로 이동">
         <span class="ir-tb-dot"></span>
-        <span>iNVTRY IR v5.2</span>
+        <span>iNVTRY IR v5.3</span>
       </a>
       <select id="ir-slide-jump" class="ir-tb-select" aria-label="슬라이드 바로가기">
         <option value="0">01 · 표지 — 디지털 순환 옷장 OS</option>
@@ -28,7 +28,7 @@
         <option value="3">04 · 문제 정의 — 6대 단절</option>
         <option value="4">05 · 솔루션 — 6 → 1 통합 OS</option>
         <option value="5">06 · 사용자 여정 — 일상 6대 순간</option>
-        <option value="6">07 · 라이브 데모 — 실구동 앱 4종</option>
+        <option value="6">07 · 라이브 데모 — 실구동 앱 5종</option>
         <option value="7">08 · 핵심 기술 — Three.js 3D · 8방향 VTON</option>
         <option value="8">09 · 보안 해자 — 4대 방어선</option>
         <option value="9">10 · 시장 기회 — $393B × $23.9B</option>
@@ -89,6 +89,7 @@
                 <img class="brand-logo brand-logo--dark s01-logo" src="../../site/public/assets/brand/invtry-logo-dark.png" alt="iNVTRY 로고" />
                 <img class="brand-logo brand-logo--light s01-logo" src="../../site/public/assets/brand/invtry-logo-light.png" alt="iNVTRY 로고" />
                 <h1 class="s01-h1" data-i18n-rich="s01-h1">내 옷장을 <span class="serif-accent">디지털 자산</span>으로,<br />입는 순간부터 리셀까지</h1>
+                <p class="s01-mission-line">“가진 옷을 더 잘 입고, 안 입는 옷은 다시 순환” — www.ainvtry.com</p>
                 <div class="s01-kpis">
                   <div class="panel s01-kpi">
                     <div class="s01-kpi-top">
@@ -120,7 +121,7 @@
                   </div>
                 </div>
                 <div class="s01-sig">
-                  <span class="gold-accent">IR v5.2</span>
+                  <span class="gold-accent">IR v5.3</span>
                   <span>·</span>
                   <span data-ir-bind="meta.urlShort">www.ainvtry.com</span>
                   <span>·</span>
@@ -143,43 +144,59 @@
                   </div>
                 </div>
 
-                <div class="panel panel--gold s01-orbit-card">
-                  <span class="badge badge--gold" data-ir-bind="versions.threeVtonTag">THREE.JS 0.187 · VTON</span>
-                  <svg viewBox="0 0 260 280" width="100%" height="290" aria-label="5단계 순환 옷장 오빗">
-                    <defs>
-                      <linearGradient id="g-orbit-1" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stop-color="var(--accent-gold)" />
-                        <stop offset="100%" stop-color="var(--accent-live)" />
-                      </linearGradient>
-                    </defs>
-                    <circle cx="130" cy="140" r="88" fill="none" stroke="var(--svg-track)" stroke-width="1.4" stroke-dasharray="4 4" />
-                    <circle cx="130" cy="140" r="88" fill="none" stroke="url(#g-orbit-1)" stroke-width="2" stroke-dasharray="140 420" />
-                    <circle cx="130" cy="140" r="46" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="1.4" />
-                    <text x="130" y="135" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="13" font-weight="700">iNVTRY</text>
-                    <text x="130" y="152" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9" font-weight="600">CLOSED OS</text>
+                <div class="s01-right-stack">
+                  <div class="s01-site-preview">
+                    <div class="s01-site-bar">
+                      <span>www.ainvtry.com</span>
+                      <span class="live-accent">● Three.js 3D LIVE</span>
+                    </div>
+                    <img
+                      src="../../site/public/assets/previews/site-hero-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-hero-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-hero-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-hero-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-hero-en-dark.webp"
+                      alt="www.ainvtry.com 공식 Three.js 3D 라이브 데모"
+                    />
+                  </div>
 
-                    <!-- 5 Orbit Nodes -->
-                    <circle cx="130" cy="52" r="10" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
-                    <circle cx="130" cy="52" r="3.5" fill="var(--accent-gold)" />
-                    <text x="130" y="32" text-anchor="middle" fill="var(--ink-primary)" font-size="10.5" font-weight="700">01 촬영 -96%</text>
+                  <div class="panel panel--gold s01-orbit-compact">
+                    <span class="badge badge--gold" data-ir-bind="versions.threeVtonTag">THREE.JS 0.187 · VTON</span>
+                    <svg viewBox="0 0 260 220" width="100%" height="205" aria-label="5단계 순환 옷장 오빗">
+                      <defs>
+                        <linearGradient id="g-orbit-1" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stop-color="var(--accent-gold)" />
+                          <stop offset="100%" stop-color="var(--accent-live)" />
+                        </linearGradient>
+                      </defs>
+                      <circle cx="130" cy="112" r="72" fill="none" stroke="var(--svg-track)" stroke-width="1.4" stroke-dasharray="4 4" />
+                      <circle cx="130" cy="112" r="72" fill="none" stroke="url(#g-orbit-1)" stroke-width="2" stroke-dasharray="120 360" />
+                      <circle cx="130" cy="112" r="38" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="1.4" />
+                      <text x="130" y="108" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="12" font-weight="700">iNVTRY</text>
+                      <text x="130" y="123" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.5" font-weight="600">CLOSED OS</text>
 
-                    <circle cx="214" cy="113" r="10" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
-                    <circle cx="214" cy="113" r="3.5" fill="var(--accent-gold)" />
-                    <text x="214" y="96" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="700">02 날씨</text>
+                      <circle cx="130" cy="40" r="8" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
+                      <circle cx="130" cy="40" r="3" fill="var(--accent-gold)" />
+                      <text x="130" y="23" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="700">01 촬영 -96%</text>
 
-                    <circle cx="182" cy="211" r="10" fill="var(--svg-node-bg)" stroke="var(--accent-live)" stroke-width="2" />
-                    <circle cx="182" cy="211" r="3.5" fill="var(--accent-live)" />
-                    <text x="192" y="236" text-anchor="middle" fill="var(--accent-live)" font-size="10.5" font-weight="700">03 360° 4겹+</text>
+                      <circle cx="198" cy="90" r="8" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
+                      <circle cx="198" cy="90" r="3" fill="var(--accent-gold)" />
+                      <text x="208" y="75" text-anchor="middle" fill="var(--ink-primary)" font-size="9.5" font-weight="700">02 날씨</text>
 
-                    <circle cx="78" cy="211" r="10" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
-                    <circle cx="78" cy="211" r="3.5" fill="var(--accent-gold)" />
-                    <text x="68" y="236" text-anchor="middle" fill="var(--ink-primary)" font-size="10.5" font-weight="700">04 CPW 관리</text>
+                      <circle cx="172" cy="171" r="8" fill="var(--svg-node-bg)" stroke="var(--accent-live)" stroke-width="2" />
+                      <circle cx="172" cy="171" r="3" fill="var(--accent-live)" />
+                      <text x="184" y="196" text-anchor="middle" fill="var(--accent-live)" font-size="10" font-weight="700">03 360° 4겹+</text>
 
-                    <circle cx="46" cy="113" r="10" fill="var(--svg-node-bg)" stroke="var(--accent-live)" stroke-width="2" />
-                    <circle cx="46" cy="113" r="3.5" fill="var(--accent-live)" />
-                    <text x="46" y="96" text-anchor="middle" fill="var(--accent-live)" font-size="10" font-weight="700">05 리셀</text>
-                  </svg>
-                  <span class="badge badge--live">5-STAGE CLOSED LOOP</span>
+                      <circle cx="88" cy="171" r="8" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
+                      <circle cx="88" cy="171" r="3" fill="var(--accent-gold)" />
+                      <text x="76" y="196" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="700">04 CPW 관리</text>
+
+                      <circle cx="62" cy="90" r="8" fill="var(--svg-node-bg)" stroke="var(--accent-live)" stroke-width="2" />
+                      <circle cx="62" cy="90" r="3" fill="var(--accent-live)" />
+                      <text x="52" y="75" text-anchor="middle" fill="var(--accent-live)" font-size="9.5" font-weight="700">05 리셀</text>
+                    </svg>
+                    <span class="badge badge--live">5-STAGE CLOSED LOOP</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -193,7 +210,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 02 — 4-ACT CONSTELLATION ROADMAP (ZERO TEXT WALL)            -->
+      <!-- SLIDE 02 — 4-ACT VISUAL CONSTELLATION ROADMAP                      -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-02" class="ir-slide" data-slide="2">
@@ -204,26 +221,37 @@
             </div>
             <div class="s-head-right">
               <span class="badge badge--gold">4 ACTS · 18 SLIDES</span>
-              <span class="badge badge--live">70%+ TARGET MARGIN</span>
+              <span class="badge badge--live">LIVE APP + SITE PROOF</span>
             </div>
           </header>
 
           <div class="s-body">
             <div class="s02-rail-wrap">
-              <svg class="s02-constellation" viewBox="0 0 1196 44" preserveAspectRatio="none" aria-hidden="true">
-                <line x1="149" y1="22" x2="1047" y2="22" stroke="var(--hairline-strong)" stroke-width="1.5" stroke-dasharray="5 5" />
-                <circle cx="149" cy="22" r="11" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
-                <circle cx="149" cy="22" r="4" fill="var(--accent-gold)" />
-                <circle cx="448" cy="22" r="11" fill="var(--svg-node-bg)" stroke="var(--accent-live)" stroke-width="2" />
-                <circle cx="448" cy="22" r="4" fill="var(--accent-live)" />
-                <circle cx="747" cy="22" r="11" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
-                <circle cx="747" cy="22" r="4" fill="var(--accent-gold)" />
-                <circle cx="1047" cy="22" r="11" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
-                <circle cx="1047" cy="22" r="4" fill="var(--accent-gold)" />
+              <svg class="s02-constellation" viewBox="0 0 1196 36" preserveAspectRatio="none" aria-hidden="true">
+                <line x1="149" y1="18" x2="1047" y2="18" stroke="var(--hairline-strong)" stroke-width="1.5" stroke-dasharray="5 5" />
+                <circle cx="149" cy="18" r="10" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
+                <circle cx="149" cy="18" r="3.5" fill="var(--accent-gold)" />
+                <circle cx="448" cy="18" r="10" fill="var(--svg-node-bg)" stroke="var(--accent-live)" stroke-width="2" />
+                <circle cx="448" cy="18" r="3.5" fill="var(--accent-live)" />
+                <circle cx="747" cy="18" r="10" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
+                <circle cx="747" cy="18" r="3.5" fill="var(--accent-gold)" />
+                <circle cx="1047" cy="18" r="10" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
+                <circle cx="1047" cy="18" r="3.5" fill="var(--accent-gold)" />
               </svg>
 
               <div class="s02-acts">
                 <div class="panel s02-act">
+                  <div class="s02-act-visual">
+                    <img
+                      src="../../site/public/assets/previews/site-hero-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-hero-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-hero-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-hero-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-hero-en-dark.webp"
+                      alt="www.ainvtry.com 공식 Three.js 3D 라이브 데모"
+                    />
+                    <span class="ir-live-tag">SITE HERO</span>
+                  </div>
                   <div class="s02-act-head">
                     <div>
                       <div class="s02-act-kicker">ACT 01</div>
@@ -252,6 +280,25 @@
                 </div>
 
                 <div class="panel panel--live s02-act">
+                  <div class="s02-act-visual s02-act-visual--duo">
+                    <img
+                      src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
+                      alt="360° 7겹 AI 피팅 라이브 캡처"
+                    />
+                    <img
+                      src="../../site/public/assets/previews/site-arch-privacy-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-arch-privacy-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-arch-privacy-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-arch-privacy-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-arch-privacy-en-dark.webp"
+                      alt="공식 사이트 보안 4대 방어선 라이브 캡처"
+                    />
+                    <span class="ir-live-tag">LIVE APP · 0B</span>
+                  </div>
                   <div class="s02-act-head">
                     <div>
                       <div class="s02-act-kicker live-accent">ACT 02</div>
@@ -265,7 +312,7 @@
                       <span class="badge">6-CUT</span>
                     </button>
                     <button type="button" class="s02-item" data-jump-slide="6">
-                      <span class="s02-item-left"><span class="s02-num">07</span><span class="s02-label">실구동 앱 라이브</span></span>
+                      <span class="s02-item-left"><span class="s02-num">07</span><span class="s02-label">실구동 앱 5종</span></span>
                       <span class="badge badge--live">LIVE</span>
                     </button>
                     <button type="button" class="s02-item" data-jump-slide="7">
@@ -280,6 +327,17 @@
                 </div>
 
                 <div class="panel s02-act">
+                  <div class="s02-act-visual">
+                    <img
+                      src="../../site/public/assets/previews/site-about-loop-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-about-loop-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-about-loop-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-about-loop-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-about-loop-en-dark.webp"
+                      alt="공식 사이트 순환 옷장 루프 및 비즈니스 모델 라이브 캡처"
+                    />
+                    <span class="ir-live-tag">iNVTRY LOOP · BM</span>
+                  </div>
                   <div class="s02-act-head">
                     <div>
                       <div class="s02-act-kicker">ACT 03</div>
@@ -308,6 +366,17 @@
                 </div>
 
                 <div class="panel s02-act">
+                  <div class="s02-act-visual">
+                    <img
+                      src="../../site/public/assets/previews/site-specs-pillars-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-specs-pillars-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-specs-pillars-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-specs-pillars-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-specs-pillars-en-dark.webp"
+                      alt="공식 사이트 Three.js 3D 6대 스펙 벤치마크 라이브 캡처"
+                    />
+                    <span class="ir-live-tag">6-TIER SPECS</span>
+                  </div>
                   <div class="s02-act-head">
                     <div>
                       <div class="s02-act-kicker">ACT 04</div>
@@ -346,7 +415,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 03 — EXECUTIVE SUMMARY (4 RADIAL GAUGES + 5-STAGE LOOP)      -->
+      <!-- SLIDE 03 — EXECUTIVE SUMMARY (4 GAUGES + VISUAL 5-STAGE LOOP)      -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-03" class="ir-slide" data-slide="3">
@@ -417,7 +486,7 @@
 
             <div class="panel s03-loop-stage">
               <div class="s03-loop-head">
-                <span class="s-eyebrow">5-STAGE CLOSED-LOOP WARDROBE OS</span>
+                <span class="s-eyebrow">5-STAGE CLOSED-LOOP — 가진 옷을 더 잘 입고, 안 입는 옷은 다시 순환</span>
                 <div class="ir-tb-group">
                   <span class="badge badge--live">₩0 온디바이스 전처리</span>
                   <span class="badge badge--gold">목표 마진 70%+</span>
@@ -426,30 +495,67 @@
 
               <div class="s03-nodes">
                 <div class="s03-node">
+                  <div class="s03-node-thumb s03-node-thumb--garments">
+                    <img src="../../site/public/assets/garments/beige-trench.webp" alt="비식별 WebP 배경 제거 의류" />
+                    <img src="../../site/public/assets/garments/cream-knit.webp" alt="크림 니트 배경 제거 의류" />
+                  </div>
                   <span class="s03-node-step">STAGE 01</span>
                   <strong class="s03-node-title">사진 1장 (-96%)</strong>
                   <span class="s03-node-sub">배경·EXIF 로컬 제거</span>
                   <span class="chip">24KB WebP</span>
                 </div>
                 <div class="s03-node">
+                  <div class="s03-node-thumb">
+                    <img
+                      src="../../site/public/assets/previews/site-arch-weather-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-arch-weather-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-arch-weather-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-arch-weather-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-arch-weather-en-dark.webp"
+                      alt="실시간 날씨 연동 Three.js 3D 무대 캡처"
+                    />
+                  </div>
                   <span class="s03-node-step">STAGE 02</span>
                   <strong class="s03-node-title">날씨 · 거리뷰</strong>
                   <span class="s03-node-sub">실시간 기온·TPO 싱크</span>
                   <span class="chip">Weather v1</span>
                 </div>
                 <div class="s03-node s03-node--core">
+                  <div class="s03-node-thumb">
+                    <img
+                      src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
+                      alt="360° 7겹 AI 피팅 라이브 캡처"
+                    />
+                  </div>
                   <span class="s03-node-step">STAGE 03 · CORE</span>
                   <strong class="s03-node-title gold-accent">360° 4겹+ VTON</strong>
                   <span class="s03-node-sub">Three.js 3D · 8방향 QC</span>
                   <span class="chip chip--gold">60 FPS · 28모프</span>
                 </div>
                 <div class="s03-node">
+                  <div class="s03-node-thumb">
+                    <img
+                      src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/app-stats-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/app-stats-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/app-stats-en-dark.webp"
+                      alt="CPW · 자산 리포트 라이브 캡처"
+                    />
+                  </div>
                   <span class="s03-node-step">STAGE 04</span>
                   <strong class="s03-node-title">CPW · 세탁 관리</strong>
                   <span class="s03-node-sub">착용 횟수·이염 알림</span>
                   <span class="chip">90일 휴면 감지</span>
                 </div>
                 <div class="s03-node s03-node--resale">
+                  <div class="s03-node-thumb">
+                    <img src="../../site/public/assets/journey/clay-cut-06-v1.webp" alt="이력 인증 원탭 리셀" />
+                  </div>
                   <span class="s03-node-step live-accent">STAGE 05</span>
                   <strong class="s03-node-title live-accent">1탭 인증 리셀</strong>
                   <span class="s03-node-sub">사진·이력 자동 연동</span>
@@ -457,11 +563,11 @@
                 </div>
               </div>
 
-              <svg class="s03-return-svg" viewBox="0 0 1140 44" aria-label="리셀 수익이 새 옷 재구매로 순환">
-                <path d="M 1030 4 C 1030 34, 110 34, 110 4" fill="none" stroke="var(--accent-gold)" stroke-width="1.6" stroke-dasharray="6 5" />
+              <svg class="s03-return-svg" viewBox="0 0 1140 38" aria-label="리셀 수익이 새 옷 재구매로 순환">
+                <path d="M 1030 4 C 1030 30, 110 30, 110 4" fill="none" stroke="var(--accent-gold)" stroke-width="1.6" stroke-dasharray="6 5" />
                 <polygon points="104,10 110,1 116,10" fill="var(--accent-gold)" />
-                <rect x="440" y="14" width="260" height="24" rx="12" fill="var(--bg-surface)" stroke="var(--hairline-gold)" />
-                <text x="570" y="30" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="11" font-weight="700">리셀 현금화 ➔ 새 옷 재구매 ↺</text>
+                <rect x="440" y="10" width="260" height="22" rx="11" fill="var(--bg-surface)" stroke="var(--hairline-gold)" />
+                <text x="570" y="25" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="11" font-weight="700">리셀 현금화 ➔ 새 옷 재구매 ↺</text>
               </svg>
             </div>
           </div>
@@ -474,7 +580,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 04 — PROBLEM (BROKEN CHAIN + 6 VISUAL FRICTION GAUGES)       -->
+      <!-- SLIDE 04 — PROBLEM (HOMEPAGE CORE BOTTLENECK + 6 VISUAL GAUGES)    -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-04" class="ir-slide" data-slide="4">
@@ -496,7 +602,7 @@
               <span>코디 (TPO)</span><span class="s04-x">✕</span>
               <span>보안 (Cloud)</span><span class="s04-x">✕</span>
               <span>리셀 (Resale)</span>
-              <span class="badge badge--danger">데이터 6중 단절</span>
+              <span class="badge badge--danger">6개 앱 분절 → 매일 못 쓰는 구조</span>
             </div>
 
             <div class="s04-grid">
@@ -697,15 +803,29 @@
                   <path d="M 145 210 C 218 210, 218 244, 290 244" fill="none" stroke="var(--accent-live)" stroke-opacity="0.82" stroke-width="1.8" />
                   <path d="M 145 210 C 218 210, 218 306, 290 306" fill="none" stroke="var(--accent-live)" stroke-opacity="0.82" stroke-width="1.8" />
                   <path d="M 145 210 C 218 210, 218 368, 290 368" fill="none" stroke="var(--accent-gold)" stroke-opacity="0.75" stroke-width="1.8" stroke-dasharray="4 3" />
-
-                  <!-- Central Core Medallion -->
-                  <circle cx="145" cy="210" r="80" fill="none" stroke="var(--hairline-gold)" stroke-width="1" stroke-dasharray="3 4" />
-                  <circle cx="145" cy="210" r="66" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.2" />
-                  <text x="145" y="184" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="9.5" font-weight="600" letter-spacing="1.2">UNIFIED CORE</text>
-                  <text x="145" y="216" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="28" font-weight="800">6 → 1</text>
-                  <rect x="98" y="227" width="94" height="20" rx="10" fill="var(--accent-gold-soft)" stroke="var(--hairline-gold)" />
-                  <text x="145" y="241" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="10" font-weight="700">iNVTRY OS</text>
                 </svg>
+
+                <div class="s05-core-overlay">
+                  <span class="badge badge--gold">6 → 1 iNVTRY OS</span>
+                  <div class="device-frame s05-phone-hub">
+                    <div class="device-screen">
+                      <img
+                        src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                        data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
+                        data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                        data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                        data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
+                        alt="실구동 iNVTRY 360° 레이어드 피팅 라이브 캡처"
+                      />
+                    </div>
+                  </div>
+                  <div class="s05-garments-mini" aria-label="4겹 레이어드 배경 제거 의류">
+                    <img src="../../site/public/assets/garments/beige-trench.webp" alt="비식별 WebP 배경 제거 의류" />
+                    <img src="../../site/public/assets/garments/cream-knit.webp" alt="크림 니트 배경 제거 의류" />
+                    <img src="../../site/public/assets/garments/charcoal-slacks.webp" alt="차콜 슬랙스 배경 제거 의류" />
+                    <img src="../../site/public/assets/garments/black-loafers.webp" alt="블랙 로퍼 배경 제거 의류" />
+                  </div>
+                </div>
               </div>
 
               <div class="s05-col">
@@ -755,7 +875,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 06 — USER JOURNEY (80% ARTWORK 3x2 STORYBOARD FILMSTRIP)     -->
+      <!-- SLIDE 06 — USER JOURNEY (6-CUT SPEECH BUBBLES + LIVE APP STRIP)    -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-06" class="ir-slide" data-slide="6">
@@ -780,6 +900,7 @@
                     <span class="s06-cut-id">CUT 01</span>
                     <span class="badge badge--live" data-ir-bind="journey.buy.badge">LIVE</span>
                   </div>
+                  <div class="s06-speech">“비슷한 코트가 이미 2벌 있어요.”</div>
                 </div>
                 <div class="s06-cap">
                   <span class="s06-cap-title">매장 3초 중복 확인</span>
@@ -794,6 +915,7 @@
                     <span class="s06-cut-id">CUT 02</span>
                     <span class="badge badge--hybrid" data-ir-bind="journey.scan.badge">LIVE+</span>
                   </div>
+                  <div class="s06-speech">“찍기만 하면 정리부터 세탁법까지.”</div>
                 </div>
                 <div class="s06-cap">
                   <span class="s06-cap-title">원탭 배경 제거 · 택 OCR</span>
@@ -808,6 +930,7 @@
                     <span class="s06-cut-id">CUT 03</span>
                     <span class="badge badge--live" data-ir-bind="journey.weather.badge">LIVE</span>
                   </div>
+                  <div class="s06-speech">“비 오는 오늘, 우리 동네에서 미리 입어봐요.”</div>
                 </div>
                 <div class="s06-cap">
                   <span class="s06-cap-title">날씨 · 거리뷰 4겹 피팅</span>
@@ -822,6 +945,7 @@
                     <span class="s06-cut-id">CUT 04</span>
                     <span class="badge badge--todo" data-ir-bind="journey.share.badge">TO-DO</span>
                   </div>
+                  <div class="s06-speech">“오늘 입은 옷을 캘린더에 바로 기록.”</div>
                 </div>
                 <div class="s06-cap">
                   <span class="s06-cap-title">OOTD 캘린더 · 360° 공유</span>
@@ -836,6 +960,7 @@
                     <span class="s06-cut-id">CUT 05</span>
                     <span class="badge badge--hybrid" data-ir-bind="journey.care.badge">LIVE+</span>
                   </div>
+                  <div class="s06-speech">“세탁법 확인하고 문 앞 방문수거 신청.”</div>
                 </div>
                 <div class="s06-cap">
                   <span class="s06-cap-title">세탁소 지도 · O2O 수거</span>
@@ -850,6 +975,7 @@
                     <span class="s06-cut-id">CUT 06</span>
                     <span class="badge badge--hybrid" data-ir-bind="journey.resale.badge">LIVE+</span>
                   </div>
+                  <div class="s06-speech">“안 입는 옷, 사진과 이력 묶어 바로 판매.”</div>
                 </div>
                 <div class="s06-cap">
                   <span class="s06-cap-title">이력 인증 원탭 리셀</span>
@@ -857,33 +983,84 @@
                 </div>
               </article>
             </div>
+
+            <div class="panel s06-live-bar">
+              <span class="s-eyebrow">LIVE APP EXECUTION</span>
+              <div class="s06-live-thumbs">
+                <span class="s06-live-pill">
+                  <img
+                    src="../../site/public/assets/previews/app-closet-ko-dark.webp"
+                    data-light-src="../../site/public/assets/previews/app-closet-ko-light.webp"
+                    data-dark-src="../../site/public/assets/previews/app-closet-ko-dark.webp"
+                    data-light-src-en="../../site/public/assets/previews/app-closet-en-light.webp"
+                    data-dark-src-en="../../site/public/assets/previews/app-closet-en-dark.webp"
+                    alt="270벌 디지털 옷장 라이브 캡처"
+                  />
+                  <span>CUT 01–02 · 옷장</span>
+                </span>
+                <span class="s06-live-pill">
+                  <img
+                    src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                    data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
+                    data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                    data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                    data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
+                    alt="360° 7겹 AI 피팅 라이브 캡처"
+                  />
+                  <span>CUT 03 · 8방향 피팅</span>
+                </span>
+                <span class="s06-live-pill">
+                  <img
+                    src="../../site/public/assets/previews/app-calendar-ko-dark.webp"
+                    data-light-src="../../site/public/assets/previews/app-calendar-ko-light.webp"
+                    data-dark-src="../../site/public/assets/previews/app-calendar-ko-dark.webp"
+                    data-light-src-en="../../site/public/assets/previews/app-calendar-en-light.webp"
+                    data-dark-src-en="../../site/public/assets/previews/app-calendar-en-dark.webp"
+                    alt="에디토리얼 OOTD 캘린더 라이브 캡처"
+                  />
+                  <span>CUT 04 · 캘린더</span>
+                </span>
+                <span class="s06-live-pill">
+                  <img
+                    src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                    data-light-src="../../site/public/assets/previews/app-stats-ko-light.webp"
+                    data-dark-src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                    data-light-src-en="../../site/public/assets/previews/app-stats-en-light.webp"
+                    data-dark-src-en="../../site/public/assets/previews/app-stats-en-dark.webp"
+                    alt="CPW · 자산 리포트 라이브 캡처"
+                  />
+                  <span>CUT 05–06 · CPW 리셀</span>
+                </span>
+              </div>
+              <span class="badge badge--live">ALL TABS SHIPPED</span>
+            </div>
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY IR Deck</span>
-            <span>User Journey — Transparent LIVE vs Roadmap Status</span>
+            <span>User Journey — Official Site 6-Cut Storyboard &amp; Live App Parity</span>
             <span class="s-foot-num">06 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 07 — LIVE DEMO SHOWCASE (4 FRESH LIVE /app CAPTURES)         -->
+      <!-- SLIDE 07 — LIVE DEMO SHOWCASE (FULL 5-SCREEN LIVE /app RUNWAY)     -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-07" class="ir-slide" data-slide="7">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">PART 02 · LIVE DEMO CAPTURE</span>
+              <span class="s-eyebrow">PART 02 · LIVE DEMO CAPTURE (5 PRODUCTION SCREENS)</span>
               <h2 class="s-title" data-i18n-rich="s07-h2">실구동 <span class="serif-accent">프로덕션 앱</span> (Web · iOS · Android)</h2>
             </div>
             <div class="s-head-right">
-              <span class="badge badge--live">LIVE CAPTURE · 270 ITEMS</span>
+              <span class="badge badge--live">5 LIVE SCREENS · 270 ITEMS</span>
               <span class="badge badge--gold">KO / EN · LIGHT / DARK</span>
             </div>
           </header>
 
           <div class="s-body">
-            <div class="s07-grid">
+            <div class="s07-grid s07-grid--5">
               <div class="s07-col">
                 <div class="device-frame s07-phone">
                   <div class="device-screen">
@@ -900,10 +1077,10 @@
                 </div>
                 <div class="s07-cap">
                   <div class="s07-cap-row">
-                    <span class="s07-cap-title"><span class="mono gold-accent">01</span> 360° 7겹 AI 피팅</span>
+                    <span class="s07-cap-title"><span class="mono gold-accent">01</span> 360° 7겹 피팅</span>
                     <span class="badge badge--live">60 FPS</span>
                   </div>
-                  <span class="s07-cap-sub">4겹+ VTON · 실시간 명동 날씨</span>
+                  <span class="s07-cap-sub">8방향 VTON · 서울 명동 날씨</span>
                 </div>
               </div>
 
@@ -923,10 +1100,33 @@
                 </div>
                 <div class="s07-cap">
                   <div class="s07-cap-row">
-                    <span class="s07-cap-title"><span class="mono gold-accent">02</span> 270벌 디지털 옷장</span>
-                    <span class="badge badge--live">3초 대조</span>
+                    <span class="s07-cap-title"><span class="mono gold-accent">02</span> 270벌 옷장</span>
+                    <span class="badge badge--live">11슬롯</span>
                   </div>
-                  <span class="s07-cap-sub">자동 배경 제거 · 11슬롯 중복 판독</span>
+                  <span class="s07-cap-sub">ARKET·LEMAIRE · 3초 대조</span>
+                </div>
+              </div>
+
+              <div class="s07-col">
+                <div class="device-frame s07-phone">
+                  <div class="device-screen">
+                    <div class="device-island"></div>
+                    <img
+                      src="../../site/public/assets/previews/app-calendar-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/app-calendar-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/app-calendar-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/app-calendar-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/app-calendar-en-dark.webp"
+                      alt="에디토리얼 OOTD 캘린더 라이브 캡처"
+                    />
+                  </div>
+                </div>
+                <div class="s07-cap">
+                  <div class="s07-cap-row">
+                    <span class="s07-cap-title"><span class="mono gold-accent">03</span> OOTD 캘린더</span>
+                    <span class="badge badge--gold">+10i</span>
+                  </div>
+                  <span class="s07-cap-sub">출석 스트릭 · 월간/주간 룩북</span>
                 </div>
               </div>
 
@@ -946,8 +1146,8 @@
                 </div>
                 <div class="s07-cap">
                   <div class="s07-cap-row">
-                    <span class="s07-cap-title"><span class="mono gold-accent">03</span> 100% 활용률 · CPW</span>
-                    <span class="badge badge--gold">LTV 락인</span>
+                    <span class="s07-cap-title"><span class="mono gold-accent">04</span> 100% CPW</span>
+                    <span class="badge badge--gold">LTV</span>
                   </div>
                   <span class="s07-cap-sub">누적 2,878회 · 평균 ₩94,679</span>
                 </div>
@@ -969,24 +1169,24 @@
                 </div>
                 <div class="s07-cap">
                   <div class="s07-cap-row">
-                    <span class="s07-cap-title"><span class="mono gold-accent">04</span> 0B 얼굴 · 체형 볼트</span>
-                    <span class="badge badge--live">0 BYTES</span>
+                    <span class="s07-cap-title"><span class="mono gold-accent">05</span> 0B 얼굴 볼트</span>
+                    <span class="badge badge--live">0B</span>
                   </div>
-                  <span class="s07-cap-sub">MediaPipe MST-04 · 28종 모프</span>
+                  <span class="s07-cap-sub">MediaPipe MST-04 · 28모프</span>
                 </div>
               </div>
             </div>
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY IR Deck</span>
-            <span>Live Demo Captures — Real-Time Production App (www.ainvtry.com/app)</span>
+            <span>Live Demo Captures — Full 5-Tab Production App (www.ainvtry.com/app)</span>
             <span class="s-foot-num">07 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 08 — CORE TECH ENGINE & -96% VISUAL COMPRESSION LAB          -->
+      <!-- SLIDE 08 — CORE TECH ENGINE (4-LAYER CUTOUT + Three.js 3D RAIN) -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-08" class="ir-slide" data-slide="8">
@@ -996,6 +1196,7 @@
               <h2 class="s-title" data-i18n-rich="s08-h2">Three.js 3D × 8방향 VTON × <span class="serif-accent">-96% 엣지</span></h2>
             </div>
             <div class="s-head-right">
+              <span class="badge badge--gold">PCCS 12-TONE · MST-04</span>
               <span class="badge badge--live">HYBRID WASM + CLOUD</span>
             </div>
           </header>
@@ -1017,9 +1218,9 @@
                   </svg>
                 </div>
                 <div class="s08-chips">
-                  <span class="chip">Three.js 3D 아바타</span>
-                  <span class="chip">21-Bone · 28모프</span>
-                  <span class="chip">SpringBone</span>
+                  <span class="chip">Three.js 3D · 21관절</span>
+                  <span class="chip">서기·걷기·우산 3자세</span>
+                  <span class="chip chip--gold">0.94~1.31 N/m²</span>
                 </div>
               </div>
 
@@ -1043,7 +1244,7 @@
                   </svg>
                 </div>
                 <div class="s08-chips">
-                  <span class="chip">0°~315° QC</span>
+                  <span class="chip">0°~315° 4겹+ 합성</span>
                   <span class="chip">착장 해시 캐시</span>
                   <span class="chip chip--live">유료 무학습 AI</span>
                 </div>
@@ -1051,8 +1252,8 @@
 
               <div class="panel s08-eng">
                 <div class="s08-eng-head">
-                  <span class="s-eyebrow">ENGINE 03 · SPATIAL</span>
-                  <span class="badge badge--live">0B EGRESS</span>
+                  <span class="s-eyebrow">ENGINE 03 · SPATIAL APIS</span>
+                  <span class="badge badge--live">5 LIVE APIS</span>
                 </div>
                 <div class="s08-eng-mid">
                   <span class="s08-eng-val live-accent">0 <span style="font-size:18px;">Storage</span></span>
@@ -1060,7 +1261,7 @@
                 </div>
                 <div class="s08-chips">
                   <span class="chip">Weather v1</span>
-                  <span class="chip">Three.js 3D 우산</span>
+                  <span class="chip">Places FieldMask</span>
                   <span class="chip">Street View(미저장)</span>
                 </div>
               </div>
@@ -1068,14 +1269,14 @@
 
             <div class="panel panel--live s08-lab">
               <div class="s08-lab-head">
-                <span class="s-eyebrow">ON-DEVICE STRIPPING &amp; COMPRESSION LAB</span>
+                <span class="s-eyebrow">ON-DEVICE -96% CUTOUT LAB × LIVE GOOGLE API THREE.JS 3D STAGE</span>
                 <div class="ir-tb-group">
                   <span class="badge badge--live">₩0 온디바이스</span>
-                  <span class="badge">100% 클라이언트 완결</span>
+                  <span class="badge badge--gold" data-ir-bind="garment.compression">-96%</span>
                 </div>
               </div>
 
-              <div class="s08-lab-main">
+              <div class="s08-lab-main s08-lab-main--rich">
                 <div class="s08-garments">
                   <div class="s08-thumb-box">
                     <div class="s08-thumb">
@@ -1083,12 +1284,15 @@
                     </div>
                     <span class="badge badge--danger">BEFORE</span>
                   </div>
-                  <span class="mono live-accent" style="font-size:12px;font-weight:700;">WASM ➔</span>
+                  <span class="mono live-accent" style="font-size:11px;font-weight:700;">WASM➔</span>
                   <div class="s08-thumb-box">
-                    <div class="s08-thumb s08-thumb--after">
+                    <div class="s08-thumb s08-thumb--after s08-after-stack">
                       <img src="../../site/public/assets/garments/beige-trench.webp" alt="비식별 WebP 배경 제거 의류" />
+                      <img src="../../site/public/assets/garments/cream-knit.webp" alt="크림 니트 배경 제거 의류" />
+                      <img src="../../site/public/assets/garments/charcoal-slacks.webp" alt="차콜 슬랙스 배경 제거 의류" />
+                      <img src="../../site/public/assets/garments/black-loafers.webp" alt="블랙 로퍼 배경 제거 의류" />
                     </div>
-                    <span class="badge badge--live">AFTER</span>
+                    <span class="badge badge--live">4-LAYER WEBP</span>
                   </div>
                 </div>
 
@@ -1107,12 +1311,24 @@
                     </div>
                     <div class="s08-bar-track"><div class="s08-bar-fill s08-bar-fill--after"></div></div>
                   </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--ink-secondary);">
+                    <span class="mono live-accent" style="font-weight:700;">클라우드 GPU 비용 ₩0</span>
+                    <span>실시간 기상·거리뷰 ➔ Three.js 3D 우산 물리</span>
+                  </div>
                 </div>
 
-                <div class="s08-hero-pct">
-                  <span class="mono" style="font-size:11px;color:var(--ink-muted);">전송 대역폭 절감</span>
-                  <span class="s08-pct-num" data-ir-bind="garment.compression">-96%</span>
-                  <span class="mono" style="font-size:11px;color:var(--ink-secondary);">클라우드 GPU 비용 ₩0</span>
+                <div class="s08-weather-box">
+                  <div class="ir-live-frame s08-weather-frame">
+                    <img
+                      src="../../site/public/assets/previews/site-arch-weather-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-arch-weather-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-arch-weather-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-arch-weather-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-arch-weather-en-dark.webp"
+                      alt="실시간 날씨 연동 Three.js 3D 무대 캡처"
+                    />
+                    <span class="ir-live-tag">SITE · GOOGLE API × Three.js 3D</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1126,7 +1342,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 09 — ZERO-TRUST 4-LAYER SECURITY FORTRESS                    -->
+      <!-- SLIDE 09 — ZERO-TRUST SECURITY FORTRESS + LIVE PRIVACY PROOFS      -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-09" class="ir-slide" data-slide="9">
@@ -1142,25 +1358,37 @@
 
           <div class="s-body">
             <div class="s09-zones">
-              <!-- Zone 1 -->
+              <!-- Zone 1 + Live Profile Vault Capture -->
               <div class="panel panel--live s09-zone">
                 <div class="s09-zone-head">
                   <div>
                     <span class="s-eyebrow">ZONE 01 · CLIENT EDGE</span>
                     <div style="font-size:15px;font-weight:750;margin-top:3px;">ON-DEVICE VAULT</div>
                   </div>
-                  <span class="badge badge--live">LOCAL</span>
+                  <span class="badge badge--live">0s RAM</span>
                 </div>
-                <div class="s09-zone-metrics">
-                  <div class="s09-metric">
-                    <span class="s09-metric-val live-accent">0 Bytes</span>
-                    <span class="s09-metric-lbl">안면 로컬 WASM</span>
-                    <span class="s09-metric-sub">원본 서버 전송 0</span>
+                <div class="s09-zone-split">
+                  <div class="s09-phone-mini">
+                    <img
+                      src="../../site/public/assets/previews/app-profile-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/app-profile-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/app-profile-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/app-profile-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/app-profile-en-dark.webp"
+                      alt="0B 얼굴 · 체형 볼트 라이브 캡처"
+                    />
                   </div>
-                  <div class="s09-metric">
-                    <span class="s09-metric-val" data-ir-bind="garment.compression">-96%</span>
-                    <span class="s09-metric-lbl">EXIF·GPS 삭제</span>
-                    <span class="s09-metric-sub" data-ir-bind="garment.flowArrow">24KB WebP →</span>
+                  <div class="s09-zone-metrics s09-zone-metrics--col">
+                    <div class="s09-metric">
+                      <span class="s09-metric-val live-accent">0 Bytes</span>
+                      <span class="s09-metric-lbl">안면 로컬 WASM</span>
+                      <span class="s09-metric-sub">원본 서버 전송 0</span>
+                    </div>
+                    <div class="s09-metric">
+                      <span class="s09-metric-val" data-ir-bind="garment.compression">-96%</span>
+                      <span class="s09-metric-lbl">EXIF·GPS 삭제</span>
+                      <span class="s09-metric-sub" data-ir-bind="garment.flowArrow">24KB WebP →</span>
+                    </div>
                   </div>
                 </div>
                 <span class="chip chip--live">MediaPipe WASM · IndexedDB 격리</span>
@@ -1193,8 +1421,8 @@
                   </div>
                 </div>
                 <div class="s08-chips">
-                  <span class="chip">Public Seed</span>
-                  <span class="chip chip--gold">Private CMEK</span>
+                  <span class="chip">resolveAuthorizedClosets</span>
+                  <span class="chip chip--gold">3-Zone CMEK</span>
                   <span class="chip">24h Scratch</span>
                 </div>
               </div>
@@ -1229,22 +1457,36 @@
               </div>
             </div>
 
-            <div class="s09-shields">
-              <div class="panel s09-shield">
-                <span class="s09-shield-ico mono">01</span>
-                <div><div style="font-size:13px;font-weight:720;">PIPA 개인정보보호</div><div style="font-size:11px;color:var(--ink-secondary);">제16·21·28조의2 준수</div></div>
+            <div class="s09-bottom-rich">
+              <div class="ir-live-frame s09-site-privacy">
+                <img
+                  src="../../site/public/assets/previews/site-arch-privacy-ko-dark.webp"
+                  data-light-src="../../site/public/assets/previews/site-arch-privacy-ko-light.webp"
+                  data-dark-src="../../site/public/assets/previews/site-arch-privacy-ko-dark.webp"
+                  data-light-src-en="../../site/public/assets/previews/site-arch-privacy-en-light.webp"
+                  data-dark-src-en="../../site/public/assets/previews/site-arch-privacy-en-dark.webp"
+                  alt="공식 사이트 보안 4대 방어선 라이브 캡처"
+                />
+                <span class="ir-live-tag">SITE · 4-LINE PRIVACY LIVE</span>
               </div>
-              <div class="panel s09-shield">
-                <span class="s09-shield-ico mono">02</span>
-                <div><div style="font-size:13px;font-weight:720;">App Store 5.1.1v</div><div style="font-size:11px;color:var(--ink-secondary);">인앱 즉시 삭제 통과</div></div>
-              </div>
-              <div class="panel s09-shield">
-                <span class="s09-shield-ico mono">03</span>
-                <div><div style="font-size:13px;font-weight:720;">TIPS 보안 심사</div><div style="font-size:11px;color:var(--ink-secondary);">CI 시크릿 스캔 완료</div></div>
-              </div>
-              <div class="panel s09-shield">
-                <span class="s09-shield-ico mono">04</span>
-                <div><div style="font-size:13px;font-weight:720;">2027 모의해킹·보험</div><div style="font-size:11px;color:var(--ink-secondary);">외부 진단 · 배상보험</div></div>
+
+              <div class="s09-shields">
+                <div class="panel s09-shield">
+                  <span class="s09-shield-ico mono">01</span>
+                  <div><div style="font-size:12.5px;font-weight:720;">PIPA 개인정보보호</div><div style="font-size:10.5px;color:var(--ink-secondary);">제16·21·28조의2 준수</div></div>
+                </div>
+                <div class="panel s09-shield">
+                  <span class="s09-shield-ico mono">02</span>
+                  <div><div style="font-size:12.5px;font-weight:720;">App Store 5.1.1v</div><div style="font-size:10.5px;color:var(--ink-secondary);">인앱 즉시 삭제 통과</div></div>
+                </div>
+                <div class="panel s09-shield">
+                  <span class="s09-shield-ico mono">03</span>
+                  <div><div style="font-size:12.5px;font-weight:720;">TIPS 보안 심사</div><div style="font-size:10.5px;color:var(--ink-secondary);">CI 시크릿 스캔 완료</div></div>
+                </div>
+                <div class="panel s09-shield">
+                  <span class="s09-shield-ico mono">04</span>
+                  <div><div style="font-size:12.5px;font-weight:720;">2027 모의해킹·보험</div><div style="font-size:10.5px;color:var(--ink-secondary);">외부 진단 · 배상보험</div></div>
+                </div>
               </div>
             </div>
           </div>
@@ -1352,6 +1594,21 @@
                       </div>
                     </div>
                   </div>
+
+                  <div class="s10-proof-pill">
+                    <div style="display:flex;align-items:center;gap:9px;min-width:0;">
+                      <img
+                        src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                        data-light-src="../../site/public/assets/previews/app-stats-ko-light.webp"
+                        data-dark-src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                        data-light-src-en="../../site/public/assets/previews/app-stats-en-light.webp"
+                        data-dark-src-en="../../site/public/assets/previews/app-stats-en-dark.webp"
+                        alt="CPW · 자산 리포트 라이브 캡처"
+                      />
+                      <span style="font-weight:650;">실구동 데모 옷장 · 270벌 · 100% 활용률 · 누적 2,878회 착용</span>
+                    </div>
+                    <span class="badge badge--live">LIVE ASSET</span>
+                  </div>
                 </div>
 
                 <div class="s10-catalysts">
@@ -1383,7 +1640,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 11 — COMPETITIVE LANDSCAPE (2x2 QUADRANT + DOT MATRIX)       -->
+      <!-- SLIDE 11 — COMPETITIVE LANDSCAPE (2x2 + LIVE MANNEQUIN & MOATS)    -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-11" class="ir-slide" data-slide="11">
@@ -1404,43 +1661,45 @@
                   <span class="s-eyebrow">2×2 STRATEGIC POSITIONING</span>
                   <span class="badge badge--gold">UNCONTESTED QUADRANT</span>
                 </div>
-                <svg class="s11-map-svg" viewBox="0 0 540 370" aria-label="2x2 경쟁 포지셔닝 맵">
-                  <!-- Top-Right White Space Highlight -->
-                  <rect x="270" y="24" width="248" height="162" rx="12" fill="var(--accent-live-soft)" stroke="var(--accent-live-border)" stroke-dasharray="4 4" />
-                  <!-- Axes -->
-                  <line x1="270" y1="22" x2="270" y2="348" stroke="var(--hairline-strong)" stroke-width="1.4" />
-                  <line x1="22" y1="186" x2="518" y2="186" stroke="var(--hairline-strong)" stroke-width="1.4" />
+                <div class="s11-map-wrap">
+                  <svg class="s11-map-svg" viewBox="0 0 540 370" aria-label="2x2 경쟁 포지셔닝 맵">
+                    <!-- Top-Right White Space Highlight -->
+                    <rect x="270" y="24" width="248" height="162" rx="12" fill="var(--accent-live-soft)" stroke="var(--accent-live-border)" stroke-dasharray="4 4" />
+                    <!-- Axes -->
+                    <line x1="270" y1="22" x2="270" y2="348" stroke="var(--hairline-strong)" stroke-width="1.4" />
+                    <line x1="22" y1="186" x2="518" y2="186" stroke="var(--hairline-strong)" stroke-width="1.4" />
 
-                  <!-- Axis Labels -->
-                  <text x="270" y="14" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="10" font-weight="700">▲ 0B 보안 · 구매→리셀 순환 완결</text>
-                  <text x="270" y="364" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="10">▼ 단절된 단일 기능 · 프라이버시 취약</text>
-                  <text x="28" y="178" text-anchor="start" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="9.5">◀ 단품 보관/정면</text>
-                  <text x="514" y="178" text-anchor="end" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.5" font-weight="700">4겹+ Three.js 3D · 8방향 ▶</text>
+                    <!-- Axis Labels -->
+                    <text x="270" y="14" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="10" font-weight="700">▲ 0B 보안 · 구매→리셀 순환 완결</text>
+                    <text x="270" y="364" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="10">▼ 단절된 단일 기능 · 프라이버시 취약</text>
+                    <text x="28" y="178" text-anchor="start" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="9.5">◀ 단품 보관/정면</text>
+                    <text x="514" y="178" text-anchor="end" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.5" font-weight="700">4겹+ Three.js 3D · 8방향 ▶</text>
 
-                  <!-- Competitors -->
-                  <circle cx="132" cy="108" r="28" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" />
-                  <text x="132" y="106" text-anchor="middle" fill="var(--ink-secondary)" font-size="11.5" font-weight="700">중고 마켓</text>
-                  <text x="132" y="121" text-anchor="middle" fill="var(--ink-muted)" font-size="9">수동 촬영</text>
+                    <!-- Competitors -->
+                    <circle cx="132" cy="108" r="28" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" />
+                    <text x="132" y="106" text-anchor="middle" fill="var(--ink-secondary)" font-size="11.5" font-weight="700">중고 마켓</text>
+                    <text x="132" y="121" text-anchor="middle" fill="var(--ink-muted)" font-size="9">수동 촬영</text>
 
-                  <circle cx="132" cy="272" r="28" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" />
-                  <text x="132" y="270" text-anchor="middle" fill="var(--ink-secondary)" font-size="11.5" font-weight="700">기존 옷장 앱</text>
-                  <text x="132" y="285" text-anchor="middle" fill="var(--ink-muted)" font-size="9">콜라주</text>
+                    <circle cx="132" cy="272" r="28" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" />
+                    <text x="132" y="270" text-anchor="middle" fill="var(--ink-secondary)" font-size="11.5" font-weight="700">기존 옷장 앱</text>
+                    <text x="132" y="285" text-anchor="middle" fill="var(--ink-muted)" font-size="9">콜라주</text>
 
-                  <circle cx="404" cy="272" r="28" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" />
-                  <text x="404" y="270" text-anchor="middle" fill="var(--ink-secondary)" font-size="11.5" font-weight="700">단품 VTON</text>
-                  <text x="404" y="285" text-anchor="middle" fill="var(--ink-muted)" font-size="9">1벌 정면</text>
+                    <circle cx="404" cy="272" r="28" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" />
+                    <text x="404" y="270" text-anchor="middle" fill="var(--ink-secondary)" font-size="11.5" font-weight="700">단품 VTON</text>
+                    <text x="404" y="285" text-anchor="middle" fill="var(--ink-muted)" font-size="9">1벌 정면</text>
 
-                  <!-- iNVTRY Leader Node -->
-                  <circle cx="394" cy="105" r="56" fill="none" stroke="var(--hairline-gold)" stroke-dasharray="3 4" />
-                  <circle cx="394" cy="105" r="42" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.5" />
-                  <text x="394" y="101" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="14" font-weight="800">iNVTRY</text>
-                  <text x="394" y="118" text-anchor="middle" fill="var(--accent-live)" font-size="10" font-weight="700">유일한 통합 OS</text>
-                </svg>
+                    <!-- iNVTRY Leader Node -->
+                    <circle cx="394" cy="105" r="56" fill="none" stroke="var(--hairline-gold)" stroke-dasharray="3 4" />
+                    <circle cx="394" cy="105" r="42" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.5" />
+                    <text x="394" y="101" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="14" font-weight="800">iNVTRY</text>
+                    <text x="394" y="118" text-anchor="middle" fill="var(--accent-live)" font-size="10" font-weight="700">유일한 통합 OS</text>
+                  </svg>
+                </div>
               </div>
 
               <div class="s11-right">
                 <div class="panel s11-matrix-card">
-                  <div class="s03-loop-head" style="margin-bottom:8px;">
+                  <div class="s03-loop-head" style="margin-bottom:6px;">
                     <span class="s-eyebrow">5 CORE CAPABILITIES</span>
                     <span class="badge badge--live">5/5 충족 (유일)</span>
                   </div>
@@ -1494,26 +1753,44 @@
                   </table>
                 </div>
 
-                <div class="panel panel--gold s11-switch">
-                  <div>
-                    <div class="mono gold-accent" style="font-size:10px;font-weight:700;">HIGH SWITCHING COST</div>
-                    <div style="font-size:13.5px;font-weight:730;margin-top:2px;">복리 데이터 전환 비용</div>
+                <div class="panel panel--gold s11-mannequin-card">
+                  <div class="ir-live-frame s11-mannequin-img">
+                    <img
+                      src="../../site/public/assets/previews/site-specs-mannequin-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-specs-mannequin-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-specs-mannequin-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-specs-mannequin-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-specs-mannequin-en-dark.webp"
+                      alt="공식 사이트 Three.js 3D 마네킹 및 케어 스펙 라이브 캡처"
+                    />
+                    <span class="ir-live-tag">SITE · Three.js 3D CARE</span>
                   </div>
-                  <span class="badge badge--live">ZERO CHURN MOAT</span>
+                  <div style="display:flex;flex-direction:column;gap:5px;">
+                    <div class="s03-loop-head">
+                      <span class="mono gold-accent" style="font-size:10px;font-weight:700;">HIGH SWITCHING COST</span>
+                      <span class="badge badge--live">ZERO CHURN MOAT</span>
+                    </div>
+                    <div style="font-size:13px;font-weight:730;">복리 데이터 전환 비용 · 4대 해자</div>
+                    <div class="s08-chips">
+                      <span class="chip">웹·iOS·Android</span>
+                      <span class="chip chip--gold">8-Cut 4겹+</span>
+                      <span class="chip chip--live">0B 온디바이스</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY IR Deck</span>
-            <span>Competitive Landscape — White-Space Positioning &amp; Capability Matrix</span>
+            <span>Competitive Landscape — White-Space Positioning &amp; Live Care Stage</span>
             <span class="s-foot-num">11 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 12 — BUSINESS MODEL 1 (4-LAYER STEPPED REVENUE STACK)        -->
+      <!-- SLIDE 12 — BUSINESS MODEL 1 (PRODUCT-ANCHORED 4-LAYER STACK)       -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-12" class="ir-slide" data-slide="12">
@@ -1531,23 +1808,33 @@
             <div class="s12-stage">
               <div class="s12-trend-wrap">
                 <svg class="s12-trend-svg" viewBox="0 0 1196 110" preserveAspectRatio="none" aria-hidden="true">
-                  <path d="M 145 96 L 445 68 L 745 40 L 1045 14" fill="none" stroke="var(--accent-gold)" stroke-width="2" stroke-dasharray="5 4" />
-                  <circle cx="145" cy="96" r="5" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.5" />
-                  <circle cx="445" cy="68" r="5" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.5" />
-                  <circle cx="745" cy="40" r="5" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.5" />
-                  <circle cx="1045" cy="14" r="6" fill="var(--accent-live)" />
+                  <path d="M 145 78 L 445 54 L 745 30 L 1045 8" fill="none" stroke="var(--accent-gold)" stroke-width="2" stroke-dasharray="5 4" />
+                  <circle cx="145" cy="78" r="5" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.5" />
+                  <circle cx="445" cy="54" r="5" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.5" />
+                  <circle cx="745" cy="30" r="5" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.5" />
+                  <circle cx="1045" cy="8" r="6" fill="var(--accent-live)" />
                 </svg>
 
                 <div class="panel s12-pillar s12-p1">
                   <div>
                     <div class="s03-loop-head"><span class="badge">TIER 01 · ARR</span><span class="mono" style="font-size:10px;color:var(--ink-muted);">Phase 03</span></div>
-                    <div class="s12-val" style="margin-top:12px;">₩6.9~9.9K</div>
-                    <div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">/월 [TBD]</div>
-                    <div style="font-size:15.5px;font-weight:750;margin-top:10px;">iNVTRY Pro 구독</div>
+                    <div class="s12-shot" style="margin-top:8px;">
+                      <img
+                        src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                        data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
+                        data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                        data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                        data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
+                        alt="360° 7겹 AI 피팅 라이브 캡처"
+                      />
+                      <span class="ir-live-tag">LIVE VTON</span>
+                    </div>
+                    <div class="s12-val" style="margin-top:8px;">₩6.9~9.9K</div>
+                    <div style="font-size:10.5px;color:var(--ink-muted);">/월 [TBD]</div>
+                    <div style="font-size:14.5px;font-weight:750;margin-top:4px;">iNVTRY Pro 구독</div>
                   </div>
                   <div class="s08-chips">
                     <span class="chip">무제한 4겹+ VTON</span>
-                    <span class="chip">CPW 리포트</span>
                     <span class="chip chip--gold">연간 20% 할인</span>
                   </div>
                 </div>
@@ -1555,41 +1842,71 @@
                 <div class="panel s12-pillar s12-p2">
                   <div>
                     <div class="s03-loop-head"><span class="badge">TIER 02 · CPS</span><span class="badge badge--live">HIGH MARGIN</span></div>
-                    <div class="s12-val" style="margin-top:12px;">5 ~ 12%</div>
-                    <div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">구매 수수료</div>
-                    <div style="font-size:15.5px;font-weight:750;margin-top:10px;">갭(Gap) 커머스</div>
+                    <div class="s12-shot" style="margin-top:8px;">
+                      <img
+                        src="../../site/public/assets/previews/app-closet-ko-dark.webp"
+                        data-light-src="../../site/public/assets/previews/app-closet-ko-light.webp"
+                        data-dark-src="../../site/public/assets/previews/app-closet-ko-dark.webp"
+                        data-light-src-en="../../site/public/assets/previews/app-closet-en-light.webp"
+                        data-dark-src-en="../../site/public/assets/previews/app-closet-en-dark.webp"
+                        alt="270벌 디지털 옷장 라이브 캡처"
+                      />
+                      <span class="ir-live-tag">270 ITEMS · 11 SLOTS</span>
+                    </div>
+                    <div class="s12-val" style="margin-top:8px;">5 ~ 12%</div>
+                    <div style="font-size:10.5px;color:var(--ink-muted);">구매 수수료</div>
+                    <div style="font-size:14.5px;font-weight:750;margin-top:4px;">갭(Gap) 커머스</div>
                   </div>
                   <div class="s08-chips">
                     <span class="chip">공백 1벌 사전 조합</span>
-                    <span class="chip">무신사·29CM·자사몰</span>
-                    <span class="chip chip--live">반품률↓</span>
+                    <span class="chip chip--live">무신사·29CM·반품↓</span>
                   </div>
                 </div>
 
                 <div class="panel s12-pillar s12-p3">
                   <div>
                     <div class="s03-loop-head"><span class="badge">TIER 03 · GMV</span><span class="mono" style="font-size:10px;color:var(--ink-muted);">CIRCULAR</span></div>
-                    <div class="s12-val" style="margin-top:12px;">3 ~ 8%</div>
-                    <div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">거래 Take Rate</div>
-                    <div style="font-size:15.5px;font-weight:750;margin-top:10px;">인증 리셀 · 세탁 O2O</div>
+                    <div class="s12-shot" style="margin-top:8px;">
+                      <img
+                        src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                        data-light-src="../../site/public/assets/previews/app-stats-ko-light.webp"
+                        data-dark-src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                        data-light-src-en="../../site/public/assets/previews/app-stats-en-light.webp"
+                        data-dark-src-en="../../site/public/assets/previews/app-stats-en-dark.webp"
+                        alt="CPW · 자산 리포트 라이브 캡처"
+                      />
+                      <span class="ir-live-tag">CPW &amp; IDLE ALERT</span>
+                    </div>
+                    <div class="s12-val" style="margin-top:8px;">3 ~ 8%</div>
+                    <div style="font-size:10.5px;color:var(--ink-muted);">거래 Take Rate</div>
+                    <div style="font-size:14.5px;font-weight:750;margin-top:4px;">인증 리셀 · 세탁 O2O</div>
                   </div>
                   <div class="s08-chips">
                     <span class="chip">90일+ 휴면 알림</span>
-                    <span class="chip">1탭 인증 등록</span>
-                    <span class="chip chip--live">공급 마찰 0</span>
+                    <span class="chip chip--live">1탭 인증 · 마찰 0</span>
                   </div>
                 </div>
 
                 <div class="panel s12-pillar s12-p4">
                   <div>
                     <div class="s03-loop-head"><span class="badge badge--gold">TIER 04 · B2B</span><span class="mono" style="font-size:10px;color:var(--ink-muted);">2027 H2+</span></div>
-                    <div class="s12-val" style="margin-top:12px;">월정액+CPC</div>
-                    <div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">Enterprise SaaS</div>
-                    <div style="font-size:15.5px;font-weight:750;margin-top:10px;">브랜드 VTON SDK</div>
+                    <div class="s12-shot" style="margin-top:8px;">
+                      <img
+                        src="../../site/public/assets/previews/site-live-studio-ko-dark.webp"
+                        data-light-src="../../site/public/assets/previews/site-live-studio-ko-light.webp"
+                        data-dark-src="../../site/public/assets/previews/site-live-studio-ko-dark.webp"
+                        data-light-src-en="../../site/public/assets/previews/site-live-studio-en-light.webp"
+                        data-dark-src-en="../../site/public/assets/previews/site-live-studio-en-dark.webp"
+                        alt="www.ainvtry.com 실구동 라이브 스튜디오 캡처"
+                      />
+                      <span class="ir-live-tag">EMBEDDED SDK</span>
+                    </div>
+                    <div class="s12-val" style="margin-top:8px;">월정액+CPC</div>
+                    <div style="font-size:10.5px;color:var(--ink-muted);">Enterprise SaaS</div>
+                    <div style="font-size:14.5px;font-weight:750;margin-top:4px;">브랜드 VTON SDK</div>
                   </div>
                   <div class="s08-chips">
                     <span class="chip">신상 디지털 시드</span>
-                    <span class="chip">편집숍·디자이너</span>
                     <span class="chip chip--gold">반품 원가 절감</span>
                   </div>
                 </div>
@@ -1597,21 +1914,21 @@
 
               <div class="panel s12-flow-bar">
                 <span class="gold-accent mono">FREEMIUM → MULTI-LTV</span>
-                <span>① 무료 옷장 유입 (₩0 전처리) ➔ ② 20벌 Lock-in ➔ ③ Pro 구독 전환 ➔ ④ 4-Way 복리 LTV</span>
+                <span>① 무료 유입 (₩0 WASM) ➔ ② 옷장 20벌 Lock-in ➔ ③ Pro · 갭 (ARR+CPS) ➔ ④ 1벌 리셀로 연 구독 회수</span>
                 <span class="badge badge--live">ZERO SINGLE-POINT RISK</span>
               </div>
             </div>
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY IR Deck</span>
-            <span>Business Model ① — 4-Layer Compound Monetization Engine</span>
+            <span>Business Model ① — Live Product-Anchored 4-Layer Revenue Engine</span>
             <span class="s-foot-num">12 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 13 — BM 2 (ORBITAL FLYWHEEL + COST CLIFF + 70% ARC GAUGE)    -->
+      <!-- SLIDE 13 — BM 2 (LIVE iNVTRY LOOP THREE.JS 3D + ₩0 COST SHIELD)    -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-13" class="ir-slide" data-slide="13">
@@ -1629,48 +1946,36 @@
             <div class="s13-grid">
               <div class="panel s13-left">
                 <div class="s03-loop-head">
-                  <span class="s-eyebrow">5-STAGE LTV FLYWHEEL</span>
+                  <span class="s-eyebrow">OFFICIAL SITE · iNVTRY LOOP (5-STAGE LTV)</span>
                   <span class="badge badge--live">ZERO CHURN LOOP</span>
                 </div>
-                <svg class="s13-orbit-svg" viewBox="0 0 480 370" aria-label="5단계 LTV 플라이휠 다이어그램">
-                  <circle cx="240" cy="185" r="118" fill="none" stroke="var(--hairline-gold)" stroke-width="1.6" stroke-dasharray="5 5" />
-                  <circle cx="240" cy="185" r="54" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
-                  <text x="240" y="177" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="13" font-weight="800">iNVTRY</text>
-                  <text x="240" y="194" text-anchor="middle" fill="var(--accent-gold)" font-size="11" font-weight="700">4-Way LTV</text>
-                  <text x="240" y="209" text-anchor="middle" fill="var(--ink-muted)" font-size="9">복합 선순환</text>
 
-                  <!-- Node 1 Top -->
-                  <rect x="166" y="18" width="148" height="44" rx="10" fill="var(--bg-elevated)" stroke="var(--accent-live-border)" />
-                  <text x="240" y="37" text-anchor="middle" fill="var(--ink-primary)" font-size="11.5" font-weight="700">① 무료 중복 체크</text>
-                  <text x="240" y="53" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="9.5">Low CAC · 서버 ₩0</text>
+                <div class="ir-live-frame s13-loop-hero">
+                  <img
+                    src="../../site/public/assets/previews/site-about-loop-ko-dark.webp"
+                    data-light-src="../../site/public/assets/previews/site-about-loop-ko-light.webp"
+                    data-dark-src="../../site/public/assets/previews/site-about-loop-ko-dark.webp"
+                    data-light-src-en="../../site/public/assets/previews/site-about-loop-en-light.webp"
+                    data-dark-src-en="../../site/public/assets/previews/site-about-loop-en-dark.webp"
+                    alt="공식 사이트 순환 옷장 루프 및 비즈니스 모델 라이브 캡처"
+                  />
+                  <span class="ir-live-tag">SITE · Three.js 3D iNVTRY LOOP × BM</span>
+                </div>
 
-                  <!-- Node 2 Right -->
-                  <rect x="334" y="114" width="136" height="44" rx="10" fill="var(--bg-elevated)" stroke="var(--hairline)" />
-                  <text x="402" y="133" text-anchor="middle" fill="var(--ink-primary)" font-size="11.5" font-weight="700">② 옷장 20벌 등록</text>
-                  <text x="402" y="149" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-mono)" font-size="9.5">데이터 Lock-in</text>
-
-                  <!-- Node 3 Bottom Right -->
-                  <rect x="298" y="274" width="152" height="44" rx="10" fill="var(--bg-elevated)" stroke="var(--hairline-gold)" />
-                  <text x="374" y="293" text-anchor="middle" fill="var(--ink-primary)" font-size="11.5" font-weight="700">③ 매일 4겹+ 피팅</text>
-                  <text x="374" y="309" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.5">Pro 월 구독 (ARR)</text>
-
-                  <!-- Node 4 Bottom Left -->
-                  <rect x="30" y="274" width="152" height="44" rx="10" fill="var(--bg-elevated)" stroke="var(--accent-live-border)" />
-                  <text x="106" y="293" text-anchor="middle" fill="var(--ink-primary)" font-size="11.5" font-weight="700">④ 옷장 갭 매칭</text>
-                  <text x="106" y="309" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="9.5">제휴 CPS 5~12%</text>
-
-                  <!-- Node 5 Left -->
-                  <rect x="10" y="114" width="136" height="44" rx="10" fill="var(--bg-elevated)" stroke="var(--hairline-gold)" />
-                  <text x="78" y="133" text-anchor="middle" fill="var(--ink-primary)" font-size="11.5" font-weight="700">⑤ 1탭 인증 리셀</text>
-                  <text x="78" y="149" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.5">수수료 3~8% + O2O</text>
-                </svg>
+                <div class="s13-loop-steps">
+                  <div class="s13-step-chip"><strong>① 무료 중복</strong><span>₩0 WASM</span></div>
+                  <div class="s13-step-chip"><strong>② 20벌 옷장</strong><span>Lock-in</span></div>
+                  <div class="s13-step-chip"><strong>③ 4겹+ 피팅</strong><span>Pro ARR</span></div>
+                  <div class="s13-step-chip"><strong>④ 갭 매칭</strong><span>CPS 5~12%</span></div>
+                  <div class="s13-step-chip"><strong>⑤ 1탭 리셀</strong><span>GMV 3~8%</span></div>
+                </div>
                 <div style="text-align:center;font-size:11.5px;color:var(--accent-gold);font-weight:600;">리셀 현금화 ➔ 새 옷 재구매 · 4-Way LTV 순환</div>
               </div>
 
               <div class="s13-right">
                 <div class="panel s13-cost-card">
                   <div class="s03-loop-head">
-                    <span class="s-eyebrow">ON-DEVICE COST SHIELD (BEFORE vs iNVTRY)</span>
+                    <span class="s-eyebrow">AI 3중 원가 방어 메커니즘 (BEFORE vs iNVTRY)</span>
                     <span class="badge badge--live" data-ir-bind="garment.costHeadSaved">-96% 용량 절감</span>
                   </div>
 
@@ -1740,7 +2045,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 14 — TRACTION (LIVE www.ainvtry.com STUDIO + 6-LAYER STACK)  -->
+      <!-- SLIDE 14 — TRACTION (LIVE STUDIO + 6-PILLAR THREE.JS 3D SPECS)     -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-14" class="ir-slide" data-slide="14">
@@ -1797,6 +2102,30 @@
                   <span class="badge">베타 코호트 [TBD]</span>
                 </div>
 
+                <div class="s14-specs-banner">
+                  <div class="ir-live-frame s14-specs-img">
+                    <img
+                      src="../../site/public/assets/previews/site-specs-pillars-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-specs-pillars-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-specs-pillars-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-specs-pillars-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-specs-pillars-en-dark.webp"
+                      alt="공식 사이트 Three.js 3D 6대 스펙 벤치마크 라이브 캡처"
+                    />
+                    <span class="ir-live-tag">SITE · 03 SPECS</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:5px;min-width:0;">
+                    <span class="mono gold-accent" style="font-size:10px;font-weight:700;">OFFICIAL SITE · 6 BENCHMARK PILLARS</span>
+                    <div class="s08-chips">
+                      <span class="chip chip--live">WEBP -96%</span>
+                      <span class="chip">HTTP/3 EDGE</span>
+                      <span class="chip">GZIP API</span>
+                      <span class="chip chip--gold">21-BONE Three.js 3D</span>
+                      <span class="chip">LOCAL-FIRST</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="s14-tiers">
                   <div class="s14-tier">
                     <span class="s14-tier-name gold-accent">01 · Client Edge</span>
@@ -1834,7 +2163,7 @@
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY IR Deck</span>
-            <span>Traction &amp; Architecture — Live Production Stack Blueprint</span>
+            <span>Traction &amp; Architecture — Live Production Studio &amp; 6-Pillar Specs</span>
             <span class="s-foot-num">14 / 18</span>
           </footer>
         </section>
@@ -1909,23 +2238,59 @@
               <div class="s15-funnel">
                 <div class="s15-channels">
                   <div class="s15-ch">
-                    <div>
-                      <span class="mono gold-accent" style="font-size:10px;font-weight:700;">CHANNEL 01</span>
-                      <div style="font-size:14px;font-weight:740;">오프라인 3초 중복 훅</div>
+                    <div class="s15-ch-left">
+                      <div class="s15-ch-thumb">
+                        <img
+                          src="../../site/public/assets/previews/app-closet-ko-dark.webp"
+                          data-light-src="../../site/public/assets/previews/app-closet-ko-light.webp"
+                          data-dark-src="../../site/public/assets/previews/app-closet-ko-dark.webp"
+                          data-light-src-en="../../site/public/assets/previews/app-closet-en-light.webp"
+                          data-dark-src-en="../../site/public/assets/previews/app-closet-en-dark.webp"
+                          alt="270벌 디지털 옷장 라이브 캡처"
+                        />
+                      </div>
+                      <div>
+                        <span class="mono gold-accent" style="font-size:10px;font-weight:700;">CHANNEL 01</span>
+                        <div style="font-size:14px;font-weight:740;">오프라인 3초 중복 훅</div>
+                      </div>
                     </div>
                     <span class="chip chip--live">성수·명동·더현대</span>
                   </div>
                   <div class="s15-ch">
-                    <div>
-                      <span class="mono gold-accent" style="font-size:10px;font-weight:700;">CHANNEL 02</span>
-                      <div style="font-size:14px;font-weight:740;">360° OOTD 룩북 바이럴</div>
+                    <div class="s15-ch-left">
+                      <div class="s15-ch-thumb">
+                        <img
+                          src="../../site/public/assets/previews/app-calendar-ko-dark.webp"
+                          data-light-src="../../site/public/assets/previews/app-calendar-ko-light.webp"
+                          data-dark-src="../../site/public/assets/previews/app-calendar-ko-dark.webp"
+                          data-light-src-en="../../site/public/assets/previews/app-calendar-en-light.webp"
+                          data-dark-src-en="../../site/public/assets/previews/app-calendar-en-dark.webp"
+                          alt="에디토리얼 OOTD 캘린더 라이브 캡처"
+                        />
+                      </div>
+                      <div>
+                        <span class="mono gold-accent" style="font-size:10px;font-weight:700;">CHANNEL 02</span>
+                        <div style="font-size:14px;font-weight:740;">OOTD 캘린더 · 360° 룩북 바이럴</div>
+                      </div>
                     </div>
-                    <span class="chip">인스타·틱톡 공유</span>
+                    <span class="chip">매일 +10i · SNS 공유</span>
                   </div>
                   <div class="s15-ch">
-                    <div>
-                      <span class="mono gold-accent" style="font-size:10px;font-weight:700;">CHANNEL 03</span>
-                      <div style="font-size:14px;font-weight:740;">세탁 O2O · 편집숍 제휴</div>
+                    <div class="s15-ch-left">
+                      <div class="s15-ch-thumb">
+                        <img
+                          src="../../site/public/assets/previews/site-specs-mannequin-ko-dark.webp"
+                          data-light-src="../../site/public/assets/previews/site-specs-mannequin-ko-light.webp"
+                          data-dark-src="../../site/public/assets/previews/site-specs-mannequin-ko-dark.webp"
+                          data-light-src-en="../../site/public/assets/previews/site-specs-mannequin-en-light.webp"
+                          data-dark-src-en="../../site/public/assets/previews/site-specs-mannequin-en-dark.webp"
+                          alt="공식 사이트 Three.js 3D 마네킹 및 케어 스펙 라이브 캡처"
+                        />
+                      </div>
+                      <div>
+                        <span class="mono gold-accent" style="font-size:10px;font-weight:700;">CHANNEL 03</span>
+                        <div style="font-size:14px;font-weight:740;">세탁 O2O · 편집숍 제휴</div>
+                      </div>
                     </div>
                     <span class="chip chip--gold">초기 옷장·유동성</span>
                   </div>
@@ -1955,7 +2320,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 16 — TEAM & 2027 GOVERNANCE (ORG TIMELINE + 4 SHIELDS)       -->
+      <!-- SLIDE 16 — TEAM & 2027 GOVERNANCE (SOLO SHIPPED PROOF + 4 SHIELDS) -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-16" class="ir-slide" data-slide="16">
@@ -1979,13 +2344,54 @@
                     <div class="mono" style="font-size:10px;color:var(--accent-gold);">SOLO FULL-STACK MVP</div>
                   </div>
                 </div>
+                <div class="s16-shipped-grid" aria-label="단독 구축 실구동 제품 갤러리">
+                  <div class="s16-shipped-tile">
+                    <img
+                      src="../../site/public/assets/previews/site-hero-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-hero-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-hero-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-hero-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-hero-en-dark.webp"
+                      alt="www.ainvtry.com 공식 Three.js 3D 라이브 데모"
+                    />
+                  </div>
+                  <div class="s16-shipped-tile">
+                    <img
+                      src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
+                      alt="360° 7겹 AI 피팅 라이브 캡처"
+                    />
+                  </div>
+                  <div class="s16-shipped-tile">
+                    <img
+                      src="../../site/public/assets/previews/site-arch-privacy-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-arch-privacy-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-arch-privacy-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-arch-privacy-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-arch-privacy-en-dark.webp"
+                      alt="공식 사이트 보안 4대 방어선 라이브 캡처"
+                    />
+                  </div>
+                  <div class="s16-shipped-tile">
+                    <img
+                      src="../../site/public/assets/previews/site-specs-pillars-ko-dark.webp"
+                      data-light-src="../../site/public/assets/previews/site-specs-pillars-ko-light.webp"
+                      data-dark-src="../../site/public/assets/previews/site-specs-pillars-ko-dark.webp"
+                      data-light-src-en="../../site/public/assets/previews/site-specs-pillars-en-light.webp"
+                      data-dark-src-en="../../site/public/assets/previews/site-specs-pillars-en-dark.webp"
+                      alt="공식 사이트 Three.js 3D 6대 스펙 벤치마크 라이브 캡처"
+                    />
+                  </div>
+                </div>
                 <div class="s08-chips">
-                  <span class="chip">Three.js 3D · Blender</span>
-                  <span class="chip">2D VTON AI</span>
+                  <span class="chip">Three.js 3D · VTON</span>
                   <span class="chip chip--live">0B 보안 백엔드</span>
                   <span class="chip">Web·iOS·Android</span>
                 </div>
-                <div class="mono" style="font-size:10.5px;color:var(--ink-muted);" data-ir-bind="meta.domainContact">ainvtry.com · raymond@ainvtry.com</div>
+                <div class="mono" style="font-size:10px;color:var(--ink-muted);" data-ir-bind="meta.domainContact">ainvtry.com · raymond@ainvtry.com</div>
                 <span class="badge">[이력·법인 일정 TBD]</span>
               </div>
 
@@ -2087,7 +2493,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 17 — FUNDING ASK (18M DONUT + VALUE-INFLECTION STAIRCASE)    -->
+      <!-- SLIDE 17 — FUNDING ASK (18M DONUT + VISUAL INFLECTION STAIRCASE)   -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-17" class="ir-slide" data-slide="17">
@@ -2172,27 +2578,57 @@
                   </div>
 
                   <div class="s17-stairs">
-                    <svg style="position:absolute;top:0;left:0;width:100%;height:96px;pointer-events:none;" viewBox="0 0 640 96" preserveAspectRatio="none" aria-hidden="true">
-                      <path d="M 100 84 Q 320 56 540 14" fill="none" stroke="var(--accent-gold)" stroke-width="2" />
-                      <circle cx="540" cy="14" r="5.5" fill="var(--accent-live)" />
+                    <svg style="position:absolute;top:0;left:0;width:100%;height:78px;pointer-events:none;" viewBox="0 0 640 78" preserveAspectRatio="none" aria-hidden="true">
+                      <path d="M 100 68 Q 320 44 540 12" fill="none" stroke="var(--accent-gold)" stroke-width="2" />
+                      <circle cx="540" cy="12" r="5.5" fill="var(--accent-live)" />
                     </svg>
 
                     <div class="s17-step s17-step-1">
+                      <div class="s17-step-thumb">
+                        <img
+                          src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                          data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
+                          data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                          data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                          data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
+                          alt="360° 7겹 AI 피팅 라이브 캡처"
+                        />
+                      </div>
                       <span class="mono" style="font-size:10px;color:var(--ink-muted);">M+1 ~ M+6</span>
-                      <strong style="font-size:16px;">01 · LAUNCH</strong>
-                      <span style="font-size:12px;color:var(--ink-secondary);">스토어 정식 출시 · 모의해킹</span>
+                      <strong style="font-size:15px;">01 · LAUNCH</strong>
+                      <span style="font-size:11.5px;color:var(--ink-secondary);">스토어 정식 출시 · 모의해킹</span>
                       <span class="chip">INFRA READY</span>
                     </div>
                     <div class="s17-step s17-step-2">
+                      <div class="s17-step-thumb">
+                        <img
+                          src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                          data-light-src="../../site/public/assets/previews/app-stats-ko-light.webp"
+                          data-dark-src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                          data-light-src-en="../../site/public/assets/previews/app-stats-en-light.webp"
+                          data-dark-src-en="../../site/public/assets/previews/app-stats-en-dark.webp"
+                          alt="CPW · 자산 리포트 라이브 캡처"
+                        />
+                      </div>
                       <span class="mono" style="font-size:10px;color:var(--ink-muted);">M+7 ~ M+12</span>
-                      <strong style="font-size:16px;">02 · MONETIZE</strong>
-                      <span style="font-size:12px;color:var(--ink-secondary);">Pro 구독 · 택 OCR · 갭 커머스</span>
+                      <strong style="font-size:15px;">02 · MONETIZE</strong>
+                      <span style="font-size:11.5px;color:var(--ink-secondary);">Pro 구독 · 택 OCR · 갭 커머스</span>
                       <span class="chip chip--live">UNIT ECON</span>
                     </div>
                     <div class="s17-step s17-step-3">
+                      <div class="s17-step-thumb">
+                        <img
+                          src="../../site/public/assets/previews/site-about-loop-ko-dark.webp"
+                          data-light-src="../../site/public/assets/previews/site-about-loop-ko-light.webp"
+                          data-dark-src="../../site/public/assets/previews/site-about-loop-ko-dark.webp"
+                          data-light-src-en="../../site/public/assets/previews/site-about-loop-en-light.webp"
+                          data-dark-src-en="../../site/public/assets/previews/site-about-loop-en-dark.webp"
+                          alt="공식 사이트 순환 옷장 루프 및 비즈니스 모델 라이브 캡처"
+                        />
+                      </div>
                       <span class="mono gold-accent" style="font-size:10px;font-weight:700;">M+13 ~ M+18</span>
-                      <strong class="gold-accent" style="font-size:16px;">03 · SCALE ↗</strong>
-                      <span style="font-size:12px;color:var(--ink-secondary);">인증 리셀 안착 · 특허 2건+</span>
+                      <strong class="gold-accent" style="font-size:15px;">03 · SCALE ↗</strong>
+                      <span style="font-size:11.5px;color:var(--ink-secondary);">인증 리셀 안착 · 특허 2건+</span>
                       <span class="chip chip--gold">SERIES A</span>
                     </div>
                   </div>
@@ -2209,7 +2645,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 18 — CLOSING & LIVE www.ainvtry.com HERO PREVIEW             -->
+      <!-- SLIDE 18 — CLOSING (DUAL-DEVICE LIVE HERO + OFFICIAL SITE FAQ)     -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-18" class="ir-slide" data-slide="18">
@@ -2244,32 +2680,57 @@
               </div>
 
               <div class="s18-right">
-                <div class="browser-frame s18-browser">
-                  <div class="browser-bar">
-                    <span class="browser-dots"><i></i><i></i><i></i></span>
-                    <span class="browser-url" data-ir-bind="meta.urlShort">www.ainvtry.com</span>
-                    <span class="badge badge--live">Three.js 3D LIVE</span>
+                <div class="s18-device-stage">
+                  <div class="browser-frame s18-browser s18-browser--dual">
+                    <div class="browser-bar">
+                      <span class="browser-dots"><i></i><i></i><i></i></span>
+                      <span class="browser-url" data-ir-bind="meta.urlShort">www.ainvtry.com</span>
+                      <span class="badge badge--live">Three.js 3D LIVE</span>
+                    </div>
+                    <div class="browser-viewport">
+                      <img
+                        src="../../site/public/assets/previews/site-hero-ko-dark.webp"
+                        data-light-src="../../site/public/assets/previews/site-hero-ko-light.webp"
+                        data-dark-src="../../site/public/assets/previews/site-hero-ko-dark.webp"
+                        data-light-src-en="../../site/public/assets/previews/site-hero-en-light.webp"
+                        data-dark-src-en="../../site/public/assets/previews/site-hero-en-dark.webp"
+                        alt="www.ainvtry.com 공식 Three.js 3D 라이브 데모"
+                      />
+                    </div>
                   </div>
-                  <div class="browser-viewport">
-                    <img
-                      src="../../site/public/assets/previews/site-hero-ko-dark.webp"
-                      data-light-src="../../site/public/assets/previews/site-hero-ko-light.webp"
-                      data-dark-src="../../site/public/assets/previews/site-hero-ko-dark.webp"
-                      data-light-src-en="../../site/public/assets/previews/site-hero-en-light.webp"
-                      data-dark-src-en="../../site/public/assets/previews/site-hero-en-dark.webp"
-                      alt="www.ainvtry.com 공식 Three.js 3D 라이브 데모"
-                    />
+                  <div class="device-frame s18-floating-phone">
+                    <div class="device-screen">
+                      <img
+                        src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                        data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
+                        data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                        data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                        data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
+                        alt="실구동 iNVTRY 360° 레이어드 피팅 라이브 캡처"
+                      />
+                    </div>
                   </div>
                 </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;">
-                  <span class="badge badge--live">LIVE AT WWW.AINVTRY.COM</span>
-                  <span class="mono" style="font-size:11px;color:var(--ink-secondary);">Cloudflare Global Edge · Web · iOS · Android</span>
+
+                <div class="s18-faq-strip">
+                  <div class="s18-faq-pill">
+                    <span class="mono live-accent" style="font-size:9.5px;font-weight:700;">Q · 얼굴 서버 전송?</span>
+                    <span style="font-size:10.5px;color:var(--ink-secondary);">0B · 기기 RAM 즉시 폐기</span>
+                  </div>
+                  <div class="s18-faq-pill">
+                    <span class="mono gold-accent" style="font-size:9.5px;font-weight:700;">Q · VTON vs Three.js 3D?</span>
+                    <span style="font-size:10.5px;color:var(--ink-secondary);">실사 8방향 + 실시간 모션</span>
+                  </div>
+                  <div class="s18-faq-pill">
+                    <span class="mono" style="font-size:9.5px;font-weight:700;">Q · 지원 플랫폼?</span>
+                    <span style="font-size:10.5px;color:var(--ink-secondary);">Web · iOS · Android 단일 코드</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
           <footer class="s-foot">
-            <span class="s-foot-brand">Ainvtry Inc. (iNVTRY) · Confidential IR Deck v5.2</span>
+            <span class="s-foot-brand">Ainvtry Inc. (iNVTRY) · Confidential IR Deck v5.3</span>
             <span data-ir-bind="meta.locationDate">Seoul, Republic of Korea · 2026.11</span>
             <span class="s-foot-num">18 / 18</span>
           </footer>

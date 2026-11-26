@@ -2371,35 +2371,703 @@ html, body {
 }
 
 /* ============================================================================
+ * v5.3 Active Live App & Official Homepage Visual Showcase Extensions
+ * ============================================================================ */
+.ir-live-frame {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-gold);
+  background: var(--bg-recessed);
+  min-height: 0;
+}
+
+.ir-live-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ir-live-tag {
+  position: absolute;
+  left: 7px;
+  bottom: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(5, 5, 7, 0.78);
+  color: #F5F5F7;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border: 1px solid rgba(214, 184, 137, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+.ir-garment-rack {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ir-garment-chip {
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  padding: 4px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: none;
+}
+
+.ir-garment-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Slide 01 — Dual Live Showcase (Phone + Live Site Hero + Orbit) */
+.s01-mission-line {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent-gold);
+  margin: -6px 0 0;
+  word-break: keep-all;
+}
+
+.s01-right-stack {
+  height: 454px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.s01-site-preview {
+  height: 162px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-gold);
+  background: var(--bg-surface);
+}
+
+.s01-site-bar {
+  height: 22px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-secondary);
+}
+
+.s01-site-preview img {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  object-fit: cover;
+  display: block;
+}
+
+.s01-orbit-compact {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Slide 02 — Visual Preview Banner per Act */
+.s02-act-visual {
+  height: 82px;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  position: relative;
+  background: var(--bg-recessed);
+  flex: none;
+}
+
+.s02-act-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
+
+.s02-act-visual--duo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  background: var(--hairline);
+}
+
+.s02-act-visual--duo img:first-child {
+  object-position: center 28%;
+}
+
+.s02-item {
+  padding: 8px 9px;
+}
+
+/* Slide 03 — Visual Thumbnails inside 5 Closed-Loop Nodes */
+.s03-node {
+  padding: 10px 10px 12px;
+  gap: 6px;
+}
+
+.s03-node-thumb {
+  width: 100%;
+  height: 76px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: var(--bg-recessed);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.s03-node-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 28%;
+  display: block;
+}
+
+.s03-node-thumb--garments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 6px;
+  background: var(--bg-surface);
+}
+
+.s03-node-thumb--garments img {
+  object-fit: contain;
+}
+
+/* Slide 05 — Center Live Phone + 4 Cutout Garments Hub */
+.s05-core-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.s05-phone-hub {
+  width: 144px;
+  height: 294px;
+  border-radius: 22px;
+  padding: 5px;
+  border: 1.5px solid var(--accent-gold);
+  background: #0A0B0F;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.55), 0 0 24px rgba(214, 184, 137, 0.18);
+}
+
+.s05-phone-hub .device-screen {
+  border-radius: 17px;
+}
+
+.s05-garments-mini {
+  display: flex;
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline-gold);
+}
+
+.s05-garments-mini img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
+}
+
+/* Slide 06 — Homepage Speech Bubbles + Live App Proof Strip */
+.s06-speech {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 7px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: rgba(5, 5, 7, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #F5F5F7;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s06-live-bar {
+  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+}
+
+.s06-live-thumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.s06-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.s06-live-pill img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+}
+
+/* Slide 07 — Full 5-Screen Live Production App Runway */
+.s07-grid--5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.s07-grid--5 .s07-phone {
+  max-width: 204px;
+  border-radius: 26px;
+  padding: 6px;
+}
+
+.s07-grid--5 .s07-phone .device-screen {
+  border-radius: 20px;
+}
+
+.s07-grid--5 .s07-phone .device-island {
+  width: 50px;
+  height: 11px;
+  top: 5px;
+}
+
+.s07-grid--5 .s07-cap-title {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.s07-grid--5 .s07-cap-sub {
+  font-size: 10.5px;
+}
+
+/* Slide 08 — 4-Layer Cutout Stack + Live Three.js 3D Weather Cube */
+.s08-lab-main--rich {
+  grid-template-columns: 280px 1fr 224px;
+  gap: 18px;
+}
+
+.s08-after-stack {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  padding: 5px;
+}
+
+.s08-after-stack img {
+  width: 100%;
+  height: 46px;
+  object-fit: contain;
+  display: block;
+}
+
+.s08-weather-box {
+  height: 136px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.s08-weather-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Slide 09 — Live App Profile Vault + Live Homepage Privacy 3D Stage */
+.s09-zone-split {
+  display: grid;
+  grid-template-columns: 94px 1fr;
+  gap: 10px;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.s09-phone-mini {
+  border-radius: 15px;
+  padding: 4px;
+  border: 1.2px solid var(--accent-live-border);
+  background: #0A0B0F;
+  overflow: hidden;
+  display: flex;
+}
+
+.s09-phone-mini img {
+  width: 100%;
+  height: 100%;
+  border-radius: 11px;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+}
+
+.s09-zone-metrics--col {
+  grid-template-columns: 1fr;
+  gap: 7px;
+}
+
+.s09-bottom-rich {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.s09-site-privacy {
+  height: 98px;
+}
+
+/* Slide 10 — Live Circular Proof Strip */
+.s10-proof-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline-gold);
+  background: var(--bg-elevated);
+  font-size: 11.5px;
+}
+
+.s10-proof-pill img {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  object-fit: cover;
+  object-position: center top;
+  border: 1px solid var(--hairline);
+  flex: none;
+}
+
+/* Slide 11 — White-Space Live Phone Badge + Live 3D Mannequin Card */
+.s11-map-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.s11-mannequin-card {
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 146px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.s11-mannequin-img {
+  height: 82px;
+}
+
+/* Slide 12 — Live Screenshot Window inside Every Revenue Pillar */
+.s12-trend-wrap {
+  padding-top: 34px;
+}
+
+.s12-pillar {
+  padding: 12px 13px;
+  gap: 7px;
+}
+
+.s12-p1 { height: 79%; }
+.s12-p2 { height: 86%; }
+.s12-p3 { height: 93%; }
+.s12-p4 { height: 100%; border-color: var(--hairline-gold); }
+
+.s12-shot {
+  height: 90px;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: var(--bg-recessed);
+  position: relative;
+  flex: none;
+}
+
+.s12-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 28%;
+  display: block;
+}
+
+.s12-p4 .s12-shot img {
+  object-position: center center;
+}
+
+.s12-val {
+  font-size: 24px;
+}
+
+/* Slide 13 — Live Homepage 3D iNVTRY LOOP + 5-Stage LTV Strip */
+.s13-loop-hero {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.s13-loop-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.s13-step-chip {
+  padding: 6px 5px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.s13-step-chip strong {
+  font-size: 10.5px;
+  line-height: 1.2;
+}
+
+.s13-step-chip span {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent-gold);
+}
+
+/* Slide 14 — Live Homepage 6-Pillar 3D Specs Visual Banner above 6-Tier Stack */
+.s14-specs-banner {
+  height: 108px;
+  display: grid;
+  grid-template-columns: 196px 1fr;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline-gold);
+  background: var(--bg-elevated);
+  align-items: center;
+  flex: none;
+}
+
+.s14-specs-img {
+  height: 90px;
+}
+
+/* Slide 15 — Live App Thumbnails inside GTM Channels */
+.s15-ch-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.s15-ch-thumb {
+  width: 48px;
+  height: 44px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-gold);
+  background: var(--bg-recessed);
+  flex: none;
+}
+
+.s15-ch-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 28%;
+  display: block;
+}
+
+/* Slide 16 — Solo Shipped Proof Gallery inside Founder Card */
+.s16-shipped-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.s16-shipped-tile {
+  height: 44px;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: var(--bg-recessed);
+}
+
+.s16-shipped-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
+
+.s16-shipped-tile:nth-child(2) img {
+  object-position: center 28%;
+}
+
+/* Slide 17 — Mini Proof Thumbnails inside Value-Inflection Steps */
+.s17-step-thumb {
+  height: 54px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: var(--bg-recessed);
+  flex: none;
+}
+
+.s17-step-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 28%;
+  display: block;
+}
+
+.s17-step-3 .s17-step-thumb img {
+  object-position: center center;
+}
+
+/* Slide 18 — Signature Dual-Device Showcase (Desktop Hero + Floating Live Phone) + FAQ Bar */
+.s18-device-stage {
+  position: relative;
+  height: 368px;
+}
+
+.s18-browser--dual {
+  height: 344px;
+  width: 92%;
+}
+
+.s18-floating-phone {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 156px;
+  height: 320px;
+  border-radius: 24px;
+  padding: 5px;
+  border: 1.6px solid var(--accent-gold);
+  background: #0A0B0F;
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.62);
+}
+
+.s18-floating-phone .device-screen {
+  border-radius: 19px;
+}
+
+.s18-faq-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.s18-faq-pill {
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ============================================================================
  * 4:3 Compact Ratio Adaptation (1024x768)
  * ============================================================================ */
 :root[data-ratio='4-3'] .ir-slide {
   padding: 24px 28px 18px;
 }
 :root[data-ratio='4-3'] .s-title { font-size: 23px; }
-:root[data-ratio='4-3'] .s01-h1 { font-size: 36px; }
-:root[data-ratio='4-3'] .s01-right { grid-template-columns: 185px 1fr; gap: 12px; }
-:root[data-ratio='4-3'] .s01-phone { width: 185px; height: 382px; }
-:root[data-ratio='4-3'] .s01-orbit-card { height: 382px; padding: 12px 8px; }
+:root[data-ratio='4-3'] .s01-h1 { font-size: 35px; }
+:root[data-ratio='4-3'] .s01-right { grid-template-columns: 175px 1fr; gap: 12px; }
+:root[data-ratio='4-3'] .s01-phone { width: 175px; height: 392px; }
+:root[data-ratio='4-3'] .s01-right-stack { height: 392px; gap: 8px; }
+:root[data-ratio='4-3'] .s01-site-preview { height: 132px; }
 :root[data-ratio='4-3'] .s02-acts { gap: 10px; }
 :root[data-ratio='4-3'] .s02-act { padding: 10px; }
+:root[data-ratio='4-3'] .s02-act-visual { height: 68px; }
 :root[data-ratio='4-3'] .s02-label { font-size: 11px; }
 :root[data-ratio='4-3'] .s03-g-val { font-size: 21px; }
 :root[data-ratio='4-3'] .s03-ring { width: 54px; height: 54px; }
-:root[data-ratio='4-3'] .s05-stage { grid-template-columns: 1fr 220px 1fr; }
-:root[data-ratio='4-3'] .s08-lab-main { grid-template-columns: 230px 1fr 125px; gap: 14px; }
+:root[data-ratio='4-3'] .s03-node-thumb { height: 64px; }
+:root[data-ratio='4-3'] .s05-stage { grid-template-columns: 1fr 215px 1fr; }
+:root[data-ratio='4-3'] .s05-phone-hub { width: 122px; height: 248px; }
+:root[data-ratio='4-3'] .s07-grid--5 { gap: 9px; }
+:root[data-ratio='4-3'] .s07-grid--5 .s07-cap-title { font-size: 10.5px; }
+:root[data-ratio='4-3'] .s08-lab-main--rich { grid-template-columns: 224px 1fr 176px; gap: 12px; }
 :root[data-ratio='4-3'] .s08-thumb-box,
-:root[data-ratio='4-3'] .s08-thumb { width: 92px; height: 92px; }
-:root[data-ratio='4-3'] .s08-pct-num { font-size: 38px; }
-:root[data-ratio='4-3'] .s09-zones { grid-template-columns: 1fr 54px 1.1fr 54px 1fr; }
-:root[data-ratio='4-3'] .s09-metric-val { font-size: 17px; }
-:root[data-ratio='4-3'] .s12-val { font-size: 22px; }
+:root[data-ratio='4-3'] .s08-thumb { width: 88px; height: 88px; }
+:root[data-ratio='4-3'] .s08-after-stack img { height: 36px; }
+:root[data-ratio='4-3'] .s08-pct-num { font-size: 36px; }
+:root[data-ratio='4-3'] .s09-zones { grid-template-columns: 1.05fr 46px 1.05fr 46px 0.95fr; }
+:root[data-ratio='4-3'] .s09-zone-split { grid-template-columns: 74px 1fr; }
+:root[data-ratio='4-3'] .s09-metric-val { font-size: 16px; }
+:root[data-ratio='4-3'] .s09-bottom-rich { grid-template-columns: 196px 1fr; }
+:root[data-ratio='4-3'] .s11-mannequin-card { grid-template-columns: 112px 1fr; }
+:root[data-ratio='4-3'] .s12-val { font-size: 20px; }
+:root[data-ratio='4-3'] .s12-shot { height: 74px; }
 :root[data-ratio='4-3'] .s13-margin-card { grid-template-columns: 158px 1fr; }
 :root[data-ratio='4-3'] .s13-gauge-svg { width: 154px; height: 102px; }
-:root[data-ratio='4-3'] .s14-tier { grid-template-columns: 108px 1fr auto; }
-:root[data-ratio='4-3'] .s15-funnel { grid-template-columns: 1.35fr 76px 0.72fr; }
-:root[data-ratio='4-3'] .s16-org { grid-template-columns: 1.2fr 26px 1fr 1fr 1fr; gap: 8px; padding: 14px; }
+:root[data-ratio='4-3'] .s14-specs-banner { grid-template-columns: 150px 1fr; height: 96px; }
+:root[data-ratio='4-3'] .s14-specs-img { height: 78px; }
+:root[data-ratio='4-3'] .s14-tier { grid-template-columns: 104px 1fr auto; }
+:root[data-ratio='4-3'] .s15-funnel { grid-template-columns: 1.35fr 70px 0.72fr; }
+:root[data-ratio='4-3'] .s16-org { grid-template-columns: 1.25fr 22px 1fr 1fr 1fr; gap: 8px; padding: 12px; }
 :root[data-ratio='4-3'] .s18-h1 { font-size: 40px; }
+:root[data-ratio='4-3'] .s18-floating-phone { width: 132px; height: 270px; }
 
 /* ============================================================================
  * Print / PDF Export Mode

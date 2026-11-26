@@ -743,7 +743,7 @@
       "url": "https://stitch.withgoogle.com/projects/17500831115017553962",
       "metadataFile": ".stitch/ir-v5-metadata.json",
       "status": "APPROVED_AND_IMPLEMENTED",
-      "revision": "v5.2-infographic-first-live-demo",
+      "revision": "v5.3-live-app-and-official-site-showcase",
       "sourceSlidesUploaded": 18,
       "redesignedSlides": 18,
       "themeShowcases": 3,
@@ -751,7 +751,7 @@
         "dark": "assets/343642396407500201",
         "light": "assets/3651991771177497085"
       },
-      "lastSyncTime": "2026-11-26T06:45:00Z"
+      "lastSyncTime": "2026-11-26T07:55:00Z"
     }
   }
 }

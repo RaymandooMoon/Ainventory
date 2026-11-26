@@ -1,10 +1,10 @@
-# iNVTRY (Ainvtry) IR 사업계획서 데크 (`docs/ir-deck/`) — v5.2 (Stitch Infographic · Live Demo · KO/EN · Light/Dark · 18장)
+# iNVTRY (Ainvtry) IR 사업계획서 데크 (`docs/ir-deck/`) — v5.3 (Live App 5종 · Official Site 3D · Stitch Infographic · KO/EN · Light/Dark · 18장)
 
-TIPS · 도전의IR · 글로벌 VC 투자 제안서 표준을 반영하고 **Google Stitch 18장 전면 UI 개편(프로젝트 `17500831115017553962`)**으로 완성한 **인포그래픽 중심(텍스트 ~60% 감축) + 실구동 라이브 데모 캡처 24종(`www.ainvtry.com` · `/app` × KO/EN × Light/Dark) + 듀얼 테마(`OLED Noir Dark` ↔ `Atelier Paper Light`) + 듀얼 비율(`16:9` & `4:3`) HTML IR 사업계획서**입니다.
+TIPS · 도전의IR · 글로벌 VC 투자 제안서 표준을 반영하고 **Google Stitch 18장 전면 UI 개편(프로젝트 `17500831115017553962`)**으로 완성한 **인포그래픽 중심 + 실구동 앱 5종 & 공식 홈페이지 Three.js 3D 스테이지 라이브 캡처 48종(`www.ainvtry.com` · `/app` × KO/EN × Light/Dark) + 홈페이지 핵심 콘텐츠 연동 + 듀얼 테마(`OLED Noir Dark` ↔ `Atelier Paper Light`) + 듀얼 비율(`16:9` & `4:3`) HTML IR 사업계획서**입니다.
 
-## v5.2 주요 특징
-- **인포그래픽 중심 전면 개편 (18장 맞춤형 SVG)**: 5-Node 순환 오빗, 4-Act 별자리 로드맵, 라디얼 KPI 게이지, 6대 단절 게이지, 6→1 Sankey 수렴도, `-96%` 압축 바 랩, 3-Zone 방화벽 도식, 동심원 TAM/SAM/SOM + 성장 차트, 2×2 백색지대 + 도트 매트릭스, 4단 상승 수익 스택, 오빗 플라이휠 + `70%+` 반원 마진 게이지, 6-Layer 스택, Gantt + 3→1 퍼널, 조직 확장 타임라인, `18M Runway` 도넛 + 가치 변곡 계단을 순수 CSS 변수 SVG로 구현했습니다.
-- **실구동 라이브 데모 캡처 24종 자동 스왑**: `www.ainvtry.com`(3D 히어로 · 라이브 스튜디오) 및 `www.ainvtry.com/app`(7겹 피팅 · 270벌 옷장 · 100% 활용률 통계 · 0B 볼트) 실화면 캡처(`site/public/assets/previews/*.webp`)가 언어(`KO/EN`) × 테마(`Light/Dark`) 전환에 따라 즉시 자동 전환됩니다.
+## v5.3 주요 특징
+- **실구동 앱 5종 + 공식 홈페이지 콘텐츠 전면 통합 (48종 라이브 캡처 자동 스왑)**: `www.ainvtry.com/app` 5개 전 화면(360° 7겹 피팅 · 270벌 옷장 · OOTD 캘린더 출석 스트릭 · 100% 활용률 CPW 통계 · 0B 얼굴 볼트)과 `www.ainvtry.com` 공식 홈페이지 7개 스테이지(Three.js 3D 히어로 · 라이브 스튜디오 · 4대 보안 3D 스택 · 실시간 기상 Google API × Three.js 3D · 6대 벤치마크 3D 필라 · Three.js 3D 마네킹 케어 · 3D `iNVTRY LOOP` 비즈니스 모델), 4겹 배경 제거 의류 에셋, 6컷 여정 말풍선 및 FAQ까지 전 슬라이드에 걸쳐 언어(`KO/EN`) × 테마(`Light/Dark`)로 실시간 전환됩니다.
+- **인포그래픽 중심 전면 개편 (18장 맞춤형 SVG)**: 5-Node 순환 오빗, 4-Act 비주얼 로드맵, 라디얼 KPI 게이지, 6대 단절 게이지, 6→1 라이브 앱 허브 수렴도, `-96%` 4겹 압축 랩, 3-Zone 방화벽 도식, 동심원 TAM/SAM/SOM + 성장 차트, 2×2 백색지대 + 도트 매트릭스, 실화면 내장 4단 수익 스택, `iNVTRY LOOP` + `70%+` 마진 게이지, 6-Layer 스택, 3→1 퍼널, 단독 구축 증거 갤러리, `18M Runway` 도넛 + 가치 변곡 계단을 순수 CSS 변수 SVG로 구현했습니다.
 - **완전한 한/영 (`KO | EN`) 실시간 전환 (`ir-deck-i18n.js`)**: 18장 전체 텍스트, 인라인 SVG `<text>`, 36개 `data-ir-bind` 실시간 동기화 수치, 툴바·목차·PDF 제목까지 한국어/영어로 즉시 전환합니다.
 - **OLED Noir Dark ↔ Atelier Paper Light 트윈 테마**: `#050507` OLED Noir + `#D6B889` Champagne Gold와 `#F6F3EC` Atelier Linen + `#9E7B46` Champagne Bronze를 View Transitions 원형 확산과 함께 즉시 전환하며, 단축키(`←`/`→`, `L` 한/영, `T` 라이트/다크, `R` 16:9·4:3) 및 URL 쿼리(`?lang=ko|en&theme=light|dark&mood=luxury|aurora&ratio=16-9|4-3&view=deck|scroll&slide=1..18`)를 지원합니다.
 - **정확한 기술 용어 정책 (`Three.js` 전용 3D 표기)**:
