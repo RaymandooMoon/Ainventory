@@ -809,6 +809,105 @@ html[data-ios-safari='true'] .site-live-app-stage {
   border-color: var(--accent-gold-hairline);
 }
 
+/* Reduced-Motion 3D Override & iOS Tilt Gyroscope Controls (Apple HIG Pill) */
+.site-hero-motion-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  pointer-events: auto;
+}
+
+.site-hero-motion-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.site-motion-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 15px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--accent-gold-hairline);
+  background: var(--bg-callout);
+  color: var(--ink-primary);
+  font-family: inherit;
+  font-size: 0.77rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: var(--glass-specular), 0 10px 26px -12px rgba(0, 0, 0, 0.42);
+  transition:
+    transform 0.16s var(--site-ease),
+    background-color 0.2s var(--site-ease),
+    border-color 0.2s var(--site-ease),
+    color 0.2s var(--site-ease);
+}
+
+.site-motion-pill svg {
+  color: var(--accent-gold-ink);
+  flex-shrink: 0;
+}
+
+.site-motion-pill:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--accent-gold);
+}
+
+.site-motion-pill:active {
+  transform: scale(0.97);
+}
+
+.site-motion-pill--subtle {
+  min-height: 40px;
+  padding: 0 13px;
+  border-color: var(--hairline-strong);
+  background: var(--bg-glass);
+  color: var(--ink-secondary);
+  font-size: 0.74rem;
+  font-weight: 560;
+}
+
+.site-motion-pill--active {
+  border-color: var(--accent-gold-hairline);
+  background: var(--accent-gold-soft);
+  color: var(--ink-primary);
+}
+
+.site-motion-pill--blocked {
+  border-color: var(--hairline-strong);
+  color: var(--ink-tertiary);
+}
+
+.site-motion-hint {
+  margin: 0;
+  max-width: 340px;
+  font-size: 0.71rem;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: var(--ink-tertiary);
+  text-align: center;
+  text-wrap: balance;
+  pointer-events: none;
+}
+
+.site-stage-motion-banner {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(116px + env(safe-area-inset-bottom));
+  z-index: 28;
+  pointer-events: auto;
+}
+
 .site-hero-proof-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
