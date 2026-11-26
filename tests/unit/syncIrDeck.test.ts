@@ -84,5 +84,27 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
       !hostedHtml.includes('../../site/public/assets/'),
       'hosted /ir/index.html must rewrite relative site asset paths to /assets/'
     );
+    assert.ok(
+      hostedHtml.includes('data-light-src-en="/assets/previews/app-fitting-live-en-light.webp"'),
+      'hosted /ir/index.html must include rewritten English Light preview assets'
+    );
+    assert.ok(
+      hostedHtml.includes('data-dark-src-en="/assets/previews/app-fitting-live-en-dark.webp"'),
+      'hosted /ir/index.html must include rewritten English Dark preview assets'
+    );
+  });
+
+  test('bilingual ir-deck-i18n.js dictionary is synced to hosted /ir/ and covers KO/EN switching', () => {
+    const docsI18nPath = path.join(REPO_ROOT, 'docs', 'ir-deck', 'ir-deck-i18n.js');
+    const hostedI18nPath = path.join(REPO_ROOT, 'site', 'public', 'ir', 'ir-deck-i18n.js');
+    assert.ok(fs.existsSync(docsI18nPath), 'docs/ir-deck/ir-deck-i18n.js must exist');
+    assert.ok(fs.existsSync(hostedI18nPath), 'hosted site/public/ir/ir-deck-i18n.js must exist');
+    assert.equal(
+      fs.readFileSync(hostedI18nPath, 'utf8'),
+      fs.readFileSync(docsI18nPath, 'utf8'),
+      'site/public/ir/ir-deck-i18n.js drifted from docs/ir-deck/ir-deck-i18n.js — run `npm run ir:sync`'
+    );
+    const i18nSrc = fs.readFileSync(docsI18nPath, 'utf8');
+    assert.ok(i18nSrc.includes('RICH_HTML_EN') && i18nSrc.includes('TEXT_EN') && i18nSrc.includes('formatBoundEn'));
   });
 });

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "3.1",
+  "schemaVersion": "4.0",
   "syncMonth": "2026.11",
   "meta": {
     "brandName": "Ainvtry",
@@ -36,10 +36,10 @@
     "unitSuites": 46,
     "apiSuites": 9,
     "e2eSuites": 5,
-    "caseCount": 405,
+    "caseCount": 406,
     "roundedPlus": "400+",
-    "summaryShort": "60스위트 · 405케이스 통과",
-    "summaryLine": "단위·API·WebGL E2E 60스위트(405케이스) · 3플랫폼"
+    "summaryShort": "60스위트 · 406케이스 통과",
+    "summaryLine": "단위·API·WebGL E2E 60스위트(406케이스) · 3플랫폼"
   },
   "garment": {
     "beforeBytes": 582332,
@@ -127,12 +127,20 @@
     "hashes": {
       "site/public/assets/previews/app-fitting-live-ko-light.webp": "7c3576c7f19b",
       "site/public/assets/previews/app-fitting-live-ko-dark.webp": "8362ea17a6e0",
+      "site/public/assets/previews/app-fitting-live-en-light.webp": "725c749483e2",
+      "site/public/assets/previews/app-fitting-live-en-dark.webp": "41a7cba8dd61",
       "site/public/assets/previews/app-closet-ko-light.webp": "35cfc77b2231",
       "site/public/assets/previews/app-closet-ko-dark.webp": "5915931b2567",
+      "site/public/assets/previews/app-closet-en-light.webp": "7e93b52d79e2",
+      "site/public/assets/previews/app-closet-en-dark.webp": "35ca2272c457",
       "site/public/assets/previews/app-stats-ko-light.webp": "fa8d7938d5cd",
       "site/public/assets/previews/app-stats-ko-dark.webp": "b966417cede3",
+      "site/public/assets/previews/app-stats-en-light.webp": "71a4d78dd2c9",
+      "site/public/assets/previews/app-stats-en-dark.webp": "eaeb5ec0f4ec",
       "site/public/assets/previews/app-profile-ko-light.webp": "d4f6efdc2f2c",
       "site/public/assets/previews/app-profile-ko-dark.webp": "44ad4bd5d770",
+      "site/public/assets/previews/app-profile-en-light.webp": "7e6402e2c267",
+      "site/public/assets/previews/app-profile-en-dark.webp": "7ca29a088140",
       "site/public/assets/journey/clay-cut-01-v1.webp": "2ffdf12e3801",
       "site/public/assets/journey/clay-cut-02-v1.webp": "34b2d763b46f",
       "site/public/assets/journey/clay-cut-03-v1.webp": "1ab31b12b1c8",

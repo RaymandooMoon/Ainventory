@@ -556,7 +556,7 @@ export function AboutStageHud({
             <ArrowUpRight size={14} aria-hidden="true" />
           </a>
           <a
-            href={`${SITE_IR_DECK_HREF}?theme=${theme}&mood=${mood}`}
+            href={`${SITE_IR_DECK_HREF}?lang=${lang}&theme=${theme}&mood=${mood}`}
             target="_blank"
             rel="noopener noreferrer"
             className="hud-founder-cta hud-founder-cta--secondary"

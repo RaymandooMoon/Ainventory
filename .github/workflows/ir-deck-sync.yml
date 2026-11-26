@@ -11,6 +11,7 @@ on:
       - 'site/public/assets/journey/**'
       - 'site/public/assets/garments/**'
       - 'docs/ir-deck/ir-deck.css'
+      - 'docs/ir-deck/ir-deck-i18n.js'
       - 'docs/ir-deck/ir-deck.js'
       - 'docs/ir-deck/assets/bg/**'
       - 'tests/**'
