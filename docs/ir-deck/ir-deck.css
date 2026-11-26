@@ -2795,48 +2795,105 @@ html, body {
   min-height: 0;
 }
 
-/* Slide 09 — Live App Profile Vault + Live Homepage Privacy 3D Stage */
-.s09-zone-split {
+/* Slide 09 — Image-First Official Homepage Security Gallery */
+.s09-visual-grid {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 94px 1fr;
-  gap: 10px;
+  grid-template-columns: 1.24fr 0.96fr;
+  gap: 14px;
   align-items: stretch;
+}
+
+.s09-stage-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.s09-browser {
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.s09-phone-mini {
-  border-radius: 15px;
-  padding: 4px;
-  border: 1.2px solid var(--accent-live-border);
-  background: #0A0B0F;
-  overflow: hidden;
-  display: flex;
+.s09-browser .browser-viewport {
+  background: var(--bg-elevated);
 }
 
-.s09-phone-mini img {
-  width: 100%;
-  height: 100%;
-  border-radius: 11px;
+.s09-browser .browser-viewport img {
   object-fit: cover;
-  object-position: center top;
-  display: block;
+  object-position: center center;
 }
 
-.s09-zone-metrics--col {
-  grid-template-columns: 1fr;
+.s09-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.s09-kpi-pill {
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.s09-kpi-val {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 760;
+  line-height: 1.1;
+}
+
+.s09-kpi-sub {
+  font-size: 10px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s09-cards-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.s09-cards-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.s09-card-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
   gap: 7px;
 }
 
-.s09-bottom-rich {
-  display: grid;
-  grid-template-columns: 248px 1fr;
-  gap: 12px;
-  align-items: stretch;
+.s09-shield-shot {
+  min-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-gold);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.s09-site-privacy {
-  height: 98px;
+.s09-shield-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 /* Slide 10 — Live Circular Proof Strip */
@@ -3114,10 +3171,8 @@ html, body {
 :root[data-ratio='4-3'] .s08-thumb { width: 88px; height: 88px; }
 :root[data-ratio='4-3'] .s08-after-stack img { height: 36px; }
 :root[data-ratio='4-3'] .s08-pct-num { font-size: 36px; }
-:root[data-ratio='4-3'] .s09-zones { grid-template-columns: 1.05fr 46px 1.05fr 46px 0.95fr; }
-:root[data-ratio='4-3'] .s09-zone-split { grid-template-columns: 74px 1fr; }
-:root[data-ratio='4-3'] .s09-metric-val { font-size: 16px; }
-:root[data-ratio='4-3'] .s09-bottom-rich { grid-template-columns: 196px 1fr; }
+:root[data-ratio='4-3'] .s09-visual-grid { grid-template-columns: 1.15fr 1fr; gap: 10px; }
+:root[data-ratio='4-3'] .s09-kpi-val { font-size: 14px; }
 :root[data-ratio='4-3'] .s11-mannequin-card { grid-template-columns: 112px 1fr; }
 :root[data-ratio='4-3'] .s12-val { font-size: 20px; }
 :root[data-ratio='4-3'] .s12-shot { height: 74px; }
