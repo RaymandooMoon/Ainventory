@@ -354,5 +354,43 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
       'iOS WebKit must unmount hidden Studio iframe when switching to 3D stages to avoid Jetsam reloads'
     );
   });
+
+  it('supports per-site 3D motion override under iOS Reduce Motion and dual-sensor synchronous iOS gyroscope activation', () => {
+    const hookSrc = readRepoFile('src/components/auth/useMarbleBackdropStage.ts');
+    const heroSrc = readRepoFile('src/site/SiteMarbleHero.tsx');
+    const siteAppSrc = readRepoFile('src/site/AinvtrySiteApp.tsx');
+    const headersSrc = readRepoFile('site/public/_headers');
+
+    assert.ok(
+      hookSrc.includes('reducedMotionOverride') &&
+        hookSrc.includes('systemReducedMotion && !reducedMotionOverrideRef.current'),
+      'useMarbleBackdropStage must compute effective reducedMotion using reducedMotionOverride'
+    );
+    assert.ok(
+      hookSrc.includes('devMotionCtor') &&
+        hookSrc.includes("window.addEventListener('devicemotion', onDeviceMotionFallback"),
+      'iOS gyroscope must support DeviceMotionEvent.requestPermission + accelerationIncludingGravity fallback'
+    );
+    assert.ok(
+      hookSrc.includes('onGyroRequesterReady') &&
+        hookSrc.includes('onGyroStatusChange'),
+      'useMarbleBackdropStage must expose explicit synchronous gyro permission requester and status updates'
+    );
+    assert.ok(
+      heroSrc.includes('reducedMotionOverride') &&
+        heroSrc.includes('onGyroRequesterReady'),
+      'SiteMarbleHero must forward reducedMotionOverride and gyro callbacks'
+    );
+    assert.ok(
+      siteAppSrc.includes('site-enable-3d-motion-btn') &&
+        siteAppSrc.includes('site-enable-gyro-btn') &&
+        siteAppSrc.includes('handleEnableSite3dMotion'),
+      'AinvtrySiteApp must provide 1-tap 3D Motion Override badge (under Reduce Motion) and explicit iOS Tilt Gyro trigger'
+    );
+    assert.ok(
+      headersSrc.includes('accelerometer=(self)') && headersSrc.includes('gyroscope=(self)'),
+      'site/public/_headers must explicitly permit accelerometer and gyroscope sensors'
+    );
+  });
 });
 

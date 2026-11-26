@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import { useEffect, useRef, useState } from 'react';
 import { observeOpenModalDialogs } from '../../utils/adaptiveFramePacer.ts';
+import { isIosSafariRuntime } from '../../utils/iosSafariCompat.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
 import { scheduleAfterFirstPaint } from '../../utils/resourcePriority.ts';
 import type {
@@ -18,9 +19,18 @@ import {
   toStageNormalizedCoords,
 } from './marbleBackdropMath.ts';
 
-interface DeviceOrientationConstructorWithPermission {
+interface DeviceSensorConstructorWithPermission {
   requestPermission?: () => Promise<'granted' | 'denied'>;
 }
+
+export type MarbleGyroStatus =
+  | 'idle'
+  | 'pending'
+  | 'granted'
+  | 'denied'
+  | 'rejected'
+  | 'attached'
+  | 'unsupported';
 
 export interface MarbleHitParams {
   readonly impactStrength: number;
@@ -35,18 +45,13 @@ export interface MarbleInputDiagnostics {
   readonly gyroEvents: number;
   readonly gyroAttached: boolean;
   readonly gyroRequiresPermission: boolean;
-  readonly gyroStatus:
-    | 'idle'
-    | 'pending'
-    | 'granted'
-    | 'denied'
-    | 'rejected'
-    | 'attached'
-    | 'unsupported';
+  readonly gyroStatus: MarbleGyroStatus;
+  readonly gyroSource: 'none' | 'orientation' | 'motion';
   readonly modalPaused: boolean;
   readonly propPaused: boolean;
   readonly effectivePaused: boolean;
   readonly reducedMotionMatch: boolean;
+  readonly reducedMotionOverride: boolean;
   readonly lastTouchTarget: string;
 }
 
@@ -54,6 +59,7 @@ export interface UseMarbleBackdropStageOptions {
   readonly isDark: boolean;
   readonly stage?: 'intro' | 'auth' | 'portal';
   readonly paused?: boolean;
+  readonly reducedMotionOverride?: boolean;
   readonly motionVariant?: LoginThreeVariantId;
   readonly variantChangeOrigin?: { readonly x: number; readonly y: number; readonly seq: number } | null;
   readonly portalSurgeOrigin?: { readonly x: number; readonly y: number } | null;
@@ -94,6 +100,10 @@ export interface UseMarbleBackdropStageOptions {
   readonly deferBootUntilPaint?: boolean;
   readonly onControllerReady?: (ctrl: LoginThreeController | null) => void;
   readonly onInputDiagnosticsReady?: (getter: (() => MarbleInputDiagnostics) | null) => void;
+  readonly onGyroStatusChange?: (status: MarbleGyroStatus, requiresPermission: boolean) => void;
+  readonly onGyroRequesterReady?: (
+    requester: (() => Promise<MarbleGyroStatus>) | null
+  ) => void;
 }
 
 export interface UseMarbleBackdropStageResult {
@@ -137,6 +147,7 @@ export function useMarbleBackdropStage(
     isDark,
     stage = 'intro',
     paused = false,
+    reducedMotionOverride = false,
     motionVariant = DEFAULT_LOGIN_THREE_VARIANT,
     variantChangeOrigin = null,
     portalSurgeOrigin = null,
@@ -160,6 +171,8 @@ export function useMarbleBackdropStage(
   const propPausedRef = useRef(paused);
   const modalPausedRef = useRef(false);
   const pausedModeRef = useRef(paused);
+  const reducedMotionOverrideRef = useRef(Boolean(reducedMotionOverride));
+  const syncEffectiveReducedMotionRef = useRef<(() => void) | null>(null);
   const stageCooldownUntilRef = useRef(0);
   const prevResetKeyRef = useRef<string | number | undefined>(cooldownResetKey);
   const invalidateCacheRef = useRef<(() => void) | null>(null);
@@ -205,6 +218,11 @@ export function useMarbleBackdropStage(
   }, [paused]);
 
   useEffect(() => {
+    reducedMotionOverrideRef.current = Boolean(reducedMotionOverride);
+    syncEffectiveReducedMotionRef.current?.();
+  }, [reducedMotionOverride]);
+
+  useEffect(() => {
     controllerRef.current?.setVariant(
       motionVariant,
       variantChangeOrigin?.x,
@@ -238,7 +256,8 @@ export function useMarbleBackdropStage(
       typeof window.matchMedia === 'function'
         ? window.matchMedia('(prefers-reduced-motion: reduce)')
         : null;
-    let reducedMotion = Boolean(reducedMotionQuery?.matches);
+    let systemReducedMotion = Boolean(reducedMotionQuery?.matches);
+    let reducedMotion = systemReducedMotion && !reducedMotionOverrideRef.current;
 
     let cachedTargets: CachedTarget[] = [];
     let cachedStageRect: DOMRect | null = null;
@@ -719,21 +738,54 @@ export function useMarbleBackdropStage(
       controller.setPointerDown?.(false);
     };
 
-    // Mobile Gyroscope / DeviceOrientation exclusively for rolling the glass marble
+    // Mobile Gyroscope / DeviceOrientation + DeviceMotion fallback exclusively for rolling the glass marble
+    const isIosDevice = isIosSafariRuntime();
     let gyroAttached = false;
+    let gyroPermissionListenersArmed = false;
     let gyroPermissionInFlight = false;
     let gyroPermissionResolved = false;
+    let hasValidOrientationEvent = false;
+    let gyroSource: 'none' | 'orientation' | 'motion' = 'none';
     let calibSamples = 0;
     let baseBeta = 0;
     let baseGamma = 0;
+    let motionCalibSamples = 0;
+    let baseAccX = 0;
+    let baseAccY = 0;
     let prevTiltX = 0;
     let prevTiltY = 0;
 
+    const applyRotatedTilt = (rawXIn: number, rawYIn: number) => {
+      const angle = getScreenOrientationAngle();
+      let rawX = rawXIn;
+      let rawY = rawYIn;
+      if (angle === 90) {
+        rawX = -rawYIn;
+        rawY = rawXIn;
+      } else if (angle === -90 || angle === 270) {
+        rawX = rawYIn;
+        rawY = -rawXIn;
+      } else if (angle === 180) {
+        rawX = -rawXIn;
+        rawY = -rawYIn;
+      }
+
+      const tx = Math.max(-1, Math.min(1, rawX));
+      const ty = Math.max(-1, Math.min(1, rawY));
+      const dtx = tx - prevTiltX;
+      const dty = ty - prevTiltY;
+      prevTiltX = tx;
+      prevTiltY = ty;
+      controller.setTilt(tx, ty, dtx, dty);
+    };
+
     const onDeviceOrientation = (e: DeviceOrientationEvent) => {
-      if (document.hidden || pausedModeRef.current) return;
+      if (document.hidden || pausedModeRef.current || reducedMotion) return;
       if (optionsRef.current.disableHeroMarbleInput) return;
       if (typeof e.beta !== 'number' || typeof e.gamma !== 'number') return;
       if (!Number.isFinite(e.beta) || !Number.isFinite(e.gamma)) return;
+      hasValidOrientationEvent = true;
+      gyroSource = 'orientation';
       gyroEventCount += 1;
 
       if (calibSamples < 5) {
@@ -745,40 +797,60 @@ export function useMarbleBackdropStage(
 
       const relGamma = e.gamma - baseGamma;
       const relBeta = e.beta - baseBeta;
-      const angle = getScreenOrientationAngle();
-      let rawX = relGamma / 24;
-      let rawY = -relBeta / 24;
-      if (angle === 90) {
-        rawX = relBeta / 24;
-        rawY = relGamma / 24;
-      } else if (angle === -90 || angle === 270) {
-        rawX = -relBeta / 24;
-        rawY = -relGamma / 24;
-      } else if (angle === 180) {
-        rawX = -rawX;
-        rawY = -rawY;
-      }
-
-      const tx = Math.max(-1, Math.min(1, rawX));
-      const ty = Math.max(-1, Math.min(1, rawY));
-      const dtx = tx - prevTiltX;
-      const dty = ty - prevTiltY;
-      prevTiltX = tx;
-      prevTiltY = ty;
+      const rawX = relGamma / 24;
+      const rawY = -relBeta / 24;
 
       if (Math.abs(rawX) < 0.14 && Math.abs(rawY) < 0.14) {
         baseBeta += (e.beta - baseBeta) * 0.004;
         baseGamma += (e.gamma - baseGamma) * 0.004;
       }
-      controller.setTilt(tx, ty, dtx, dty);
+      applyRotatedTilt(rawX, rawY);
+    };
+
+    const onDeviceMotionFallback = (e: DeviceMotionEvent) => {
+      if (hasValidOrientationEvent) return;
+      if (document.hidden || pausedModeRef.current || reducedMotion) return;
+      if (optionsRef.current.disableHeroMarbleInput) return;
+      const acc = e.accelerationIncludingGravity;
+      if (!acc || typeof acc.x !== 'number' || typeof acc.y !== 'number') return;
+      if (!Number.isFinite(acc.x) || !Number.isFinite(acc.y)) return;
+
+      gyroSource = 'motion';
+      gyroEventCount += 1;
+
+      if (motionCalibSamples < 5) {
+        motionCalibSamples += 1;
+        baseAccX += (acc.x - baseAccX) / motionCalibSamples;
+        baseAccY += (acc.y - baseAccY) / motionCalibSamples;
+        return;
+      }
+
+      // iOS CoreMotion accelerationIncludingGravity uses +X right, -Y down in portrait;
+      // W3C Android Chrome uses the opposite sign convention.
+      const sign = isIosDevice ? 1 : -1;
+      const rawX = ((acc.x - baseAccX) * sign) / 3.8;
+      const rawY = ((acc.y - baseAccY) * sign) / 3.8;
+
+      if (Math.abs(rawX) < 0.14 && Math.abs(rawY) < 0.14) {
+        baseAccX += (acc.x - baseAccX) * 0.004;
+        baseAccY += (acc.y - baseAccY) * 0.004;
+      }
+      applyRotatedTilt(rawX, rawY);
     };
 
     const devOrientCtor =
       typeof window.DeviceOrientationEvent !== 'undefined'
-        ? (window.DeviceOrientationEvent as unknown as DeviceOrientationConstructorWithPermission)
+        ? (window.DeviceOrientationEvent as unknown as DeviceSensorConstructorWithPermission)
         : null;
-    const requiresIosPermission = typeof devOrientCtor?.requestPermission === 'function';
-    let gyroStatus: MarbleInputDiagnostics['gyroStatus'] = !devOrientCtor
+    const devMotionCtor =
+      typeof window.DeviceMotionEvent !== 'undefined'
+        ? (window.DeviceMotionEvent as unknown as DeviceSensorConstructorWithPermission)
+        : null;
+    const hasAnySensorApi = Boolean(devOrientCtor || devMotionCtor);
+    const requiresIosPermission =
+      typeof devOrientCtor?.requestPermission === 'function' ||
+      typeof devMotionCtor?.requestPermission === 'function';
+    let gyroStatus: MarbleGyroStatus = !hasAnySensorApi
       ? 'unsupported'
       : requiresIosPermission
         ? 'idle'
@@ -791,31 +863,132 @@ export function useMarbleBackdropStage(
       }
     })();
 
+    const emitGyroStatus = (nextStatus: MarbleGyroStatus) => {
+      gyroStatus = nextStatus;
+      optionsRef.current.onGyroStatusChange?.(gyroStatus, requiresIosPermission);
+    };
+
     const attachGyro = () => {
-      if (gyroAttached) return;
+      if (gyroAttached || !hasAnySensorApi) return;
       gyroAttached = true;
+      calibSamples = 0;
+      motionCalibSamples = 0;
+      hasValidOrientationEvent = false;
       if (gyroStatus === 'idle' || gyroStatus === 'pending') {
-        gyroStatus = 'attached';
+        emitGyroStatus('attached');
       }
       window.addEventListener('deviceorientation', onDeviceOrientation, { passive: true });
+      window.addEventListener('devicemotion', onDeviceMotionFallback, { passive: true });
+    };
+
+    const detachGyro = () => {
+      if (!gyroAttached) return;
+      gyroAttached = false;
+      window.removeEventListener('deviceorientation', onDeviceOrientation);
+      window.removeEventListener('devicemotion', onDeviceMotionFallback);
+      controller.setTilt(0, 0, 0, 0);
     };
 
     const GYRO_IGNORE_SELECTOR =
       'button, a, input, select, textarea, label, [role="button"], [role="tab"], [role="dialog"], [aria-modal="true"], [data-hud-surface="true"], [data-no-marble="true"]';
 
+    const armGyroPermissionListeners = () => {
+      if (gyroPermissionListenersArmed || !requiresIosPermission || !isTopLevelWindow) return;
+      gyroPermissionListenersArmed = true;
+      window.addEventListener('click', requestIosGyro, false);
+      stageEl.addEventListener('click', requestIosGyro, false);
+      stageEl.addEventListener('touchend', requestIosGyroOnStageTap, { passive: true });
+    };
+
     const detachGyroPermissionListeners = () => {
+      if (!gyroPermissionListenersArmed) return;
+      gyroPermissionListenersArmed = false;
       window.removeEventListener('click', requestIosGyro, false);
       stageEl.removeEventListener('click', requestIosGyro, false);
       stageEl.removeEventListener('touchend', requestIosGyroOnStageTap, false);
     };
 
+    /**
+     * Requests iOS Motion & Orientation permission synchronously inside a user click/tap.
+     * Invokes both DeviceOrientationEvent.requestPermission() and DeviceMotionEvent.requestPermission()
+     * (when exposed) in the same user-activation tick so both iOS Safari and iOS Chrome WKWebView
+     * reliably unlock tilt events.
+     */
+    const executeIosGyroPermissionRequest = (allowRetryDenied: boolean): Promise<MarbleGyroStatus> => {
+      if (!hasAnySensorApi) {
+        emitGyroStatus('unsupported');
+        return Promise.resolve('unsupported');
+      }
+      if (!requiresIosPermission) {
+        attachGyro();
+        emitGyroStatus('attached');
+        return Promise.resolve('attached');
+      }
+      if (gyroPermissionInFlight) {
+        return Promise.resolve(gyroStatus);
+      }
+      if (gyroPermissionResolved && gyroStatus === 'granted') {
+        attachGyro();
+        return Promise.resolve('granted');
+      }
+      if (gyroPermissionResolved && gyroStatus === 'denied' && !allowRetryDenied) {
+        return Promise.resolve('denied');
+      }
+
+      gyroPermissionInFlight = true;
+      emitGyroStatus('pending');
+
+      const pendingRequests: Array<Promise<'granted' | 'denied' | 'rejected'>> = [];
+      try {
+        if (typeof devOrientCtor?.requestPermission === 'function') {
+          const p = devOrientCtor.requestPermission();
+          if (p && typeof p.then === 'function') {
+            pendingRequests.push(p.catch(() => 'rejected'));
+          }
+        }
+        if (typeof devMotionCtor?.requestPermission === 'function') {
+          const p = devMotionCtor.requestPermission();
+          if (p && typeof p.then === 'function') {
+            pendingRequests.push(p.catch(() => 'rejected'));
+          }
+        }
+      } catch {
+        gyroPermissionInFlight = false;
+        emitGyroStatus('rejected');
+        return Promise.resolve('rejected');
+      }
+
+      if (pendingRequests.length === 0) {
+        gyroPermissionInFlight = false;
+        attachGyro();
+        emitGyroStatus('attached');
+        return Promise.resolve('attached');
+      }
+
+      return Promise.all(pendingRequests).then((results) => {
+        gyroPermissionInFlight = false;
+        if (results.includes('granted')) {
+          gyroPermissionResolved = true;
+          emitGyroStatus('granted');
+          detachGyroPermissionListeners();
+          attachGyro();
+          return 'granted';
+        }
+        if (results.includes('denied')) {
+          gyroPermissionResolved = true;
+          emitGyroStatus('denied');
+          detachGyroPermissionListeners();
+          return 'denied';
+        }
+        // iOS Safari rejects non-activation gestures (such as prevented drags) with
+        // NotAllowedError; keep listeners armed so the user's next clean tap prompts normally.
+        emitGyroStatus('rejected');
+        return 'rejected';
+      });
+    };
+
     const requestIosGyro = (event: Event) => {
-      if (
-        gyroPermissionResolved ||
-        gyroPermissionInFlight ||
-        !requiresIosPermission ||
-        !devOrientCtor?.requestPermission
-      ) {
+      if (reducedMotion || gyroPermissionResolved || gyroPermissionInFlight || !requiresIosPermission) {
         return;
       }
       if (optionsRef.current.disableHeroMarbleInput) {
@@ -828,38 +1001,7 @@ export function useMarbleBackdropStage(
       if (target && typeof target.closest === 'function' && target.closest(GYRO_IGNORE_SELECTOR)) {
         return;
       }
-      gyroPermissionInFlight = true;
-      gyroStatus = 'pending';
-      try {
-        const resultPromise = devOrientCtor.requestPermission();
-        if (resultPromise && typeof resultPromise.then === 'function') {
-          void resultPromise
-            .then((state) => {
-              gyroPermissionInFlight = false;
-              if (state === 'granted') {
-                gyroPermissionResolved = true;
-                gyroStatus = 'granted';
-                detachGyroPermissionListeners();
-                attachGyro();
-              } else if (state === 'denied') {
-                gyroPermissionResolved = true;
-                gyroStatus = 'denied';
-                detachGyroPermissionListeners();
-              }
-            })
-            .catch(() => {
-              // iOS Safari rejects non-activation gestures (such as prevented drags) with
-              // NotAllowedError; keep listeners armed so the user's next clean tap prompts normally.
-              gyroPermissionInFlight = false;
-              gyroStatus = 'rejected';
-            });
-        } else {
-          gyroPermissionInFlight = false;
-        }
-      } catch {
-        gyroPermissionInFlight = false;
-        gyroStatus = 'rejected';
-      }
+      void executeIosGyroPermissionRequest(false);
     };
 
     const requestIosGyroOnStageTap = (event: TouchEvent) => {
@@ -868,23 +1010,50 @@ export function useMarbleBackdropStage(
       requestIosGyro(event);
     };
 
+    const requestIosGyroExplicit = (): Promise<MarbleGyroStatus> =>
+      executeIosGyroPermissionRequest(true);
+
     // Guard single-finger drags strictly on stageEl (sibling of .site-shell / modals)
-    // so iOS Safari never hijacks marble rolling or 3D stage orbiting with viewport rubber-band.
+    // so iOS Safari never hijacks marble rolling or 3D stage orbiting with viewport rubber-band,
+    // while keeping tiny (<5px) clean taps un-cancelled so iOS still dispatches genuine click events.
     const onStageTouchMove = (e: TouchEvent) => {
       if (document.hidden || pausedModeRef.current || e.touches.length !== 1) return;
       if (optionsRef.current.isEventExcluded?.(e.target)) return;
+      const t = e.touches[0];
+      const movedPx = t ? Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY) : 0;
+      if (movedPx < 5 && touchTotalMovedPx < 5) return;
       if (e.cancelable) {
         e.preventDefault();
       }
     };
 
-    if (!reducedMotion && devOrientCtor) {
-      if (requiresIosPermission) {
-        if (isTopLevelWindow) {
-          window.addEventListener('click', requestIosGyro, false);
-          stageEl.addEventListener('click', requestIosGyro, false);
-          stageEl.addEventListener('touchend', requestIosGyroOnStageTap, { passive: true });
+    const syncEffectiveReducedMotion = () => {
+      const nextReduced = systemReducedMotion && !reducedMotionOverrideRef.current;
+      reducedMotion = nextReduced;
+      controller.setReducedMotion?.(reducedMotion);
+      if (reducedMotion) {
+        detachGyro();
+        detachGyroPermissionListeners();
+      } else if (hasAnySensorApi) {
+        if (requiresIosPermission) {
+          if (gyroStatus === 'granted') {
+            attachGyro();
+          } else {
+            armGyroPermissionListeners();
+          }
+        } else {
+          attachGyro();
         }
+      }
+    };
+    syncEffectiveReducedMotionRef.current = syncEffectiveReducedMotion;
+
+    optionsRef.current.onGyroRequesterReady?.(requestIosGyroExplicit);
+    emitGyroStatus(gyroStatus);
+
+    if (!reducedMotion && hasAnySensorApi) {
+      if (requiresIosPermission) {
+        armGyroPermissionListeners();
       } else {
         attachGyro();
       }
@@ -898,10 +1067,12 @@ export function useMarbleBackdropStage(
       gyroAttached,
       gyroRequiresPermission: requiresIosPermission,
       gyroStatus,
+      gyroSource,
       modalPaused: modalPausedRef.current,
       propPaused: propPausedRef.current,
       effectivePaused: pausedModeRef.current,
       reducedMotionMatch: reducedMotion,
+      reducedMotionOverride: reducedMotionOverrideRef.current,
       lastTouchTarget,
     }));
 
@@ -932,15 +1103,8 @@ export function useMarbleBackdropStage(
     }
 
     const handleReducedMotionChange = (event: MediaQueryListEvent) => {
-      reducedMotion = event.matches;
-      controller.setReducedMotion?.(reducedMotion);
-      if (reducedMotion && gyroAttached) {
-        window.removeEventListener('deviceorientation', onDeviceOrientation);
-        gyroAttached = false;
-        controller.setTilt(0, 0, 0, 0);
-      } else if (!reducedMotion && devOrientCtor && !gyroAttached && !requiresIosPermission) {
-        attachGyro();
-      }
+      systemReducedMotion = event.matches;
+      syncEffectiveReducedMotion();
     };
     if (reducedMotionQuery && typeof reducedMotionQuery.addEventListener === 'function') {
       reducedMotionQuery.addEventListener('change', handleReducedMotionChange);
@@ -965,6 +1129,7 @@ export function useMarbleBackdropStage(
     stageEl.addEventListener('touchmove', onStageTouchMove, { passive: false });
 
       cleanupRuntime = () => {
+        syncEffectiveReducedMotionRef.current = null;
         if (reducedMotionQuery && typeof reducedMotionQuery.removeEventListener === 'function') {
           reducedMotionQuery.removeEventListener('change', handleReducedMotionChange);
         }
@@ -984,15 +1149,12 @@ export function useMarbleBackdropStage(
         window.removeEventListener('touchend', onTouchEnd);
         window.removeEventListener('touchcancel', onTouchEnd);
         stageEl.removeEventListener('touchmove', onStageTouchMove);
-        stageEl.removeEventListener('click', requestIosGyro, false);
-        stageEl.removeEventListener('touchend', requestIosGyroOnStageTap, false);
-        window.removeEventListener('click', requestIosGyro, false);
-        if (gyroAttached) {
-          window.removeEventListener('deviceorientation', onDeviceOrientation);
-        }
+        detachGyroPermissionListeners();
+        detachGyro();
         resizeObserver?.disconnect();
         stopModalObserver();
         modalPausedRef.current = false;
+        optionsRef.current.onGyroRequesterReady?.(null);
         optionsRef.current.onInputDiagnosticsReady?.(null);
         optionsRef.current.onControllerReady?.(null);
         controller.dispose();

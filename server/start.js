@@ -57,7 +57,10 @@ app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   }
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(self), microphone=()');
+  res.setHeader(
+    'Permissions-Policy',
+    'geolocation=(self), camera=(self), microphone=(), accelerometer=(self), gyroscope=(self)'
+  );
   if (!req.path.startsWith('/uploads/')) {
     res.setHeader('Content-Security-Policy', isEmbedAppPath ? EMBED_APP_CSP : APP_CSP);
   }

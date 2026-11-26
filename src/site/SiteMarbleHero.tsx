@@ -11,6 +11,7 @@ import type {
 } from '../components/auth/loginThreeScenes.ts';
 import {
   useMarbleBackdropStage,
+  type MarbleGyroStatus,
   type MarbleHitParams,
   type MarbleInputDiagnostics,
 } from '../components/auth/useMarbleBackdropStage.ts';
@@ -75,6 +76,11 @@ export interface SiteMarbleHeroProps {
   readonly interaction: StageInteractionState;
   readonly onStageUiSync: (patch: Partial<StageInteractionState>) => void;
   readonly viewportRootRef: React.RefObject<HTMLElement | null>;
+  readonly reducedMotionOverride?: boolean;
+  readonly onGyroStatusChange?: (status: MarbleGyroStatus, requiresPermission: boolean) => void;
+  readonly onGyroRequesterReady?: (
+    requester: (() => Promise<MarbleGyroStatus>) | null
+  ) => void;
 }
 
 interface LightingTargets {
@@ -227,6 +233,9 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   interaction,
   onStageUiSync,
   viewportRootRef,
+  reducedMotionOverride = false,
+  onGyroStatusChange,
+  onGyroRequesterReady,
 }: SiteMarbleHeroProps) {
   const isDark = theme === 'dark';
   const mood: MoodMode = motionVariant;
@@ -260,6 +269,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   const loadingStagesRef = useRef<Set<ActiveStageId>>(new Set());
   const rawActiveStageRef = useRef<StageId>(activeStage);
   const activeStageRef = useRef<StageId>(effectiveThreeStage);
+  const reducedMotionOverrideRef = useRef<boolean>(Boolean(reducedMotionOverride));
   const themeRef = useRef<ThemeMode>(theme);
   const moodRef = useRef<MoodMode>(mood);
   const glassPercentRef = useRef<number>(glassPercent);
@@ -274,6 +284,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   // Sync refs synchronously on render so rAF overlay passes never see a stale stage or subtab
   rawActiveStageRef.current = activeStage;
   activeStageRef.current = effectiveThreeStage;
+  reducedMotionOverrideRef.current = Boolean(reducedMotionOverride);
   themeRef.current = theme;
   moodRef.current = mood;
   glassPercentRef.current = glassPercent;
@@ -548,11 +559,13 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       if (!rigRef.current && activeStageRef.current === 'hero') {
         return;
       }
-      const reducedMotion = Boolean(
-        typeof window !== 'undefined' &&
-          typeof window.matchMedia === 'function' &&
-          window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      );
+      const reducedMotion =
+        !reducedMotionOverrideRef.current &&
+        Boolean(
+          typeof window !== 'undefined' &&
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        );
       const rig = ensureRig(renderer, width, height, reducedMotion, isSoftwareGl);
       const aspect = width / Math.max(1, height);
       rig.camera.aspect = aspect;
@@ -697,6 +710,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     isDark,
     stage: 'intro',
     paused: activeStage === 'studio',
+    reducedMotionOverride,
     motionVariant,
     variantChangeOrigin,
     cooldownResetKey: effectiveThreeStage,
@@ -725,6 +739,8 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     onOverlayContextRestored: handleOverlayContextRestored,
     onControllerReady: handleControllerReady,
     onInputDiagnosticsReady: handleInputDiagnosticsReady,
+    onGyroStatusChange,
+    onGyroRequesterReady,
   });
 
   // Sync HUD interaction changes into active 3D stage BEFORE stage transitions run
@@ -1056,10 +1072,10 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         ? `3D f:${r.committedFrames} (${r.fpsTier}/${r.detectedRefreshHz}Hz) dpr:${r.dpr} aa:${r.antialias ? 1 : 0} hf:${r.useHalfFloat ? 1 : 0} ${r.canvasW}x${r.canvasH}`
         : `3D boot pending (fb:${snap.webglFallback ? 1 : 0})`;
       const line2 = r
-        ? `stg:${snap.activeStage}/${snap.effectiveThreeStage} rm:${r.reducedMotion ? 1 : 0} p:${r.paused ? 1 : 0} hid:${r.isDocHidden ? 1 : 0} lost:${r.isContextLost ? 1 : 0} gl:${r.glError}`
+        ? `stg:${snap.activeStage}/${snap.effectiveThreeStage} rm:${r.reducedMotion ? 1 : 0}${inp?.reducedMotionOverride ? '(ovr)' : ''} p:${r.paused ? 1 : 0} hid:${r.isDocHidden ? 1 : 0} lost:${r.isContextLost ? 1 : 0} gl:${r.glError}`
         : `stg:${snap.activeStage} vp:${snap.viewport} dpr:${snap.devicePixelRatio}`;
       const line3 = inp
-        ? `t:${inp.touchStarts}/${inp.touchMoves} sT:${snap.stageTouchStarts}/${snap.stageDrags} gyro:${inp.gyroStatus}(${inp.gyroEvents}) mP:${inp.modalPaused ? 1 : 0}`
+        ? `t:${inp.touchStarts}/${inp.touchMoves} sT:${snap.stageTouchStarts}/${snap.stageDrags} gyro:${inp.gyroStatus}:${inp.gyroSource}(${inp.gyroEvents}) mP:${inp.modalPaused ? 1 : 0}`
         : `sT:${snap.stageTouchStarts}/${snap.stageDrags}`;
       const line4 = r
         ? `m:(${r.marbleU},${r.marbleV}) v:${r.marbleSpeed} t:${r.elapsed}s${r.lastError ? ` ERR:${r.lastError}` : ''}`

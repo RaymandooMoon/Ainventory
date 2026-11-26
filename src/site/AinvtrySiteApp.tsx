@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   BarChart3,
   ChevronsUpDown,
+  Compass,
   Globe,
   Home,
   Mail,
@@ -18,6 +19,7 @@ import {
   getLoginThreeVariantMeta,
   type LoginThreeVariantId,
 } from '../components/auth/loginThreeVariants.ts';
+import type { MarbleGyroStatus } from '../components/auth/useMarbleBackdropStage.ts';
 import {
   DEFAULT_STAGE_INTERACTION_STATE,
   type ActiveStageId,
@@ -65,6 +67,34 @@ import { warmStageModule } from './stageModuleLoader.ts';
 const MIN_UI_ALPHA = 0.02;
 const MAX_UI_ALPHA = 0.96;
 const DEFAULT_UI_ALPHA = 0.5;
+const SITE_MOTION_OVERRIDE_KEY = 'ainvtry_site_3d_motion_override';
+
+function readStoredMotionOverride(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SITE_MOTION_OVERRIDE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeStoredMotionOverride(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (enabled) {
+      window.localStorage.setItem(SITE_MOTION_OVERRIDE_KEY, '1');
+    } else {
+      window.localStorage.removeItem(SITE_MOTION_OVERRIDE_KEY);
+    }
+  } catch {
+    // Ignore storage quota/private-mode errors on iOS Safari/Chrome
+  }
+}
+
+function readSystemReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return Boolean(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
 
 declare global {
   interface Window {
@@ -137,6 +167,15 @@ export default function AinvtrySiteApp() {
   const [activeStage, setActiveStage] = useState<StageId>('hero');
   const [hasVisitedStudio, setHasVisitedStudio] = useState<boolean>(false);
   const [isIosWebKit] = useState<boolean>(() => isIosSafariRuntime());
+  const [systemReducedMotion, setSystemReducedMotion] = useState<boolean>(() =>
+    readSystemReducedMotion()
+  );
+  const [motionOverrideEnabled, setMotionOverrideEnabled] = useState<boolean>(() =>
+    readStoredMotionOverride()
+  );
+  const [gyroStatus, setGyroStatus] = useState<MarbleGyroStatus>('unsupported');
+  const [gyroRequiresPermission, setGyroRequiresPermission] = useState<boolean>(false);
+  const gyroRequesterRef = useRef<(() => Promise<MarbleGyroStatus>) | null>(null);
   const [stageInteraction, setStageInteraction] = useState<StageInteractionState>(() => ({
     ...DEFAULT_STAGE_INTERACTION_STATE,
   }));
@@ -172,6 +211,60 @@ export default function AinvtrySiteApp() {
   const [homeCalloutOpen, setHomeCalloutOpen] = useState(false);
   const homeCalloutTimerRef = useRef<number>(0);
   const prevStageForCalloutRef = useRef<StageId>('hero');
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return undefined;
+    }
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = (event: MediaQueryListEvent) => {
+      setSystemReducedMotion(event.matches);
+    };
+    setSystemReducedMotion(mq.matches);
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    }
+    return undefined;
+  }, []);
+
+  const handleGyroStatusChange = useCallback(
+    (status: MarbleGyroStatus, requiresPermission: boolean) => {
+      setGyroStatus(status);
+      setGyroRequiresPermission(requiresPermission);
+    },
+    []
+  );
+
+  const handleGyroRequesterReady = useCallback(
+    (requester: (() => Promise<MarbleGyroStatus>) | null) => {
+      gyroRequesterRef.current = requester;
+    },
+    []
+  );
+
+  const handleEnableSite3dMotion = useCallback(() => {
+    triggerHaptic('selection');
+    setMotionOverrideEnabled(true);
+    writeStoredMotionOverride(true);
+    // Synchronously request iOS Motion & Orientation access in the exact same user click gesture
+    if (gyroRequiresPermission && gyroStatus !== 'granted' && gyroStatus !== 'attached') {
+      void gyroRequesterRef.current?.();
+    }
+  }, [gyroRequiresPermission, gyroStatus]);
+
+  const handleDisableSite3dMotion = useCallback(() => {
+    triggerHaptic('selection');
+    setMotionOverrideEnabled(false);
+    writeStoredMotionOverride(false);
+  }, []);
+
+  const handleRequestIosGyro = useCallback(() => {
+    triggerHaptic('selection');
+    void gyroRequesterRef.current?.();
+  }, []);
+
+  const effectiveReducedMotion = systemReducedMotion && !motionOverrideEnabled;
 
   useEffect(() => {
     activeStageRef.current = activeStage;
@@ -656,6 +749,9 @@ export default function AinvtrySiteApp() {
             interaction={stageInteraction}
             onStageUiSync={handleUpdateInteraction}
             viewportRootRef={rootRef}
+            reducedMotionOverride={motionOverrideEnabled}
+            onGyroStatusChange={handleGyroStatusChange}
+            onGyroRequesterReady={handleGyroRequesterReady}
           />
         </Suspense>
       ) : (
@@ -835,22 +931,119 @@ export default function AinvtrySiteApp() {
                       <ArrowUpRight size={14} aria-hidden="true" />
                     </a>
                   </div>
+
+                  {(systemReducedMotion ||
+                    (!effectiveReducedMotion &&
+                      gyroRequiresPermission &&
+                      gyroStatus !== 'granted' &&
+                      gyroStatus !== 'attached' &&
+                      gyroStatus !== 'unsupported')) && (
+                    <div className="site-hero-motion-strip" data-no-marble="true">
+                      <div className="site-hero-motion-row">
+                        {systemReducedMotion && !motionOverrideEnabled ? (
+                          <button
+                            type="button"
+                            className="site-motion-pill"
+                            data-testid="site-enable-3d-motion-btn"
+                            onClick={handleEnableSite3dMotion}
+                          >
+                            <Sparkles size={13} aria-hidden="true" />
+                            <span>
+                              {lang === 'ko'
+                                ? '동작 줄이기 감지 · 3D 모션 켜기'
+                                : 'Reduced Motion · Enable 3D Motion'}
+                            </span>
+                          </button>
+                        ) : systemReducedMotion && motionOverrideEnabled ? (
+                          <button
+                            type="button"
+                            className="site-motion-pill site-motion-pill--subtle site-motion-pill--active"
+                            data-testid="site-disable-3d-motion-btn"
+                            aria-pressed="true"
+                            onClick={handleDisableSite3dMotion}
+                          >
+                            <Sparkles size={12} aria-hidden="true" />
+                            <span>
+                              {lang === 'ko' ? '3D 모션 켜짐 · 끄기' : '3D Motion On · Pause'}
+                            </span>
+                          </button>
+                        ) : null}
+
+                        {!effectiveReducedMotion &&
+                          gyroRequiresPermission &&
+                          gyroStatus !== 'granted' &&
+                          gyroStatus !== 'attached' &&
+                          gyroStatus !== 'unsupported' && (
+                            <button
+                              type="button"
+                              className={`site-motion-pill ${
+                                gyroStatus === 'denied' ? 'site-motion-pill--blocked' : ''
+                              }`}
+                              data-testid="site-enable-gyro-btn"
+                              onClick={handleRequestIosGyro}
+                            >
+                              <Compass size={13} aria-hidden="true" />
+                              <span>
+                                {gyroStatus === 'denied'
+                                  ? lang === 'ko'
+                                    ? '기울기 권한 거부됨 · 탭 재시작'
+                                    : 'Tilt Blocked · Reopen Tab'
+                                  : gyroStatus === 'pending'
+                                    ? lang === 'ko'
+                                      ? '기울기 권한 확인 중…'
+                                      : 'Requesting Tilt…'
+                                    : lang === 'ko'
+                                      ? '기울기 센서 켜기'
+                                      : 'Enable Tilt Gyro'}
+                              </span>
+                            </button>
+                          )}
+                      </div>
+
+                      {systemReducedMotion && !motionOverrideEnabled && (
+                        <p className="site-motion-hint">
+                          {lang === 'ko'
+                            ? '기기 동작 줄이기 설정을 유지한 채 ainvtry.com에서만 3D·기울기를 켭니다'
+                            : 'Enables 3D motion & tilt on ainvtry.com while keeping iOS Reduce Motion on'}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
           ) : (
-            <SiteStageHud
-              activeStage={activeStage}
-              copy={copy}
-              lang={lang}
-              theme={theme}
-              mood={motionVariant}
-              betaMailto={betaMailto}
-              interaction={stageInteraction}
-              selectedPrivacyShield={selectedPrivacyShield}
-              onSelectPrivacyShield={handleSelectPrivacyShield}
-              onUpdateInteraction={handleUpdateInteraction}
-            />
+            <>
+              <SiteStageHud
+                activeStage={activeStage}
+                copy={copy}
+                lang={lang}
+                theme={theme}
+                mood={motionVariant}
+                betaMailto={betaMailto}
+                interaction={stageInteraction}
+                selectedPrivacyShield={selectedPrivacyShield}
+                onSelectPrivacyShield={handleSelectPrivacyShield}
+                onUpdateInteraction={handleUpdateInteraction}
+              />
+              {activeStage !== 'studio' && systemReducedMotion && !motionOverrideEnabled && (
+                <div className="site-stage-motion-banner" data-no-marble="true">
+                  <button
+                    type="button"
+                    className="site-motion-pill"
+                    data-testid="site-stage-enable-3d-motion-btn"
+                    onClick={handleEnableSite3dMotion}
+                  >
+                    <Sparkles size={13} aria-hidden="true" />
+                    <span>
+                      {lang === 'ko'
+                        ? '동작 줄이기 · 3D 모션 켜기'
+                        : 'Reduced Motion · Enable 3D'}
+                    </span>
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </main>
 

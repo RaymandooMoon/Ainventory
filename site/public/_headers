@@ -3,7 +3,7 @@
   X-Frame-Options: SAMEORIGIN
   Content-Security-Policy: frame-ancestors 'self' https://ainvtry.com https://www.ainvtry.com
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(self), microphone=(), geolocation=(self)
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(self), accelerometer=(self), gyroscope=(self)
 
 /app.html
   ! X-Frame-Options
