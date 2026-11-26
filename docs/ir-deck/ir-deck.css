@@ -3085,22 +3085,6 @@ html, body {
   top: 2.5px;
 }
 
-.s18-faq-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.s18-faq-pill {
-  padding: 8px 10px;
-  border-radius: 9px;
-  border: 1px solid var(--hairline);
-  background: var(--bg-surface);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 /* ============================================================================
  * 4:3 Compact Ratio Adaptation (1024x768)
  * ============================================================================ */
