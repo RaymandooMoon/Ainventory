@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
   DEFAULT_LOGIN_THREE_VARIANT,
@@ -6,11 +6,13 @@ import {
 } from '../components/auth/loginThreeVariants.ts';
 import type {
   LoginThreeController,
+  LoginThreeDiagnostics,
   LoginThreeOverlayRenderContext,
 } from '../components/auth/loginThreeScenes.ts';
 import {
   useMarbleBackdropStage,
   type MarbleHitParams,
+  type MarbleInputDiagnostics,
 } from '../components/auth/useMarbleBackdropStage.ts';
 import {
   AinvtryStageDirector,
@@ -35,6 +37,34 @@ import { isIosSafariRuntime } from '../utils/iosSafariCompat.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import type { SiteTheme } from './siteContent.ts';
 import { getLoadedStageFactory, preloadStageModule } from './stageModuleLoader.ts';
+
+export interface Site3dDiagnosticsSnapshot {
+  readonly activeStage: StageId;
+  readonly effectiveThreeStage: StageId;
+  readonly webglFallback: boolean;
+  readonly rigActive: boolean;
+  readonly stageTouchStarts: number;
+  readonly stageDrags: number;
+  readonly viewport: string;
+  readonly devicePixelRatio: number;
+  readonly renderer: LoginThreeDiagnostics | null;
+  readonly input: MarbleInputDiagnostics | null;
+}
+
+declare global {
+  interface Window {
+    __AINVTRY_3D_DIAG__?: () => Site3dDiagnosticsSnapshot;
+  }
+}
+
+function isDebug3dQueryEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return new URLSearchParams(window.location.search).get('debug3d') === '1';
+  } catch {
+    return false;
+  }
+}
 
 export interface SiteMarbleHeroProps {
   readonly theme: SiteTheme;
@@ -221,8 +251,14 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   );
 
   const controllerRef = useRef<LoginThreeController | null>(null);
+  const inputDiagGetterRef = useRef<(() => MarbleInputDiagnostics) | null>(null);
+  const stageInputCountersRef = useRef<{ touchStarts: number; drags: number }>({
+    touchStarts: 0,
+    drags: 0,
+  });
   const rigRef = useRef<StageDirectorRig | null>(null);
   const loadingStagesRef = useRef<Set<ActiveStageId>>(new Set());
+  const rawActiveStageRef = useRef<StageId>(activeStage);
   const activeStageRef = useRef<StageId>(effectiveThreeStage);
   const themeRef = useRef<ThemeMode>(theme);
   const moodRef = useRef<MoodMode>(mood);
@@ -232,8 +268,11 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   const tmpStartVecRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const tmpHeroCamPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const tmpHeroTargetPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const [debug3dEnabled] = useState<boolean>(() => isDebug3dQueryEnabled());
+  const [debugHudText, setDebugHudText] = useState<string>('');
 
   // Sync refs synchronously on render so rAF overlay passes never see a stale stage or subtab
+  rawActiveStageRef.current = activeStage;
   activeStageRef.current = effectiveThreeStage;
   themeRef.current = theme;
   moodRef.current = mood;
@@ -647,6 +686,13 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     controllerRef.current = ctrl;
   }, []);
 
+  const handleInputDiagnosticsReady = useCallback(
+    (getter: (() => MarbleInputDiagnostics) | null) => {
+      inputDiagGetterRef.current = getter;
+    },
+    []
+  );
+
   const { stageRef, canvasRef, webglFallback } = useMarbleBackdropStage({
     isDark,
     stage: 'intro',
@@ -678,6 +724,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     onOverlayDispose: handleOverlayDispose,
     onOverlayContextRestored: handleOverlayContextRestored,
     onControllerReady: handleControllerReady,
+    onInputDiagnosticsReady: handleInputDiagnosticsReady,
   });
 
   // Sync HUD interaction changes into active 3D stage BEFORE stage transitions run
@@ -832,6 +879,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       const dx = usesNormalizedDrag ? dxPx / Math.max(240, coords.rect.width) : dxPx;
       const dy = usesNormalizedDrag ? dyPx / Math.max(240, coords.rect.height) : dyPx;
 
+      stageInputCountersRef.current.drags += 1;
       rig.director.handleLeftPointerDrag(dx, dy);
       rig.director.handleLeftPointerMove(coords.ndcX, coords.ndcY);
       controllerRef.current?.requestRender?.();
@@ -908,6 +956,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     // and without interfering with native vertical scrolling inside .site-hud-scroll or modals.
     const onTouchStart = (e: TouchEvent) => {
       lastNativeTouchAt = performance.now();
+      stageInputCountersRef.current.touchStarts += 1;
       if (e.touches.length !== 1) {
         activeTouchId = null;
         return;
@@ -972,6 +1021,63 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     };
   }, [effectiveThreeStage, canvasRef, stageRef]);
 
+  // Expose zero-overhead live 3D diagnostics getter & opt-in ?debug3d=1 mobile overlay
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const readSnapshot = (): Site3dDiagnosticsSnapshot => ({
+      activeStage: rawActiveStageRef.current,
+      effectiveThreeStage: activeStageRef.current,
+      webglFallback,
+      rigActive: Boolean(rigRef.current),
+      stageTouchStarts: stageInputCountersRef.current.touchStarts,
+      stageDrags: stageInputCountersRef.current.drags,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      devicePixelRatio: Number((window.devicePixelRatio || 1).toFixed(2)),
+      renderer: controllerRef.current?.getDiagnostics?.() ?? null,
+      input: inputDiagGetterRef.current?.() ?? null,
+    });
+
+    window.__AINVTRY_3D_DIAG__ = readSnapshot;
+
+    if (!debug3dEnabled) {
+      return () => {
+        if (window.__AINVTRY_3D_DIAG__ === readSnapshot) {
+          delete window.__AINVTRY_3D_DIAG__;
+        }
+      };
+    }
+
+    const formatHud = () => {
+      const snap = readSnapshot();
+      const r = snap.renderer;
+      const inp = snap.input;
+      const line1 = r
+        ? `3D f:${r.committedFrames} (${r.fpsTier}/${r.detectedRefreshHz}Hz) dpr:${r.dpr} aa:${r.antialias ? 1 : 0} hf:${r.useHalfFloat ? 1 : 0} ${r.canvasW}x${r.canvasH}`
+        : `3D boot pending (fb:${snap.webglFallback ? 1 : 0})`;
+      const line2 = r
+        ? `stg:${snap.activeStage}/${snap.effectiveThreeStage} rm:${r.reducedMotion ? 1 : 0} p:${r.paused ? 1 : 0} hid:${r.isDocHidden ? 1 : 0} lost:${r.isContextLost ? 1 : 0} gl:${r.glError}`
+        : `stg:${snap.activeStage} vp:${snap.viewport} dpr:${snap.devicePixelRatio}`;
+      const line3 = inp
+        ? `t:${inp.touchStarts}/${inp.touchMoves} sT:${snap.stageTouchStarts}/${snap.stageDrags} gyro:${inp.gyroStatus}(${inp.gyroEvents}) mP:${inp.modalPaused ? 1 : 0}`
+        : `sT:${snap.stageTouchStarts}/${snap.stageDrags}`;
+      const line4 = r
+        ? `m:(${r.marbleU},${r.marbleV}) v:${r.marbleSpeed} t:${r.elapsed}s${r.lastError ? ` ERR:${r.lastError}` : ''}`
+        : '';
+      setDebugHudText(line4 ? `${line1}\n${line2}\n${line3}\n${line4}` : `${line1}\n${line2}\n${line3}`);
+    };
+
+    formatHud();
+    const timer = window.setInterval(formatHud, 450);
+
+    return () => {
+      window.clearInterval(timer);
+      if (window.__AINVTRY_3D_DIAG__ === readSnapshot) {
+        delete window.__AINVTRY_3D_DIAG__;
+      }
+    };
+  }, [debug3dEnabled, webglFallback]);
+
   return (
     <div
       ref={stageRef}
@@ -983,6 +1089,11 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     >
       <canvas ref={canvasRef} className="site-marble-canvas" />
       <div className="site-marble-veil" />
+      {debug3dEnabled && debugHudText ? (
+        <div className="site-3d-debug-hud" data-testid="site-3d-debug-hud">
+          {debugHudText}
+        </div>
+      ) : null}
     </div>
   );
 });

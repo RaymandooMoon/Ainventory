@@ -213,6 +213,10 @@ export function shouldCommitFrame(
   if (tier === 'paused') return false;
   if (state.lastCommitNow <= 0) return true;
   const elapsed = now - state.lastCommitNow;
+  if (!Number.isFinite(elapsed) || elapsed < 0) {
+    state.lastCommitNow = 0;
+    return true;
+  }
   if (tier === 'active60' && state.detectedRefreshHz <= 60) {
     return elapsed >= 4.0;
   }

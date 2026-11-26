@@ -157,18 +157,19 @@ function buildStudioCubeFaceData(
 }
 
 /**
- * Generates an instant (<0.3ms, ~32 KB VRAM) pre-filtered studio softbox
- * `CubeTexture` marked as `isPMREMTexture = true` with 4 roughness-matched
- * mipmap levels (32 -> 16 -> 8 -> 4 -> 2).
+ * Generates an instant (<1.2ms, ~128 KB VRAM) pre-filtered studio softbox
+ * `CubeTexture` marked as `isPMREMTexture = true` with a complete 6-level
+ * roughness-matched mipmap pyramid (64 -> 32 -> 16 -> 8 -> 4 -> 2 -> 1).
  *
  * Bypasses Three.js 0.187's synchronous 256-sample GGX `PMREMGenerator`
  * HalfFloat cube-mip convolution completely so iOS WebKit ANGLE Metal and
- * software WebGL never hit multi-second GPU stalls or watchdog context resets.
+ * software WebGL never hit multi-second GPU stalls or watchdog context resets,
+ * while remaining strictly mipmap-complete down to 1×1.
  */
 export function createLightweightStudioCubeEnvMap(): THREE.CubeTexture {
   const baseFaces: THREE.DataTexture[] = [];
   for (let face = 0; face < 6; face += 1) {
-    baseFaces.push(buildStudioCubeFaceData(face, 32, 18));
+    baseFaces.push(buildStudioCubeFaceData(face, 64, 24));
   }
 
   const cubeTex = new THREE.CubeTexture(baseFaces);
@@ -179,10 +180,12 @@ export function createLightweightStudioCubeEnvMap(): THREE.CubeTexture {
   cubeTex.generateMipmaps = false;
 
   const mipSpecs: ReadonlyArray<readonly [number, number]> = [
-    [16, 8.5],
-    [8, 4.0],
+    [32, 13.5],
+    [16, 7.0],
+    [8, 3.6],
     [4, 2.0],
-    [2, 1.1],
+    [2, 1.2],
+    [1, 0.8],
   ];
   const mipmaps: PMREMLikeCubeMip[] = [];
   for (const [mipSize, sharpness] of mipSpecs) {
@@ -370,9 +373,10 @@ export function applySmokedGlassState(
   if (softwareGlGlassFallback) {
     mat.transmission = 0;
     mat.thickness = 0;
-    mat.opacity = THREE.MathUtils.lerp(isDark ? 0.86 : 0.82, isDark ? 0.26 : 0.30, g);
+    mat.opacity = THREE.MathUtils.lerp(isDark ? 0.86 : 0.82, isDark ? 0.28 : 0.32, g);
     mat.clearcoat = 1.0;
-    mat.envMapIntensity = 1.6;
+    mat.clearcoatRoughness = THREE.MathUtils.lerp(0.14, 0.04, g);
+    mat.envMapIntensity = THREE.MathUtils.lerp(isDark ? 1.45 : 1.15, isDark ? 2.05 : 1.55, g);
   } else {
     mat.opacity = THREE.MathUtils.lerp(isDark ? 0.9 : 0.86, isDark ? 0.24 : 0.28, g);
     mat.transmission = THREE.MathUtils.lerp(0.06, 0.56, g);
@@ -724,7 +728,7 @@ export function createFloatingLabelSprite(
   const hasSubtext = Boolean(opts.subtext && opts.subtext.trim().length > 0);
   const logicalWidth = opts.width ?? (hasSubtext ? 260 : 210);
   const logicalHeight = opts.height ?? (hasSubtext ? 74 : 52);
-  const scaleFactor = isIosSafariRuntime() ? 1 : 2; // 1× on iOS to stay well inside WebKit Canvas IOSurface cap
+  const scaleFactor = 2; // Crisp Retina label typography (inactive stages are disposed on iOS)
 
   const pixelWidth = logicalWidth * scaleFactor;
   const pixelHeight = logicalHeight * scaleFactor;
@@ -1189,7 +1193,7 @@ export function createTierTechRibbonSprite(
 ): TechRibbonHandle {
   const logicalWidth = 440;
   const logicalHeight = 128;
-  const scaleFactor = isIosSafariRuntime() ? 1 : 2;
+  const scaleFactor = 2;
   const pixelWidth = logicalWidth * scaleFactor;
   const pixelHeight = logicalHeight * scaleFactor;
   const aspect = logicalWidth / logicalHeight;
@@ -1349,7 +1353,7 @@ export function createTierTechDrawer(
   group.name = `tech-drawer-${title}`;
   group.visible = false;
 
-  const scaleFactor = isIosSafariRuntime() ? 1 : 2;
+  const scaleFactor = isIosSafariRuntime() ? 1.5 : 2;
   const fontStack =
     '"Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 

@@ -241,6 +241,32 @@ html[data-ios-safari='true'] .site-live-app-stage {
   overflow: hidden;
 }
 
+.site-marble-stage[data-active-stage='hero'] {
+  cursor: pointer;
+}
+
+.site-3d-debug-hud {
+  position: fixed;
+  top: max(62px, calc(54px + env(safe-area-inset-top)));
+  left: 10px;
+  z-index: 120;
+  max-width: calc(100vw - 20px);
+  padding: 6px 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 184, 137, 0.48);
+  background: rgba(8, 8, 12, 0.88);
+  color: #f5f5f7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.42;
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
 .site-marble-canvas {
   position: absolute;
   inset: 0;

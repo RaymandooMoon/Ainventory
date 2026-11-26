@@ -492,7 +492,7 @@ export default function StudioThreeStageLayer({
       try {
         renderer = new THREE.WebGLRenderer({
           alpha: true,
-          antialias: cachedSw === false && !isIosSafari,
+          antialias: cachedSw === false,
           powerPreference: isIosSafari ? 'default' : 'high-performance',
           preserveDrawingBuffer: isIosSafari,
         });
@@ -510,7 +510,7 @@ export default function StudioThreeStageLayer({
       renderer.toneMappingExposure = 1.08;
       renderer.setClearColor(0x000000, 0);
       renderer.setPixelRatio(
-        isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, isIosSafari ? 1.35 : 2)
+        isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, isIosSafari ? 1.75 : 2)
       );
       renderer.shadowMap.enabled = false;
 
