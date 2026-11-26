@@ -1082,7 +1082,7 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.match(serverPrompt, /Layer the 그레이 mid-layer blazer cleanly OVER the inner top\/knit/);
     assert.match(serverPrompt, /worn as the 2nd mid-layer cardigan or tailored vest\/knit cleanly OVER \[TOP\]/);
     assert.match(serverPrompt, /worn as the 3rd mid-outerwear blazer\/blouson\/jacket cleanly OVER \[TOP\]\/\[TOP_MID\]/);
-    assert.match(serverPrompt, /Render the outermost 카멜 wool coat uniformly on BOTH/);
+    assert.match(serverPrompt, /Render the outermost 카멜 wool coat.*uniform 카멜 outer fabric on BOTH/);
   });
 
   it('(i) preserves shaded muted-cool 0° right sleeves and 45° chest interiors matching #94A3B8 chroma ratio (lum <= 124) while keying outer backdrop', () => {

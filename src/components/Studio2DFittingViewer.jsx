@@ -350,6 +350,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   onUpdateStylingPref,
   selectedPlace = null,
   outfitSaveBar = null,
+  isProvisionalInitialSlots = false,
 }) {
   void _legacyQuickSelectPreset;
   void _legacyOpenBodyModal;
@@ -1622,7 +1623,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         abortControllerRef.current?.abort();
         clearFirstLookCountdown();
         setAiState(null);
-        if (!isDemoAccount) {
+        if (!isDemoAccount && !isDemoVtonShowcaseActive()) {
           setDemoShowcaseEnabled(false);
         }
         setPinnedHistoryItem(null);
@@ -1662,6 +1663,19 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         facePhotoJustApplied ||
         weatherTabJustChanged
     );
+
+    if (
+      isProvisionalInitialSlots &&
+      !isDemoAccount &&
+      !demoShowcaseEnabled &&
+      !isUserApproved &&
+      !manualDemoRef.current
+    ) {
+      setAiLoading(false);
+      setProgressiveBgAnglesLoading(false);
+      setStagedNeedsApply(false);
+      return undefined;
+    }
 
     const alreadyCompletedRun =
       !isForceBypass && completedProgressiveKeysRef.current.has(scenarioVtonKey);
@@ -2370,6 +2384,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     retryNonce,
     demoShowcaseEnabled,
     isDemoAccount,
+    isProvisionalInitialSlots,
     autoGenEnabled,
     pinnedHistoryItem,
     clearFirstLookCountdown,

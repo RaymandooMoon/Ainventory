@@ -5070,7 +5070,11 @@ export async function sliceTurnaround2x2Sheet(
   await Promise.all(
     TURNAROUND_ANGLES.map(async (angle) => {
       const src = rawCropped[angle];
-      if (src && src !== sheetDataUrl && src.startsWith('data:image/png;base64,')) {
+      if (
+        src &&
+        src !== sheetDataUrl &&
+        (src.startsWith('data:image/png;base64,') || src.startsWith('data:image/webp;base64,'))
+      ) {
         verifiedOut[angle] = src;
         return;
       }

@@ -1214,6 +1214,9 @@ export default function OutfitStudioView({
   const provisionalInitialSlotsRef = useRef(
     Boolean(!preEquippedGarment && !isDemoShowcaseAccount && garments.length > 0)
   );
+  const [initialWeatherResolved, setInitialWeatherResolved] = useState(
+    () => Boolean(preEquippedGarment || isDemoShowcaseAccount)
+  );
   const forceAutoApplyWeatherRef = useRef(false);
   const scenarioSnapshotsRef = useRef({});
   const ensuredSeedClosetsRef = useRef(new Set());
@@ -1690,6 +1693,7 @@ export default function OutfitStudioView({
             return mappedSlots;
           });
           setHasExplicitSlotState(true);
+          setInitialWeatherResolved(true);
           activeRecIdRef.current = chosenRec.id;
           setActiveRecId(chosenRec.id);
         } else if (recs.length === 0 && !userModifiedSlotsRef.current && garments.length > 0) {
@@ -1699,6 +1703,9 @@ export default function OutfitStudioView({
               : buildInitialStudioSlots(garments, null, isDemoShowcaseAccount)
           );
           setHasExplicitSlotState(true);
+          setInitialWeatherResolved(true);
+        } else {
+          setInitialWeatherResolved(true);
         }
       })
       .catch(() => {
@@ -1709,6 +1716,9 @@ export default function OutfitStudioView({
               : buildInitialStudioSlots(garments, null, isDemoShowcaseAccount)
           );
           setHasExplicitSlotState(true);
+        }
+        if (!cancelled) {
+          setInitialWeatherResolved(true);
         }
       });
 
@@ -4266,6 +4276,9 @@ export default function OutfitStudioView({
 
           <Studio25DCanvas
             slots={slots}
+            isProvisionalInitialSlots={Boolean(
+              !isDemoShowcaseAccount && !preEquippedGarment && !initialWeatherResolved
+            )}
             theme={theme}
             lang={lang}
             user={user}
