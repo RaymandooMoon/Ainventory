@@ -7072,7 +7072,7 @@ html[data-theme-transitioning='1'] *::after {
   gap: 5px;
 }
 
-.admin-console-nl-channels .admin-console-status-chip.is-neutral {
+.admin-console-status-chip.is-neutral {
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
   color: var(--ink-muted);

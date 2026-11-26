@@ -66,6 +66,7 @@ import {
 import {
   dispatchNewsletterNotifications,
   resolveSafeWebhookUrl,
+  sendNewsletterVerificationEmail,
 } from './newsletterNotifications.js';
 import {
   fetchPlaceBackdropBundle,
@@ -1140,24 +1141,183 @@ export function createApiRouter(options = {}) {
     return normalized;
   }
 
+  const newsletterFetchImpl = options.newsletterFetchImpl || fetch;
+  const NEWSLETTER_OTP_TTL_MS = 10 * 60 * 1000;
+  const NEWSLETTER_RESEND_COOLDOWN_MS = 60 * 1000;
+  const NEWSLETTER_MAX_VERIFY_FAILS = 5;
+
+  function hashNewsletterSecret(email, rawSecret) {
+    return crypto
+      .createHash('sha256')
+      .update(`ainvtry-nl-v1:${email}:${String(rawSecret || '').trim()}`)
+      .digest('hex');
+  }
+
+  function resolveNewsletterVerifyBaseUrl(req) {
+    const configured = String(process.env.SITE_PUBLIC_ORIGIN || '').trim().replace(/\/+$/, '');
+    if (configured && /^https:\/\//i.test(configured)) {
+      return configured;
+    }
+    const originHeader = String(req.headers.origin || '').trim();
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(originHeader)) {
+      return originHeader;
+    }
+    return 'https://ainvtry.com';
+  }
+
+  function parseSqliteUtcMs(raw) {
+    if (!raw) return 0;
+    const str = String(raw).trim();
+    const iso = str.includes('T') ? str : `${str.replace(' ', 'T')}Z`;
+    const ms = Date.parse(iso);
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  async function issueNewsletterVerificationChallenge(req, res, { email, lang, source, isResend }) {
+    const existing = db
+      .prepare(
+        `SELECT id, status, lang, source, verification_sent_at
+         FROM newsletter_subscribers WHERE email = ?`
+      )
+      .get(email);
+
+    if (existing && existing.status === 'subscribed') {
+      db.prepare(
+        "UPDATE newsletter_subscribers SET lang = ?, source = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(lang, source, existing.id);
+      return res.status(200).json({
+        ok: true,
+        status: 'already_subscribed',
+        email,
+      });
+    }
+
+    if (existing && existing.verification_sent_at) {
+      const sentMs = parseSqliteUtcMs(existing.verification_sent_at);
+      const elapsedMs = Date.now() - sentMs;
+      if (sentMs > 0 && elapsedMs < NEWSLETTER_RESEND_COOLDOWN_MS) {
+        const retryAfterSec = Math.max(
+          1,
+          Math.ceil((NEWSLETTER_RESEND_COOLDOWN_MS - elapsedMs) / 1000)
+        );
+        res.setHeader('Retry-After', String(retryAfterSec));
+        return res.status(429).json({
+          ok: false,
+          error: `인증코드를 방금 발송했습니다. ${retryAfterSec}초 후에 다시 요청해 주세요.`,
+          code: 'RESEND_COOLDOWN',
+          retryAfterSec,
+        });
+      }
+    }
+
+    const emailRate = checkRateLimit(`newsletter:otp:${email}`, 5);
+    if (!emailRate.allowed) {
+      res.setHeader('Retry-After', String(emailRate.retryAfterSec));
+      return res.status(429).json({
+        ok: false,
+        error: `인증 메일 발송 한도를 초과했습니다. ${emailRate.retryAfterSec}초 후 다시 시도해 주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: emailRate.retryAfterSec,
+      });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    const token = crypto.randomBytes(24).toString('hex');
+    const codeHash = hashNewsletterSecret(email, code);
+    const tokenHash = hashNewsletterSecret(email, token);
+    const nowIso = new Date().toISOString();
+    const expiresIso = new Date(Date.now() + NEWSLETTER_OTP_TTL_MS).toISOString();
+    const verifyBase = resolveNewsletterVerifyBaseUrl(req);
+    const verifyUrl = `${verifyBase}/?nl_verify=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+
+    const emailResult = await sendNewsletterVerificationEmail(
+      { email, lang, code, verifyUrl, expiresInMinutes: 10 },
+      process.env,
+      newsletterFetchImpl
+    );
+
+    const devPreviewAllowed = isDevOtpPreviewAllowed();
+    if (!emailResult.sent) {
+      if (emailResult.configured) {
+        return res.status(502).json({
+          ok: false,
+          error: '인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+          code: 'EMAIL_SEND_FAILED',
+        });
+      }
+      if (!devPreviewAllowed) {
+        return res.status(503).json({
+          ok: false,
+          error:
+            '이메일 인증 발송 서비스(RESEND_API_KEY)가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요.',
+          code: 'EMAIL_DELIVERY_NOT_CONFIGURED',
+        });
+      }
+    }
+
+    if (existing) {
+      db.prepare(
+        `UPDATE newsletter_subscribers
+         SET status = 'pending',
+             lang = ?,
+             source = ?,
+             consent_at = datetime('now'),
+             verification_code_hash = ?,
+             verification_token_hash = ?,
+             verification_expires_at = ?,
+             verification_sent_at = ?,
+             verification_fail_count = 0,
+             updated_at = datetime('now')
+         WHERE id = ?`
+      ).run(lang, source, codeHash, tokenHash, expiresIso, nowIso, existing.id);
+    } else {
+      db.prepare(
+        `INSERT INTO newsletter_subscribers (
+           email, lang, source, status,
+           verification_code_hash, verification_token_hash,
+           verification_expires_at, verification_sent_at, verification_fail_count
+         ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, 0)`
+      ).run(email, lang, source, codeHash, tokenHash, expiresIso, nowIso);
+    }
+
+    rateBuckets.delete(`newsletter:vfail:${email}`);
+
+    const responsePayload = {
+      ok: true,
+      status: 'pending_verification',
+      email,
+      expiresInSec: Math.floor(NEWSLETTER_OTP_TTL_MS / 1000),
+      cooldownSec: Math.floor(NEWSLETTER_RESEND_COOLDOWN_MS / 1000),
+      delivery: emailResult.sent ? 'email' : 'dev_preview',
+      resent: Boolean(isResend),
+    };
+    if (devPreviewAllowed && !emailResult.sent) {
+      responsePayload.devPreviewCode = code;
+      responsePayload.devVerifyToken = token;
+    }
+    return res.status(202).json(responsePayload);
+  }
+
   router.get('/newsletter/health', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     return res.json({
       ok: true,
       service: 'ainventory-express-newsletter',
       storage: 'sqlite',
+      verificationRequired: true,
       emailConfigured: Boolean(String(process.env.RESEND_API_KEY || '').trim()),
       webhookConfigured: Boolean(resolveSafeWebhookUrl(process.env.NEWSLETTER_WEBHOOK_URL)),
     });
   });
 
-  router.post('/newsletter/subscribe', (req, res) => {
+  router.post('/newsletter/subscribe', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 64);
     const rate = checkRateLimit(`newsletter:sub:${clientIp}`, MAX_NEWSLETTER_SUBSCRIBES_PER_WINDOW);
     if (!rate.allowed) {
       res.setHeader('Retry-After', String(rate.retryAfterSec));
       return res.status(429).json({
+        ok: false,
         error: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
         code: 'RATE_LIMITED',
         retryAfterSec: rate.retryAfterSec,
@@ -1173,6 +1333,7 @@ export function createApiRouter(options = {}) {
     const email = normalizeNewsletterEmail(body.email);
     if (!email) {
       return res.status(400).json({
+        ok: false,
         error: '올바른 이메일 주소를 입력해 주세요.',
         code: 'INVALID_EMAIL',
       });
@@ -1180,6 +1341,7 @@ export function createApiRouter(options = {}) {
 
     if (body.consent !== true) {
       return res.status(400).json({
+        ok: false,
         error: '뉴스레터 수신 및 개인정보 수집 동의가 필요합니다.',
         code: 'CONSENT_REQUIRED',
       });
@@ -1188,73 +1350,310 @@ export function createApiRouter(options = {}) {
     const lang = body.lang === 'en' ? 'en' : 'ko';
     const rawSource = typeof body.source === 'string' ? body.source.trim() : 'site_modal';
     const source = NEWSLETTER_ALLOWED_SOURCES.has(rawSource) ? rawSource : 'site_modal';
-    const notifyHandledAtEdge = String(req.headers['x-newsletter-notify-handled'] || '') === '1';
 
     try {
-      const existing = db
-        .prepare('SELECT id, status FROM newsletter_subscribers WHERE email = ?')
-        .get(email);
-
-      if (existing) {
-        if (existing.status === 'subscribed') {
-          db.prepare(
-            "UPDATE newsletter_subscribers SET lang = ?, source = ?, updated_at = datetime('now') WHERE id = ?"
-          ).run(lang, source, existing.id);
-          return res.status(200).json({
-            ok: true,
-            status: 'already_subscribed',
-            email,
-          });
-        }
-        db.prepare(
-          "UPDATE newsletter_subscribers SET status = 'subscribed', lang = ?, source = ?, consent_at = datetime('now'), updated_at = datetime('now'), unsubscribed_at = NULL WHERE id = ?"
-        ).run(lang, source, existing.id);
-        if (!notifyHandledAtEdge) {
-          void dispatchNewsletterNotifications({
-            type: 'subscribed',
-            email,
-            lang,
-            source,
-            resubscribed: true,
-            storage: 'express',
-          });
-        }
-        return res.status(200).json({
-          ok: true,
-          status: 'subscribed',
-          resubscribed: true,
-          email,
-        });
-      }
-
-      db.prepare(
-        `INSERT INTO newsletter_subscribers (email, lang, source, status)
-         VALUES (?, ?, ?, 'subscribed')`
-      ).run(email, lang, source);
-
-      if (!notifyHandledAtEdge) {
-        void dispatchNewsletterNotifications({
-          type: 'subscribed',
-          email,
-          lang,
-          source,
-          resubscribed: false,
-          storage: 'express',
-        });
-      }
-
-      return res.status(201).json({
-        ok: true,
-        status: 'subscribed',
+      return await issueNewsletterVerificationChallenge(req, res, {
         email,
+        lang,
+        source,
+        isResend: false,
       });
     } catch (err) {
-      console.error('[Newsletter] Subscribe failed:', err?.message || err);
+      console.error('[Newsletter] Subscribe challenge failed:', err?.message || err);
       return res.status(500).json({
-        error: '뉴스레터 구독 처리 중 오류가 발생했습니다.',
+        ok: false,
+        error: '인증코드 발송 중 오류가 발생했습니다.',
         code: 'NEWSLETTER_SUBSCRIBE_FAILED',
       });
     }
+  });
+
+  router.post('/newsletter/resend', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 64);
+    const rate = checkRateLimit(`newsletter:sub:${clientIp}`, MAX_NEWSLETTER_SUBSCRIBES_PER_WINDOW);
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', String(rate.retryAfterSec));
+      return res.status(429).json({
+        ok: false,
+        error: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+        code: 'RATE_LIMITED',
+        retryAfterSec: rate.retryAfterSec,
+      });
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const email = normalizeNewsletterEmail(body.email);
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        error: '올바른 이메일 주소를 입력해 주세요.',
+        code: 'INVALID_EMAIL',
+      });
+    }
+
+    const existing = db
+      .prepare('SELECT lang, source FROM newsletter_subscribers WHERE email = ?')
+      .get(email);
+    const lang = body.lang === 'en' ? 'en' : existing?.lang === 'en' ? 'en' : 'ko';
+    const rawSource =
+      typeof body.source === 'string' ? body.source.trim() : existing?.source || 'site_modal';
+    const source = NEWSLETTER_ALLOWED_SOURCES.has(rawSource) ? rawSource : 'site_modal';
+
+    try {
+      return await issueNewsletterVerificationChallenge(req, res, {
+        email,
+        lang,
+        source,
+        isResend: true,
+      });
+    } catch (err) {
+      console.error('[Newsletter] Resend challenge failed:', err?.message || err);
+      return res.status(500).json({
+        ok: false,
+        error: '인증코드 재발송 중 오류가 발생했습니다.',
+        code: 'NEWSLETTER_RESEND_FAILED',
+      });
+    }
+  });
+
+  router.post('/newsletter/verify', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 64);
+    const ipRate = checkRateLimit(`newsletter:verifyip:${clientIp}`, MAX_NEWSLETTER_SUBSCRIBES_PER_WINDOW * 2);
+    if (!ipRate.allowed) {
+      res.setHeader('Retry-After', String(ipRate.retryAfterSec));
+      return res.status(429).json({
+        ok: false,
+        error: '인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+        code: 'RATE_LIMITED',
+        retryAfterSec: ipRate.retryAfterSec,
+      });
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const email = normalizeNewsletterEmail(body.email);
+    const code = typeof body.code === 'string' ? body.code.replace(/\s+/g, '').trim() : '';
+    const token = typeof body.token === 'string' ? body.token.trim() : '';
+
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        error: '올바른 이메일 주소를 입력해 주세요.',
+        code: 'INVALID_EMAIL',
+      });
+    }
+
+    if (!/^\d{6}$/.test(code) && !/^[a-f0-9]{32,128}$/i.test(token)) {
+      return res.status(400).json({
+        ok: false,
+        error: '6자리 숫자 인증코드 또는 유효한 인증 링크가 필요합니다.',
+        code: 'INVALID_CODE',
+      });
+    }
+
+    const failBlock = peekRateLimitBlocked(`newsletter:vfail:${email}`, NEWSLETTER_MAX_VERIFY_FAILS);
+    if (failBlock.blocked) {
+      res.setHeader('Retry-After', String(failBlock.retryAfterSec));
+      return res.status(429).json({
+        ok: false,
+        error: `인증 시도 횟수(${NEWSLETTER_MAX_VERIFY_FAILS}회)를 초과했습니다. ${failBlock.retryAfterSec}초 후 인증코드를 다시 발송해 주세요.`,
+        code: 'OTP_ATTEMPTS_EXCEEDED',
+        retryAfterSec: failBlock.retryAfterSec,
+      });
+    }
+
+    const notifyHandledAtEdge = String(req.headers['x-newsletter-notify-handled'] || '') === '1';
+
+    try {
+      const row = db
+        .prepare(
+          `SELECT id, email, lang, source, status, unsubscribed_at,
+                  verification_code_hash, verification_token_hash,
+                  verification_expires_at, verification_fail_count
+           FROM newsletter_subscribers WHERE email = ?`
+        )
+        .get(email);
+
+      if (!row) {
+        return res.status(400).json({
+          ok: false,
+          error: '진행 중인 이메일 인증 내역이 없습니다. 인증코드를 먼저 요청해 주세요.',
+          code: 'NO_PENDING_VERIFICATION',
+        });
+      }
+
+      if (row.status === 'subscribed') {
+        return res.status(200).json({
+          ok: true,
+          status: 'already_subscribed',
+          verified: true,
+          email,
+        });
+      }
+
+      if (row.status !== 'pending' || (!row.verification_code_hash && !row.verification_token_hash)) {
+        return res.status(400).json({
+          ok: false,
+          error: '진행 중인 이메일 인증 내역이 없습니다. 인증코드를 먼저 요청해 주세요.',
+          code: 'NO_PENDING_VERIFICATION',
+        });
+      }
+
+      const expiresMs = parseSqliteUtcMs(row.verification_expires_at);
+      if (!expiresMs || Date.now() > expiresMs) {
+        db.prepare(
+          `UPDATE newsletter_subscribers
+           SET verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
+           WHERE id = ?`
+        ).run(row.id);
+        return res.status(400).json({
+          ok: false,
+          error: '인증 유효시간(10분)이 만료되었습니다. 인증코드를 다시 요청해 주세요.',
+          code: 'OTP_EXPIRED',
+        });
+      }
+
+      const currentFails = Number(row.verification_fail_count || 0);
+      if (currentFails >= NEWSLETTER_MAX_VERIFY_FAILS) {
+        db.prepare(
+          `UPDATE newsletter_subscribers
+           SET verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
+           WHERE id = ?`
+        ).run(row.id);
+        return res.status(429).json({
+          ok: false,
+          error: `인증 시도 횟수(${NEWSLETTER_MAX_VERIFY_FAILS}회)를 초과했습니다. 인증코드를 다시 발송해 주세요.`,
+          code: 'OTP_ATTEMPTS_EXCEEDED',
+        });
+      }
+
+      const codeMatched =
+        Boolean(code) &&
+        Boolean(row.verification_code_hash) &&
+        timingSafeStringEquals(row.verification_code_hash, hashNewsletterSecret(email, code));
+      const tokenMatched =
+        Boolean(token) &&
+        Boolean(row.verification_token_hash) &&
+        timingSafeStringEquals(row.verification_token_hash, hashNewsletterSecret(email, token));
+
+      if (!codeMatched && !tokenMatched) {
+        const nextFails = currentFails + 1;
+        const failRes = checkRateLimit(`newsletter:vfail:${email}`, NEWSLETTER_MAX_VERIFY_FAILS);
+        if (nextFails >= NEWSLETTER_MAX_VERIFY_FAILS) {
+          db.prepare(
+            `UPDATE newsletter_subscribers
+             SET verification_fail_count = ?, verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
+             WHERE id = ?`
+          ).run(nextFails, row.id);
+          return res.status(429).json({
+            ok: false,
+            error: `인증 시도 횟수(${NEWSLETTER_MAX_VERIFY_FAILS}회)를 초과했습니다. 인증코드를 다시 발송해 주세요.`,
+            code: 'OTP_ATTEMPTS_EXCEEDED',
+            remainingAttempts: 0,
+          });
+        }
+        db.prepare(
+          "UPDATE newsletter_subscribers SET verification_fail_count = ?, updated_at = datetime('now') WHERE id = ?"
+        ).run(nextFails, row.id);
+        const remainingAttempts = Math.max(0, NEWSLETTER_MAX_VERIFY_FAILS - nextFails);
+        return res.status(400).json({
+          ok: false,
+          error: `인증코드가 일치하지 않습니다. (남은 시도 ${remainingAttempts}회)`,
+          code: 'INVALID_CODE',
+          remainingAttempts: Math.min(remainingAttempts, failRes.remaining),
+        });
+      }
+
+      const wasResubscribed = Boolean(row.unsubscribed_at);
+      db.prepare(
+        `UPDATE newsletter_subscribers
+         SET status = 'subscribed',
+             verified_at = datetime('now'),
+             consent_at = datetime('now'),
+             unsubscribed_at = NULL,
+             verification_code_hash = NULL,
+             verification_token_hash = NULL,
+             verification_expires_at = NULL,
+             verification_fail_count = 0,
+             updated_at = datetime('now')
+         WHERE id = ?`
+      ).run(row.id);
+
+      rateBuckets.delete(`newsletter:vfail:${email}`);
+
+      if (!notifyHandledAtEdge) {
+        void dispatchNewsletterNotifications(
+          {
+            type: 'subscribed',
+            email,
+            lang: row.lang || 'ko',
+            source: row.source || 'site_modal',
+            resubscribed: wasResubscribed,
+            storage: 'express',
+          },
+          process.env,
+          newsletterFetchImpl
+        );
+      }
+
+      return res.status(200).json({
+        ok: true,
+        status: 'subscribed',
+        verified: true,
+        resubscribed: wasResubscribed || undefined,
+        email,
+      });
+    } catch (err) {
+      console.error('[Newsletter] Verify failed:', err?.message || err);
+      return res.status(500).json({
+        ok: false,
+        error: '이메일 인증 확인 중 오류가 발생했습니다.',
+        code: 'NEWSLETTER_VERIFY_FAILED',
+      });
+    }
+  });
+
+  // Optional HMAC-authenticated sync endpoint for Edge-verified Cloudflare Worker mirrors
+  router.post('/newsletter/sync-verified', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const syncSecret = String(process.env.NEWSLETTER_SYNC_SECRET || '').trim();
+    if (syncSecret.length < 16) {
+      return res.status(404).json({ ok: false, code: 'NOT_ENABLED' });
+    }
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const email = normalizeNewsletterEmail(body.email);
+    const ts = Number(req.headers['x-newsletter-sync-ts'] || 0);
+    const sig = String(req.headers['x-newsletter-sync-signature'] || '').trim();
+    if (!email || !Number.isFinite(ts) || Math.abs(Date.now() - ts) > 5 * 60 * 1000 || !sig) {
+      return res.status(401).json({ ok: false, code: 'UNAUTHORIZED' });
+    }
+    const expectedSig = crypto
+      .createHmac('sha256', syncSecret)
+      .update(`${ts}:${email}:subscribed`)
+      .digest('hex');
+    if (!timingSafeStringEquals(expectedSig, sig)) {
+      return res.status(401).json({ ok: false, code: 'UNAUTHORIZED' });
+    }
+    const lang = body.lang === 'en' ? 'en' : 'ko';
+    const rawSource = typeof body.source === 'string' ? body.source.trim() : 'site_modal';
+    const source = NEWSLETTER_ALLOWED_SOURCES.has(rawSource) ? rawSource : 'site_modal';
+    const existing = db.prepare('SELECT id FROM newsletter_subscribers WHERE email = ?').get(email);
+    if (existing) {
+      db.prepare(
+        `UPDATE newsletter_subscribers
+         SET status = 'subscribed', lang = ?, source = ?, verified_at = COALESCE(verified_at, datetime('now')),
+             unsubscribed_at = NULL, verification_code_hash = NULL, verification_token_hash = NULL,
+             updated_at = datetime('now')
+         WHERE id = ?`
+      ).run(lang, source, existing.id);
+    } else {
+      db.prepare(
+        `INSERT INTO newsletter_subscribers (email, lang, source, status, verified_at)
+         VALUES (?, ?, ?, 'subscribed', datetime('now'))`
+      ).run(email, lang, source);
+    }
+    return res.status(200).json({ ok: true, status: 'subscribed', verified: true, email });
   });
 
   router.post('/newsletter/unsubscribe', (req, res) => {
@@ -1267,6 +1666,7 @@ export function createApiRouter(options = {}) {
     if (!rate.allowed) {
       res.setHeader('Retry-After', String(rate.retryAfterSec));
       return res.status(429).json({
+        ok: false,
         error: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
         code: 'RATE_LIMITED',
         retryAfterSec: rate.retryAfterSec,
@@ -1277,6 +1677,7 @@ export function createApiRouter(options = {}) {
     const email = normalizeNewsletterEmail(body.email);
     if (!email) {
       return res.status(400).json({
+        ok: false,
         error: '올바른 이메일 주소를 입력해 주세요.',
         code: 'INVALID_EMAIL',
       });
@@ -1287,15 +1688,25 @@ export function createApiRouter(options = {}) {
     try {
       const updated = db
         .prepare(
-          "UPDATE newsletter_subscribers SET status = 'unsubscribed', unsubscribed_at = datetime('now'), updated_at = datetime('now') WHERE email = ?"
+          `UPDATE newsletter_subscribers
+           SET status = 'unsubscribed',
+               unsubscribed_at = datetime('now'),
+               verification_code_hash = NULL,
+               verification_token_hash = NULL,
+               updated_at = datetime('now')
+           WHERE email = ?`
         )
         .run(email);
       if (!notifyHandledAtEdge && Number(updated?.changes || 0) > 0) {
-        void dispatchNewsletterNotifications({
-          type: 'unsubscribed',
-          email,
-          storage: 'express',
-        });
+        void dispatchNewsletterNotifications(
+          {
+            type: 'unsubscribed',
+            email,
+            storage: 'express',
+          },
+          process.env,
+          newsletterFetchImpl
+        );
       }
       // Uniform response to avoid subscriber email enumeration
       return res.status(200).json({
@@ -1305,6 +1716,7 @@ export function createApiRouter(options = {}) {
     } catch (err) {
       console.error('[Newsletter] Unsubscribe failed:', err?.message || err);
       return res.status(500).json({
+        ok: false,
         error: '수신 거부 처리 중 오류가 발생했습니다.',
         code: 'NEWSLETTER_UNSUBSCRIBE_FAILED',
       });
@@ -4919,17 +5331,19 @@ export function createApiRouter(options = {}) {
     res.setHeader('Cache-Control', 'private, no-store');
     const rows = db
       .prepare(
-        `SELECT id, email, lang, source, status, consent_at, created_at, updated_at, unsubscribed_at
+        `SELECT id, email, lang, source, status, consent_at, verified_at, created_at, updated_at, unsubscribed_at
          FROM newsletter_subscribers
          ORDER BY created_at DESC, id DESC
          LIMIT 500`
       )
       .all();
     const activeCount = rows.filter((r) => r.status === 'subscribed').length;
-    const unsubscribedCount = rows.length - activeCount;
+    const pendingCount = rows.filter((r) => r.status === 'pending').length;
+    const unsubscribedCount = rows.filter((r) => r.status === 'unsubscribed').length;
     return res.json({
       total: rows.length,
       activeCount,
+      pendingCount,
       unsubscribedCount,
       emailConfigured: Boolean(String(process.env.RESEND_API_KEY || '').trim()),
       webhookConfigured: Boolean(resolveSafeWebhookUrl(process.env.NEWSLETTER_WEBHOOK_URL)),
@@ -4962,16 +5376,24 @@ export function createApiRouter(options = {}) {
       }
       if (nextStatus === 'unsubscribed') {
         db.prepare(
-          "UPDATE newsletter_subscribers SET status = 'unsubscribed', unsubscribed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+          `UPDATE newsletter_subscribers
+           SET status = 'unsubscribed', unsubscribed_at = datetime('now'),
+               verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
+           WHERE id = ?`
         ).run(id);
       } else {
         db.prepare(
-          "UPDATE newsletter_subscribers SET status = 'subscribed', consent_at = datetime('now'), unsubscribed_at = NULL, updated_at = datetime('now') WHERE id = ?"
+          `UPDATE newsletter_subscribers
+           SET status = 'subscribed', consent_at = datetime('now'),
+               verified_at = COALESCE(verified_at, datetime('now')),
+               unsubscribed_at = NULL, verification_code_hash = NULL, verification_token_hash = NULL,
+               updated_at = datetime('now')
+           WHERE id = ?`
         ).run(id);
       }
       const updated = db
         .prepare(
-          `SELECT id, email, lang, source, status, consent_at, created_at, updated_at, unsubscribed_at
+          `SELECT id, email, lang, source, status, consent_at, verified_at, created_at, updated_at, unsubscribed_at
            FROM newsletter_subscribers WHERE id = ?`
         )
         .get(id);

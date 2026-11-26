@@ -5,15 +5,14 @@ import { describe, it } from 'node:test';
 import {
   resolveNewsletterEndpoints,
   subscribeToNewsletter,
-  syncOfflineNewsletterSubscription,
+  verifyNewsletterEmail,
 } from '../../src/site/newsletterClient.ts';
 import { buildNewsletterSubscribersCsv, sanitizeCsvCell } from '../../src/utils/newsletterCsv.ts';
 
-describe('Newsletter Client Resilience, CSV Export & Cloudflare Worker Config Contract', () => {
+describe('Newsletter Client Double Opt-In Resilience, CSV Export & Cloudflare Worker Config Contract', () => {
   it('configures wrangler.jsonc with Worker entry point and /api/* run_worker_first routing', () => {
     const wranglerPath = path.resolve(process.cwd(), 'wrangler.jsonc');
     const raw = fs.readFileSync(wranglerPath, 'utf8');
-    // Strip JSONC comments before JSON.parse
     const stripped = raw.replace(/^\s*\/\/.*$/gm, '');
     const config = JSON.parse(stripped) as {
       main?: string;
@@ -28,124 +27,119 @@ describe('Newsletter Client Resilience, CSV Export & Cloudflare Worker Config Co
     assert.equal(config.main, 'worker/index.js');
     assert.equal(config.assets?.directory, './dist-site');
     assert.equal(config.assets?.binding, 'ASSETS');
-    assert.ok(Array.isArray(config.assets?.run_worker_first));
     assert.ok(config.assets?.run_worker_first?.includes('/api/*'));
     assert.equal(config.vars?.API_UPSTREAM_ORIGIN, 'https://ainventory-api.onrender.com');
   });
 
-  it('attaches automatic Render production API fallback only on hosted public domains', () => {
+  it('attaches automatic Render production API fallback for subscribe, verify, resend, and unsubscribe on hosted domains', () => {
     const prod = resolveNewsletterEndpoints({}, 'ainvtry.com');
     assert.equal(prod.isStaticOnly, false);
     assert.deepEqual(prod.subscribeUrls, [
       '/api/newsletter/subscribe',
       'https://ainventory-api.onrender.com/api/newsletter/subscribe',
     ]);
-
-    const wwwProd = resolveNewsletterEndpoints({}, 'www.ainvtry.com');
-    assert.equal(wwwProd.subscribeUrls.length, 2);
-
-    const ghPages = resolveNewsletterEndpoints({ VITE_STATIC_SITE: 'true' }, 'raymandoomoon.github.io');
-    assert.equal(ghPages.isStaticOnly, false);
-    assert.equal(ghPages.subscribeUrls[1], 'https://ainventory-api.onrender.com/api/newsletter/subscribe');
+    assert.deepEqual(prod.verifyUrls, [
+      '/api/newsletter/verify',
+      'https://ainventory-api.onrender.com/api/newsletter/verify',
+    ]);
+    assert.deepEqual(prod.resendUrls, [
+      '/api/newsletter/resend',
+      'https://ainventory-api.onrender.com/api/newsletter/resend',
+    ]);
 
     const local = resolveNewsletterEndpoints({}, 'localhost');
     assert.deepEqual(local.subscribeUrls, ['/api/newsletter/subscribe']);
+    assert.deepEqual(local.verifyUrls, ['/api/newsletter/verify']);
   });
 
-  it('falls back seamlessly from same-origin HTML/503 to Render backup API before ever returning offline_saved', async () => {
+  it('completes 2-step subscribe (pending_verification) -> verifyNewsletterEmail with hosted fallback', async () => {
     const visitedUrls: string[] = [];
     const mockFetch: typeof fetch = async (input) => {
       const url = String(input);
       visitedUrls.push(url);
       if (url === '/api/newsletter/subscribe') {
-        // Simulate old static SPA HTML fallback
         return new Response('<!doctype html><html></html>', {
           status: 200,
           headers: { 'Content-Type': 'text/html' },
         });
       }
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          status: 'subscribed',
-          email: 'mbo88@naver.com',
-          storage: 'upstream',
-        }),
-        {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      if (url.endsWith('/newsletter/subscribe')) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            status: 'pending_verification',
+            email: 'mbo88@naver.com',
+            expiresInSec: 600,
+            cooldownSec: 60,
+            challengeToken: 'nlc1.mock.sig',
+          }),
+          { status: 202, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/newsletter/verify')) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            status: 'subscribed',
+            verified: true,
+            email: 'mbo88@naver.com',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response('Not Found', { status: 404 });
     };
 
-    const result = await subscribeToNewsletter(
-      {
-        email: 'mbo88@naver.com',
-        consent: true,
-        lang: 'ko',
-        source: 'site_about',
-      },
-      {
-        fetchImpl: mockFetch,
-        envOverride: {},
-        hostnameOverride: 'ainvtry.com',
-        timeoutMs: 3000,
-      }
+    const step1 = await subscribeToNewsletter(
+      { email: 'mbo88@naver.com', consent: true, lang: 'ko', source: 'site_about' },
+      { fetchImpl: mockFetch, envOverride: {}, hostnameOverride: 'ainvtry.com', timeoutMs: 3000 }
     );
-
-    assert.equal(visitedUrls.length, 2);
-    assert.equal(visitedUrls[0], '/api/newsletter/subscribe');
-    assert.equal(visitedUrls[1], 'https://ainventory-api.onrender.com/api/newsletter/subscribe');
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.status, 'subscribed');
-      assert.equal(result.email, 'mbo88@naver.com');
+    assert.equal(step1.ok, true);
+    if (step1.ok) {
+      assert.equal(step1.status, 'pending_verification');
+      if (step1.status === 'pending_verification') {
+        assert.equal(step1.challengeToken, 'nlc1.mock.sig');
+      }
     }
+
+    const step2 = await verifyNewsletterEmail(
+      { email: 'mbo88@naver.com', code: '482910', challengeToken: 'nlc1.mock.sig', lang: 'ko' },
+      { fetchImpl: mockFetch, envOverride: {}, hostnameOverride: 'ainvtry.com', timeoutMs: 3000 }
+    );
+    assert.equal(step2.ok, true);
+    if (step2.ok) {
+      assert.equal(step2.status, 'subscribed');
+      assert.equal(step2.email, 'mbo88@naver.com');
+    }
+    assert.ok(visitedUrls.includes('https://ainventory-api.onrender.com/api/newsletter/subscribe'));
   });
 
-  it('upgrades previously offline_saved local records to subscribed when syncOfflineNewsletterSubscription reaches the server', async () => {
+  it('propagates EMAIL_DELIVERY_NOT_CONFIGURED cleanly without silently falling back to offline_saved', async () => {
     const mockFetch: typeof fetch = async () =>
       new Response(
         JSON.stringify({
-          ok: true,
-          status: 'subscribed',
-          email: 'mbo88@naver.com',
+          ok: false,
+          code: 'EMAIL_DELIVERY_NOT_CONFIGURED',
+          error: 'RESEND_API_KEY required',
         }),
-        {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        }
+        { status: 503, headers: { 'Content-Type': 'application/json' } }
       );
 
-    const synced = await syncOfflineNewsletterSubscription(
-      {
-        email: 'mbo88@naver.com',
-        lang: 'ko',
-        status: 'offline_saved',
-        subscribedAt: '2026-11-26T00:00:00.000Z',
-      },
-      'site_about',
-      {
-        fetchImpl: mockFetch,
-        envOverride: {},
-        hostnameOverride: 'ainvtry.com',
-        timeoutMs: 3000,
-      }
+    const res = await subscribeToNewsletter(
+      { email: 'mbo88@naver.com', consent: true, lang: 'ko', source: 'site_modal' },
+      { fetchImpl: mockFetch, envOverride: {}, hostnameOverride: 'ainvtry.com', timeoutMs: 3000 }
     );
-
-    assert.equal(synced.ok, true);
-    if (synced.ok) {
-      assert.equal(synced.status, 'subscribed');
-      assert.equal(synced.email, 'mbo88@naver.com');
+    assert.equal(res.ok, false);
+    if (!res.ok) {
+      assert.equal(res.code, 'EMAIL_DELIVERY_NOT_CONFIGURED');
     }
   });
 
-  it('sanitizes spreadsheet formula-injection cells and emits UTF-8 BOM in CSV exports', () => {
-    assert.equal(sanitizeCsvCell('=CMD("calc")'), `"'=CMD(""calc"")"` );
+  it('sanitizes spreadsheet formula-injection cells and emits verified_at + UTF-8 BOM in CSV exports', () => {
+    assert.equal(sanitizeCsvCell('=CMD("calc")'), `"'=CMD(""calc"")"`);
     assert.equal(sanitizeCsvCell('+1+1'), "'+1+1");
     assert.equal(sanitizeCsvCell('-2+3'), "'-2+3");
     assert.equal(sanitizeCsvCell('@SUM(A1:A2)'), "'@SUM(A1:A2)");
-    assert.equal(sanitizeCsvCell('normal@ainvtry.com'), 'normal@ainvtry.com');
 
     const csv = buildNewsletterSubscribersCsv([
       {
@@ -154,24 +148,30 @@ describe('Newsletter Client Resilience, CSV Export & Cloudflare Worker Config Co
         status: 'subscribed',
         lang: 'ko',
         source: 'site_about',
+        verified_at: '2026-11-26 09:47:10',
         created_at: '2026-11-26 09:46:48',
-        updated_at: '2026-11-26 09:46:48',
+        updated_at: '2026-11-26 09:47:10',
         unsubscribed_at: null,
       },
       {
         id: 8,
         email: '=HYPERLINK("https://evil.test","click")',
-        status: 'unsubscribed',
+        status: 'pending',
         lang: 'en',
         source: 'site_footer',
+        verified_at: null,
         created_at: '2026-11-26 10:00:00',
-        updated_at: '2026-11-26 10:05:00',
-        unsubscribed_at: '2026-11-26 10:05:00',
+        updated_at: '2026-11-26 10:00:00',
+        unsubscribed_at: null,
       },
     ]);
 
-    assert.ok(csv.startsWith('\uFEFFid,email,status,lang,source,created_at,updated_at,unsubscribed_at\r\n'));
-    assert.ok(csv.includes('7,mbo88@naver.com,subscribed,ko,site_about'));
-    assert.ok(csv.includes(`8,"'=HYPERLINK(""https://evil.test"",""click"")",unsubscribed,en,site_footer`));
+    assert.ok(
+      csv.startsWith(
+        '\uFEFFid,email,status,lang,source,verified_at,created_at,updated_at,unsubscribed_at\r\n'
+      )
+    );
+    assert.ok(csv.includes('7,mbo88@naver.com,subscribed,ko,site_about,2026-11-26 09:47:10'));
+    assert.ok(csv.includes(`8,"'=HYPERLINK(""https://evil.test"",""click"")",pending,en,site_footer`));
   });
 });

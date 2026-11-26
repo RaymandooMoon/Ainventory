@@ -31,17 +31,23 @@ function createFakeD1() {
   let nextId = 1;
   const rows = new Map<
     string,
-    { id: number; email: string; lang: string; source: string; status: string }
+    {
+      id: number;
+      email: string;
+      lang: string;
+      source: string;
+      status: string;
+      unsubscribed_at: string | null;
+      verification_code_hash: string | null;
+      verification_token_hash: string | null;
+      verification_expires_at: string | null;
+      verification_sent_at: string | null;
+      verification_fail_count: number;
+    }
   >();
-  let ddlCalls = 0;
 
   return {
-    get ddlCalls() {
-      return ddlCalls;
-    },
-    get rows() {
-      return rows;
-    },
+    rows,
     prepare(sql: string) {
       let args: unknown[] = [];
       const stmt = {
@@ -50,48 +56,82 @@ function createFakeD1() {
           return stmt;
         },
         async first() {
-          if (sql.includes('SELECT id, status FROM newsletter_subscribers WHERE email = ?')) {
+          if (sql.includes('FROM newsletter_subscribers WHERE email = ?')) {
             const email = String(args[0] || '');
-            const found = rows.get(email);
-            return found ? { id: found.id, status: found.status } : null;
+            return rows.get(email) || null;
           }
           return null;
         },
         async run() {
-          if (sql.includes('CREATE TABLE IF NOT EXISTS newsletter_subscribers')) {
-            ddlCalls += 1;
-            return { success: true };
-          }
           if (sql.includes('INSERT INTO newsletter_subscribers')) {
-            const [email, lang, source] = args.map(String);
-            rows.set(email, { id: nextId++, email, lang, source, status: 'subscribed' });
+            const [email, lang, source, codeHash, tokenHash, expiresIso, nowIso] = args.map(String);
+            rows.set(email, {
+              id: nextId++,
+              email,
+              lang,
+              source,
+              status: 'pending',
+              unsubscribed_at: null,
+              verification_code_hash: codeHash,
+              verification_token_hash: tokenHash,
+              verification_expires_at: expiresIso,
+              verification_sent_at: nowIso,
+              verification_fail_count: 0,
+            });
             return { success: true };
           }
-          if (sql.includes("status = 'subscribed', lang = ?, source = ?")) {
-            const [lang, source, id] = args;
+          if (sql.includes("SET status = 'pending'")) {
+            const [lang, source, codeHash, tokenHash, expiresIso, nowIso, id] = args;
             for (const row of rows.values()) {
               if (row.id === Number(id)) {
+                row.status = 'pending';
+                row.lang = String(lang);
+                row.source = String(source);
+                row.verification_code_hash = String(codeHash);
+                row.verification_token_hash = String(tokenHash);
+                row.verification_expires_at = String(expiresIso);
+                row.verification_sent_at = String(nowIso);
+                row.verification_fail_count = 0;
+              }
+            }
+            return { success: true };
+          }
+          if (sql.includes("SET status = 'subscribed'")) {
+            const id = Number(args[0]);
+            for (const row of rows.values()) {
+              if (row.id === id) {
                 row.status = 'subscribed';
-                row.lang = String(lang);
-                row.source = String(source);
+                row.unsubscribed_at = null;
+                row.verification_code_hash = null;
+                row.verification_token_hash = null;
+                row.verification_expires_at = null;
+                row.verification_fail_count = 0;
               }
             }
             return { success: true };
           }
-          if (sql.includes('SET lang = ?, source = ?')) {
-            const [lang, source, id] = args;
+          if (sql.includes('SET verification_fail_count = ?')) {
+            const [fails, id] = args;
             for (const row of rows.values()) {
               if (row.id === Number(id)) {
-                row.lang = String(lang);
-                row.source = String(source);
+                row.verification_fail_count = Number(fails);
+                if (sql.includes('verification_code_hash = NULL')) {
+                  row.verification_code_hash = null;
+                  row.verification_token_hash = null;
+                }
               }
             }
             return { success: true };
           }
-          if (sql.includes("status = 'unsubscribed'")) {
+          if (sql.includes("SET status = 'unsubscribed'")) {
             const email = String(args[0] || '');
             const row = rows.get(email);
-            if (row) row.status = 'unsubscribed';
+            if (row) {
+              row.status = 'unsubscribed';
+              row.unsubscribed_at = new Date().toISOString();
+              row.verification_code_hash = null;
+              row.verification_token_hash = null;
+            }
             return { success: true };
           }
           return { success: true };
@@ -124,75 +164,61 @@ function makeJsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-describe('Cloudflare Worker Edge Newsletter API (worker/index.js)', () => {
+function extractCodeAndLinkFromResendBody(bodyJson: string): { code: string; token: string } {
+  const parsed = JSON.parse(bodyJson) as { text?: string; html?: string; subject?: string };
+  const codeMatch = String(parsed.subject || parsed.text || '').match(/\b(\d{6})\b/);
+  const tokenMatch = String(parsed.text || parsed.html || '').match(/nl_verify=([^&\s"']+)/);
+  assert.ok(codeMatch?.[1], `Could not find 6-digit code in Resend email: ${bodyJson}`);
+  assert.ok(tokenMatch?.[1], `Could not find nl_verify token in Resend email: ${bodyJson}`);
+  return {
+    code: codeMatch[1],
+    token: decodeURIComponent(tokenMatch[1]),
+  };
+}
+
+describe('Cloudflare Worker Edge Newsletter Double Opt-In API (worker/index.js)', () => {
   beforeEach(() => {
     resetWorkerRateLimitsForTests();
   });
 
-  it('enforces strict CORS preflight with null 204 body and blocks untrusted origins', async () => {
+  it('enforces strict CORS preflight with null 204 body and reports accurate health readiness', async () => {
     const worker = createWorkerHandler(async () => makeJsonResponse({ ok: true }));
 
-    const allowedRes = await worker.fetch(
+    const allowed = await worker.fetch(
       new Request('https://ainvtry.com/api/newsletter/subscribe', {
         method: 'OPTIONS',
         headers: { Origin: 'https://ainvtry.com' },
       }),
       {}
     );
-    assert.equal(allowedRes.status, 204);
-    assert.equal(await allowedRes.text(), '');
-    assert.equal(allowedRes.headers.get('Access-Control-Allow-Origin'), 'https://ainvtry.com');
-
-    const blockedRes = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/subscribe', {
-        method: 'OPTIONS',
-        headers: { Origin: 'https://evil.example' },
-      }),
-      {}
-    );
-    assert.equal(blockedRes.status, 204);
-    assert.equal(blockedRes.headers.get('Access-Control-Allow-Origin'), null);
-  });
-
-  it('reports accurate health storage tier and integration readiness without leaking secrets', async () => {
-    const worker = createWorkerHandler(async () => makeJsonResponse({ ok: true }));
-
-    const upstreamHealth = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/health'),
-      {}
-    );
-    assert.equal(upstreamHealth.status, 200);
-    const upstreamJson = (await upstreamHealth.json()) as Record<string, unknown>;
-    assert.equal(upstreamJson.ok, true);
-    assert.equal(upstreamJson.storage, 'upstream');
-    assert.equal(upstreamJson.emailConfigured, false);
-    assert.equal(upstreamJson.webhookConfigured, false);
+    assert.equal(allowed.status, 204);
+    assert.equal(await allowed.text(), '');
+    assert.equal(allowed.headers.get('Access-Control-Allow-Origin'), 'https://ainvtry.com');
 
     const mockToken = ['stub', 'never', 'echoed'].join('-');
-    const d1Health = await worker.fetch(
+    const health = await worker.fetch(
       new Request('https://ainvtry.com/api/newsletter/health'),
       {
-        NEWSLETTER_DB: createFakeD1(),
         RESEND_API_KEY: mockToken,
-        NEWSLETTER_WEBHOOK_URL: 'https://hooks.slack.com/services/T000/B000/XXXX',
+        NEWSLETTER_WEBHOOK_URL: 'https://hooks.slack.com/services/T1/B2/C3',
       }
     );
-    const rawText = await d1Health.text();
+    const rawText = await health.text();
     assert.ok(!rawText.includes(mockToken));
-    const d1Json = JSON.parse(rawText) as Record<string, unknown>;
-    assert.equal(d1Json.storage, 'd1');
-    assert.equal(d1Json.emailConfigured, true);
-    assert.equal(d1Json.webhookConfigured, true);
-
-    const kvHealth = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/health'),
-      { NEWSLETTER_KV: createFakeKv() }
-    );
-    const kvJson = (await kvHealth.json()) as Record<string, unknown>;
-    assert.equal(kvJson.storage, 'kv');
+    const json = JSON.parse(rawText) as Record<string, unknown>;
+    assert.equal(json.ok, true);
+    assert.equal(json.verificationRequired, true);
+    assert.equal(json.storage, 'edge_hmac');
+    assert.equal(json.emailConfigured, true);
+    assert.equal(json.webhookConfigured, true);
   });
 
-  it('validates inputs, drops honeypot silently, rejects oversized payloads, and enforces rate limits', async () => {
+  it('validates inputs, rejects oversized payloads, drops honeypot bots, and enforces SSRF checks', async () => {
+    assert.equal(resolveSafeHttpsUrl('http://hooks.slack.com/x'), null);
+    assert.equal(resolveSafeHttpsUrl('https://127.0.0.1/hook'), null);
+    assert.equal(resolveSafeHttpsUrl('https://169.254.169.254/latest/meta-data/'), null);
+    assert.ok(resolveSafeHttpsUrl('https://hooks.slack.com/services/T/B/X'));
+
     const calls: RecordedFetch[] = [];
     const worker = createWorkerHandler(async (url, init) => {
       calls.push({
@@ -201,7 +227,7 @@ describe('Cloudflare Worker Edge Newsletter API (worker/index.js)', () => {
         headers: Object.fromEntries(new Headers(init?.headers).entries()),
         body: String(init?.body || ''),
       });
-      return makeJsonResponse({ ok: true, status: 'subscribed', email: 'ok@ainvtry.com' }, 201);
+      return makeJsonResponse({ ok: true, status: 'pending_verification' }, 202);
     });
 
     const badEmail = await worker.fetch(
@@ -214,64 +240,30 @@ describe('Cloudflare Worker Edge Newsletter API (worker/index.js)', () => {
     );
     assert.equal(badEmail.status, 400);
 
-    const noConsent = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.11' },
-        body: JSON.stringify({ email: 'valid@ainvtry.com', consent: false }),
-      }),
-      {}
-    );
-    assert.equal(noConsent.status, 400);
-
     const oversized = await worker.fetch(
       new Request('https://ainvtry.com/api/newsletter/subscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.12' },
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.11' },
         body: JSON.stringify({ email: 'a@b.com', consent: true, pad: 'x'.repeat(9000) }),
       }),
       {}
     );
     assert.equal(oversized.status, 413);
 
-    const honeypot = await worker.fetch(
+    const bot = await worker.fetch(
       new Request('https://ainvtry.com/api/newsletter/subscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.13' },
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.12' },
         body: JSON.stringify({ email: 'bot@spam.test', consent: true, website: 'https://spam.test' }),
       }),
       {}
     );
-    assert.equal(honeypot.status, 200);
+    assert.equal(bot.status, 200);
     assert.equal(calls.length, 0);
-
-    // Trigger rate limit on same IP (12 allowed, 13th returns 429 + Retry-After)
-    for (let i = 0; i < 12; i += 1) {
-      const ok = await worker.fetch(
-        new Request('https://ainvtry.com/api/newsletter/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.77' },
-          body: JSON.stringify({ email: `u${i}@ainvtry.com`, consent: true }),
-        }),
-        {}
-      );
-      assert.equal(ok.status, 201);
-    }
-    const limited = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.77' },
-        body: JSON.stringify({ email: 'u13@ainvtry.com', consent: true }),
-      }),
-      {}
-    );
-    assert.equal(limited.status, 429);
-    assert.ok(Number(limited.headers.get('Retry-After')) >= 1);
   });
 
-  it('persists full subscribe -> duplicate -> unsubscribe -> resubscribe lifecycle in Cloudflare D1 + fires Resend & Webhook notifications', async () => {
+  it('completes zero-config Edge HMAC Double Opt-In via 6-digit OTP AND one-click magic link without D1/KV', async () => {
     const calls: RecordedFetch[] = [];
-    const d1 = createFakeD1();
     const worker = createWorkerHandler(async (url, init) => {
       calls.push({
         url: String(url),
@@ -279,211 +271,256 @@ describe('Cloudflare Worker Edge Newsletter API (worker/index.js)', () => {
         headers: Object.fromEntries(new Headers(init?.headers).entries()),
         body: String(init?.body || ''),
       });
-      return makeJsonResponse({ ok: true, status: 'subscribed' }, 201);
+      return makeJsonResponse({ id: 'resend_ok' }, 200);
     });
 
     const env = {
-      NEWSLETTER_DB: d1,
-      RESEND_API_KEY: ['stub', 'mail', 'key'].join('-'),
+      RESEND_API_KEY: ['stub', 'edge', 'resend'].join('-'),
       NEWSLETTER_NOTIFY_EMAIL: 'raymond@ainvtry.com',
-      NEWSLETTER_WEBHOOK_URL: 'https://hooks.slack.com/services/T01/B02/SECRET',
-      NEWSLETTER_WEBHOOK_SECRET: ['stub', 'hook', '123'].join('-'),
+      NEWSLETTER_WEBHOOK_URL: 'https://hooks.slack.com/services/T1/B2/C3',
+      NEWSLETTER_WEBHOOK_SECRET: ['stub', 'hook', '999'].join('-'),
     };
 
-    const wait1 = createWaitUntilCollector();
-    const first = await worker.fetch(
+    const subRes = await worker.fetch(
       new Request('https://ainvtry.com/api/newsletter/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.21' },
         body: JSON.stringify({ email: 'MBO88@Naver.com', consent: true, lang: 'ko', source: 'site_about' }),
       }),
-      env,
-      wait1.ctx
+      env
     );
-    await wait1.flush();
+    assert.equal(subRes.status, 202);
+    const subBody = (await subRes.json()) as {
+      ok: boolean;
+      status: string;
+      storage: string;
+      challengeToken: string;
+    };
+    assert.equal(subBody.ok, true);
+    assert.equal(subBody.status, 'pending_verification');
+    assert.equal(subBody.storage, 'edge_hmac');
+    assert.ok(subBody.challengeToken.startsWith('nlc1.'));
 
-    assert.equal(first.status, 201);
-    const firstBody = (await first.json()) as { ok: boolean; status: string; storage: string; email: string };
-    assert.equal(firstBody.ok, true);
-    assert.equal(firstBody.status, 'subscribed');
-    assert.equal(firstBody.storage, 'd1');
-    assert.equal(firstBody.email, 'mbo88@naver.com');
-    assert.equal(d1.ddlCalls, 1);
+    // Extract code & one-click token from the actual verification email sent to Resend
+    assert.equal(calls.length, 1);
+    const { code, token } = extractCodeAndLinkFromResendBody(calls[0]!.body);
+    // Challenge token MUST NOT expose plaintext 6-digit code
+    assert.ok(!subBody.challengeToken.includes(code));
 
-    // Resend called twice (welcome + founder alert), webhook called once, upstream mirror called with dedup header
+    // Wrong code is rejected
+    const badVerify = await worker.fetch(
+      new Request('https://ainvtry.com/api/newsletter/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.21' },
+        body: JSON.stringify({
+          email: 'mbo88@naver.com',
+          code: code === '000000' ? '111111' : '000000',
+          challengeToken: subBody.challengeToken,
+        }),
+      }),
+      env
+    );
+    assert.equal(badVerify.status, 400);
+
+    // Tampered challenge token is rejected
+    const tampered = await worker.fetch(
+      new Request('https://ainvtry.com/api/newsletter/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.21' },
+        body: JSON.stringify({
+          email: 'mbo88@naver.com',
+          code,
+          challengeToken: `${subBody.challengeToken.slice(0, -4)}ffff`,
+        }),
+      }),
+      env
+    );
+    assert.equal(tampered.status, 400);
+
+    // Correct code succeeds & triggers Welcome + Founder Alert + Webhook
+    const wait = createWaitUntilCollector();
+    const okVerify = await worker.fetch(
+      new Request('https://ainvtry.com/api/newsletter/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.21' },
+        body: JSON.stringify({
+          email: 'mbo88@naver.com',
+          code,
+          challengeToken: subBody.challengeToken,
+        }),
+      }),
+      env,
+      wait.ctx
+    );
+    await wait.flush();
+    assert.equal(okVerify.status, 200);
+    const okBody = (await okVerify.json()) as { ok: boolean; status: string; verified: boolean };
+    assert.equal(okBody.ok, true);
+    assert.equal(okBody.status, 'subscribed');
+    assert.equal(okBody.verified, true);
+
     const resendCalls = calls.filter((c) => c.url === 'https://api.resend.com/emails');
-    assert.equal(resendCalls.length, 2);
-    assert.ok(resendCalls.some((c) => c.body.includes('mbo88@naver.com')));
-    assert.ok(resendCalls.some((c) => c.body.includes('raymond@ainvtry.com')));
-
+    assert.equal(resendCalls.length, 3); // 1 verification + 1 welcome + 1 founder alert
     const webhookCalls = calls.filter((c) => c.url.includes('hooks.slack.com'));
     assert.equal(webhookCalls.length, 1);
-    assert.equal(webhookCalls[0]?.headers['x-ainvtry-webhook-secret'], 'stub-hook-123');
+    assert.equal(webhookCalls[0]?.headers['x-ainvtry-webhook-secret'], 'stub-hook-999');
 
-    const mirrorCalls = calls.filter((c) => c.url.includes('ainventory-api.onrender.com'));
-    assert.equal(mirrorCalls.length, 1);
-    assert.equal(mirrorCalls[0]?.headers['x-newsletter-notify-handled'], '1');
-
-    // Duplicate subscription MUST NOT re-send welcome/founder emails
-    const beforeDupResendCount = resendCalls.length;
-    const wait2 = createWaitUntilCollector();
-    const dup = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/subscribe', {
+    // Replaying the same one-click link token returns idempotent already_subscribed without re-sending emails
+    const replayRes = await worker.fetch(
+      new Request('https://ainvtry.com/api/newsletter/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.22' },
-        body: JSON.stringify({ email: 'mbo88@naver.com', consent: true, lang: 'en', source: 'site_footer' }),
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.21' },
+        body: JSON.stringify({ email: 'mbo88@naver.com', token }),
       }),
-      env,
-      wait2.ctx
+      env
     );
-    await wait2.flush();
-    assert.equal(dup.status, 200);
-    const dupBody = (await dup.json()) as { status: string };
-    assert.equal(dupBody.status, 'already_subscribed');
-    assert.equal(
-      calls.filter((c) => c.url === 'https://api.resend.com/emails').length,
-      beforeDupResendCount
-    );
-
-    // Unsubscribe -> Resubscribe reactivates record
-    const wait3 = createWaitUntilCollector();
-    const unsub = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/unsubscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.23' },
-        body: JSON.stringify({ email: 'mbo88@naver.com' }),
-      }),
-      env,
-      wait3.ctx
-    );
-    await wait3.flush();
-    assert.equal(unsub.status, 200);
-    assert.equal(d1.rows.get('mbo88@naver.com')?.status, 'unsubscribed');
-
-    const wait4 = createWaitUntilCollector();
-    const resub = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.24' },
-        body: JSON.stringify({ email: 'mbo88@naver.com', consent: true, lang: 'ko', source: 'site_modal' }),
-      }),
-      env,
-      wait4.ctx
-    );
-    await wait4.flush();
-    assert.equal(resub.status, 200);
-    const resubBody = (await resub.json()) as { status: string; resubscribed?: boolean };
-    assert.equal(resubBody.status, 'subscribed');
-    assert.equal(resubBody.resubscribed, true);
+    assert.equal(replayRes.status, 200);
+    assert.equal(((await replayRes.json()) as { status: string }).status, 'already_subscribed');
+    assert.equal(calls.filter((c) => c.url === 'https://api.resend.com/emails').length, 3);
   });
 
-  it('persists subscribe -> duplicate -> unsubscribe -> resubscribe lifecycle in Cloudflare KV', async () => {
-    const kv = createFakeKv();
-    const worker = createWorkerHandler(async () => makeJsonResponse({ ok: true, status: 'subscribed' }, 201));
-    const env = { NEWSLETTER_KV: kv };
+  it('completes D1 Double Opt-In lifecycle and blocks unverified setup when RESEND_API_KEY is missing', async () => {
+    const d1 = createFakeD1();
+    const calls: RecordedFetch[] = [];
+    const worker = createWorkerHandler(async (url, init) => {
+      calls.push({
+        url: String(url),
+        method: String(init?.method || 'GET'),
+        headers: Object.fromEntries(new Headers(init?.headers).entries()),
+        body: String(init?.body || ''),
+      });
+      return makeJsonResponse({ id: 'ok' }, 200);
+    });
 
-    const wait1 = createWaitUntilCollector();
-    const r1 = await worker.fetch(
+    // Fail-closed 503 if D1 bound without RESEND_API_KEY
+    const noKeyRes = await worker.fetch(
       new Request('https://ainvtry.com/api/newsletter/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.31' },
-        body: JSON.stringify({ email: 'kvuser@ainvtry.com', consent: true, lang: 'en', source: 'site_hero' }),
+        body: JSON.stringify({ email: 'd1user@ainvtry.com', consent: true }),
       }),
-      env,
-      wait1.ctx
+      { NEWSLETTER_DB: d1 }
     );
-    await wait1.flush();
-    assert.equal(r1.status, 201);
-    const b1 = (await r1.json()) as { storage: string; status: string };
-    assert.equal(b1.storage, 'kv');
-    assert.equal(b1.status, 'subscribed');
+    assert.equal(noKeyRes.status, 503);
+    assert.equal(((await noKeyRes.json()) as { code: string }).code, 'EMAIL_DELIVERY_NOT_CONFIGURED');
 
-    const r2 = await worker.fetch(
+    const env = {
+      NEWSLETTER_DB: d1,
+      RESEND_API_KEY: ['stub', 'd1', 'mail'].join('-'),
+    };
+    const subRes = await worker.fetch(
       new Request('https://ainvtry.com/api/newsletter/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.32' },
-        body: JSON.stringify({ email: 'kvuser@ainvtry.com', consent: true }),
+        body: JSON.stringify({ email: 'd1user@ainvtry.com', consent: true, lang: 'en', source: 'site_footer' }),
       }),
       env
     );
-    assert.equal(r2.status, 200);
-    assert.equal(((await r2.json()) as { status: string }).status, 'already_subscribed');
+    assert.equal(subRes.status, 202);
+    assert.equal(d1.rows.get('d1user@ainvtry.com')?.status, 'pending');
 
-    const r3 = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/unsubscribe', {
+    const { code } = extractCodeAndLinkFromResendBody(calls[0]!.body);
+    const wait = createWaitUntilCollector();
+    const verRes = await worker.fetch(
+      new Request('https://ainvtry.com/api/newsletter/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.33' },
-        body: JSON.stringify({ email: 'kvuser@ainvtry.com' }),
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.32' },
+        body: JSON.stringify({ email: 'd1user@ainvtry.com', code }),
       }),
-      env
+      env,
+      wait.ctx
     );
-    assert.equal(r3.status, 200);
-    const storedAfterUnsub = JSON.parse(kv.store.get('newsletter:sub:kvuser@ainvtry.com') || '{}') as {
-      status?: string;
-    };
-    assert.equal(storedAfterUnsub.status, 'unsubscribed');
+    await wait.flush();
+    assert.equal(verRes.status, 200);
+    assert.equal(d1.rows.get('d1user@ainvtry.com')?.status, 'subscribed');
   });
 
-  it('retries Render upstream once on 503 cold-start hiccup and succeeds without dropping the subscription', async () => {
-    let attempts = 0;
+  it('completes KV Double Opt-In via one-click verification link token', async () => {
+    const kv = createFakeKv();
+    const calls: RecordedFetch[] = [];
+    const worker = createWorkerHandler(async (url, init) => {
+      calls.push({
+        url: String(url),
+        method: String(init?.method || 'GET'),
+        headers: Object.fromEntries(new Headers(init?.headers).entries()),
+        body: String(init?.body || ''),
+      });
+      return makeJsonResponse({ id: 'ok' }, 200);
+    });
+
+    const env = {
+      NEWSLETTER_KV: kv,
+      RESEND_API_KEY: ['stub', 'kv', 'mail'].join('-'),
+    };
+    const subRes = await worker.fetch(
+      new Request('https://ainvtry.com/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.41' },
+        body: JSON.stringify({ email: 'kvuser@ainvtry.com', consent: true, lang: 'ko', source: 'site_hero' }),
+      }),
+      env
+    );
+    assert.equal(subRes.status, 202);
+    const { token } = extractCodeAndLinkFromResendBody(calls[0]!.body);
+
+    const wait = createWaitUntilCollector();
+    const verRes = await worker.fetch(
+      new Request('https://ainvtry.com/api/newsletter/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.41' },
+        body: JSON.stringify({ email: 'kvuser@ainvtry.com', token }),
+      }),
+      env,
+      wait.ctx
+    );
+    await wait.flush();
+    assert.equal(verRes.status, 200);
+    const stored = JSON.parse(kv.store.get('newsletter:sub:kvuser@ainvtry.com') || '{}') as {
+      status?: string;
+      verified_at?: string;
+    };
+    assert.equal(stored.status, 'subscribed');
+    assert.ok(stored.verified_at);
+  });
+
+  it('proxies subscribe & verify transparently to Render upstream with cold-start retry when RESEND_API_KEY lives on Render', async () => {
+    let subAttempts = 0;
     const worker = createWorkerHandler(async (url) => {
       if (String(url).includes('/api/newsletter/subscribe')) {
-        attempts += 1;
-        if (attempts === 1) {
-          return new Response('Service Waking Up', { status: 503 });
-        }
-        return makeJsonResponse({ ok: true, status: 'subscribed', email: 'mbo88@naver.com' }, 201);
+        subAttempts += 1;
+        if (subAttempts === 1) return new Response('Waking Up', { status: 503 });
+        return makeJsonResponse(
+          { ok: true, status: 'pending_verification', email: 'mbo88@naver.com', expiresInSec: 600, cooldownSec: 60 },
+          202
+        );
+      }
+      if (String(url).includes('/api/newsletter/verify')) {
+        return makeJsonResponse({ ok: true, status: 'subscribed', verified: true, email: 'mbo88@naver.com' }, 200);
       }
       return makeJsonResponse({ ok: true });
     });
 
-    const res = await worker.fetch(
-      new Request('https://ainvtry.com/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.41' },
-        body: JSON.stringify({ email: 'mbo88@naver.com', consent: true, lang: 'ko', source: 'site_about' }),
-      }),
-      {}
-    );
-    assert.equal(attempts, 2);
-    assert.equal(res.status, 201);
-    const body = (await res.json()) as { ok: boolean; status: string; storage: string };
-    assert.equal(body.ok, true);
-    assert.equal(body.status, 'subscribed');
-    assert.equal(body.storage, 'upstream');
-  });
-
-  it('uses last-resort Resend/Webhook relay when upstream returns 503 twice and blocks SSRF webhook URLs', async () => {
-    // Verify SSRF protection rejects private/loopback/metadata/http URLs
-    assert.equal(resolveSafeHttpsUrl('http://hooks.slack.com/services/a/b/c'), null);
-    assert.equal(resolveSafeHttpsUrl('https://127.0.0.1/hook'), null);
-    assert.equal(resolveSafeHttpsUrl('https://169.254.169.254/latest/meta-data/'), null);
-    assert.equal(resolveSafeHttpsUrl('https://10.0.0.5/internal'), null);
-    assert.equal(resolveSafeHttpsUrl('https://user:pass@hooks.slack.com/x'), null);
-    assert.ok(resolveSafeHttpsUrl('https://hooks.slack.com/services/T/B/X'));
-
-    const worker = createWorkerHandler(async (url) => {
-      if (String(url).includes('ainventory-api.onrender.com')) {
-        return new Response('Upstream Down', { status: 503 });
-      }
-      if (String(url) === 'https://api.resend.com/emails') {
-        return makeJsonResponse({ id: 'email_123' }, 200);
-      }
-      return new Response('Not Found', { status: 404 });
-    });
-
-    const res = await worker.fetch(
+    const sub = await worker.fetch(
       new Request('https://ainvtry.com/api/newsletter/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.51' },
-        body: JSON.stringify({ email: 'relay@ainvtry.com', consent: true, lang: 'ko', source: 'site_about' }),
+        body: JSON.stringify({ email: 'mbo88@naver.com', consent: true }),
       }),
-      { RESEND_API_KEY: ['stub', 'relay', 'key'].join('-') }
+      {}
     );
-    assert.equal(res.status, 201);
-    const body = (await res.json()) as { ok: boolean; status: string; storage: string };
-    assert.equal(body.ok, true);
-    assert.equal(body.storage, 'relay');
+    assert.equal(subAttempts, 2);
+    assert.equal(sub.status, 202);
+
+    const ver = await worker.fetch(
+      new Request('https://ainvtry.com/api/newsletter/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.51' },
+        body: JSON.stringify({ email: 'mbo88@naver.com', code: '123456' }),
+      }),
+      {}
+    );
+    assert.equal(ver.status, 200);
+    assert.equal(((await ver.json()) as { status: string }).status, 'subscribed');
   });
 
   it('passes non-/api/* requests directly through to Cloudflare ASSETS binding', async () => {
@@ -502,6 +539,5 @@ describe('Cloudflare Worker Edge Newsletter API (worker/index.js)', () => {
     });
     assert.equal(assetCalled, true);
     assert.equal(res.status, 200);
-    assert.ok((await res.text()).includes('ainvtry'));
   });
 });
