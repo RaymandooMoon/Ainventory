@@ -383,7 +383,8 @@ const FRAGMENT_SHADER = /* glsl */ `
     float nz = clamp(0.48 + alphaCore * 0.52, 0.25, 1.0);
 
     outNormal = normalize(vec3(nx, ny, nz));
-    outEdgeBand = pow(clamp(1.0 - innerSmooth, 0.0, 1.0), 2.15);
+    float edgeBase = clamp(1.0 - innerSmooth, 0.0, 1.0);
+    outEdgeBand = edgeBase > 0.0001 ? pow(edgeBase, 2.15) : 0.0;
     float centralBulge = clamp(1.0 - abs(vPlaneUv.x - 0.5) * 2.2, 0.0, 1.0);
     outDepth = clamp(alphaCore * 0.62 + centralBulge * 0.20 + lC * 0.18, 0.0, 1.0);
   }
@@ -599,7 +600,8 @@ const FRAGMENT_SHADER = /* glsl */ `
     float leftSpatial = smoothstep(0.84, 0.10, vPlaneUv.x);
     float rightSpatial = smoothstep(0.16, 0.90, vPlaneUv.x);
 
-    float fresnel = pow(clamp(1.0 - N.z, 0.0, 1.0), 2.25);
+    float fresnelBase = clamp(1.0 - N.z, 0.0, 1.0);
+    float fresnel = fresnelBase > 0.0001 ? pow(fresnelBase, 2.25) : 0.0;
     float leftFacing = clamp(max(-N.x, 0.0) * 1.10 + leftSpatial * 0.22 * neonFlag, 0.0, 1.0);
     float rightFacing = clamp(max(N.x, 0.0) * 1.10 + rightSpatial * 0.22 * neonFlag, 0.0, 1.0);
 
@@ -615,7 +617,8 @@ const FRAGMENT_SHADER = /* glsl */ `
       rightLin * (ndlRight * rightSpatial * diffuseScale * keyBiasRight);
 
     vec3 Hkey = normalize(Lkey + vec3(0.0, 0.0, 1.0));
-    float keySpec = pow(max(dot(N, Hkey), 0.0), 18.0) * mix(0.02, 0.14, neonFlag) * strength * highlightProtect;
+    float keySpecDot = max(dot(N, Hkey), 0.0);
+    float keySpec = (keySpecDot > 0.0001 ? pow(keySpecDot, 18.0) : 0.0) * mix(0.02, 0.14, neonFlag) * strength * highlightProtect;
     lit += albedo * sideDiffuse + keyLin * (ndlKey * 0.015 * neonFlag * strength + keySpec * (0.25 + luma * 0.55));
 
     float rimIntensity = mix(0.055, 0.68, neonFlag) * strength;
@@ -624,7 +627,8 @@ const FRAGMENT_SHADER = /* glsl */ `
       rightLin * (rightRimWeight * rimIntensity);
     lit = softScreen(lit, rimGlow * highlightProtect * (0.58 + 0.42 * (1.0 - luma * 0.35)));
 
-    float floorMask = pow(clamp(1.0 - vPlaneUv.y / 0.28, 0.0, 1.0), 1.75);
+    float floorBase = clamp(1.0 - vPlaneUv.y / 0.28, 0.0, 1.0);
+    float floorMask = floorBase > 0.0001 ? pow(floorBase, 1.75) : 0.0;
     float underFacing = clamp(-N.y * 0.55 + 0.55, 0.12, 1.0);
     vec3 floorBounce = floorLin * (floorMask * underFacing * uFloorBounceStrength * mix(0.04, 0.38, neonFlag));
     lit = softScreen(lit, floorBounce * highlightProtect * (0.42 + 0.58 * (1.0 - luma * 0.4)));
@@ -739,7 +743,7 @@ export default function StudioCharacterRelightCanvas({
     try {
       renderer = new THREE.WebGLRenderer({
         alpha: true,
-        antialias: !isSoftwareGl && !isIosSafari,
+        antialias: !isSoftwareGl,
         premultipliedAlpha: false,
         powerPreference: isIosSafari ? 'default' : 'high-performance',
         preserveDrawingBuffer: true,
@@ -753,7 +757,7 @@ export default function StudioCharacterRelightCanvas({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.setPixelRatio(
-      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, isIosSafari ? 1.35 : 2)
+      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, isIosSafari ? 1.75 : 2)
     );
 
     const canvas = renderer.domElement;

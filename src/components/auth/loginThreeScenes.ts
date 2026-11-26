@@ -53,6 +53,30 @@ export interface MarbleStepSnapshot {
   elapsed: number;
 }
 
+export interface LoginThreeDiagnostics {
+  readonly committedFrames: number;
+  readonly skippedFrames: number;
+  readonly fpsTier: string;
+  readonly detectedRefreshHz: number;
+  readonly reducedMotion: boolean;
+  readonly paused: boolean;
+  readonly isDocHidden: boolean;
+  readonly isContextLost: boolean;
+  readonly isSoftwareGl: boolean;
+  readonly isIosSafari: boolean;
+  readonly useHalfFloat: boolean;
+  readonly antialias: boolean;
+  readonly dpr: number;
+  readonly canvasW: number;
+  readonly canvasH: number;
+  readonly marbleU: number;
+  readonly marbleV: number;
+  readonly marbleSpeed: number;
+  readonly elapsed: number;
+  readonly glError: number;
+  readonly lastError: string | null;
+}
+
 export interface LoginThreeController {
   setTheme: (isDark: boolean, snapImmediately?: boolean) => void;
   setStage: (stage: 'intro' | 'auth' | 'portal') => void;
@@ -81,6 +105,7 @@ export interface LoginThreeController {
   setExternalMarbleHidden?: (hidden: boolean) => void;
   resetHeroMarble?: () => void;
   getMarbleSnapshot?: () => MarbleStepSnapshot;
+  getDiagnostics?: () => LoginThreeDiagnostics;
   requestRender?: () => void;
   triggerPulse: (nx: number, ny: number, strength?: number) => void;
   triggerLoginSurge: (nx: number, ny: number) => void;
@@ -220,7 +245,8 @@ const FLUID_SIM_FRAG = /* glsl */ `
       float dBurst = length((vUv - uBurstPos) * aspectScale);
       float r = max(0.016, uBurstRadius);
       float dimple = -exp(-(dBurst * dBurst) / (r * r)) * 0.58;
-      float collar = exp(-pow((dBurst - r * 1.48) / (r * 0.88), 2.0)) * 0.78;
+      float burstCollarT = (dBurst - r * 1.48) / (r * 0.88);
+      float collar = exp(-(burstCollarT * burstCollarT)) * 0.78;
       nextH += (dimple + collar) * uBurstStrength * 0.66;
     }
 
@@ -229,7 +255,8 @@ const FLUID_SIM_FRAG = /* glsl */ `
       float dM = length((vUv - uMarbleWavePos) * aspectScale);
       float mr = max(0.018, uMarbleWaveRadius);
       float coreDip = -exp(-(dM * dM) / (mr * mr * 1.15)) * 0.94;
-      float ringCrest = exp(-pow((dM - mr * 1.72) / (mr * 0.90), 2.0)) * 0.62;
+      float marbleCollarT = (dM - mr * 1.72) / (mr * 0.90);
+      float ringCrest = exp(-(marbleCollarT * marbleCollarT)) * 0.62;
       nextH += (coreDip + ringCrest) * uMarbleWaveStrength * 0.54;
     }
 
@@ -324,13 +351,13 @@ const SILK_CLOTH_VERT = /* glsl */ `
       zHeight *= ambientFlatten;
 
       // Subtle outer elastic tension shoulder where stretched fabric gently rebounds outside the hammock
-      float outerShoulder =
-        exp(-pow((r - R * 4.55) / (R * 1.85), 2.0)) * 0.085 * clampedPress;
+      float shoulderT = (r - R * 4.55) / (R * 1.85);
+      float outerShoulder = exp(-(shoulderT * shoulderT)) * 0.085 * clampedPress;
 
       // Radial star-shaped tension pleats radiating tautly out from the sunken marble collar
-      float ang = atan(md.y, md.x + 0.00001);
-      float pleatRing =
-        smoothstep(0.0, R * 0.78, r) * exp(-pow((r - R * 2.45) / (R * 1.95), 2.0));
+      float ang = (abs(md.x) + abs(md.y) > 0.0001) ? atan(md.y, md.x) : 0.0;
+      float pleatT = (r - R * 2.45) / (R * 1.95);
+      float pleatRing = smoothstep(0.0, R * 0.78, r) * exp(-(pleatT * pleatT));
       float radialPleats =
         (sin(ang * 7.0 + sin(ang * 3.0) * 0.70 + t * 0.18) * 0.62 +
           cos(ang * 11.0 - 0.8) * 0.38) *
@@ -344,9 +371,10 @@ const SILK_CLOTH_VERT = /* glsl */ `
       if (velLen > 0.01) {
         vec2 vDir = uMarbleVel / velLen;
         float along = dot(md, vDir) / R;
+        float bowT = (r - R * 1.75) / (R * 1.05);
         float bowRidge =
           smoothstep(0.32, 1.50, along) *
-          exp(-pow((r - R * 1.75) / (R * 1.05), 2.0)) *
+          exp(-(bowT * bowT)) *
           0.16;
         float rearTrough =
           smoothstep(0.22, 2.05, -along) *
@@ -524,7 +552,7 @@ const SILK_CLOTH_FRAG = /* glsl */ `
 
       float midAge = clamp(0.5 * (a.z + b.z), 0.0, 1.0);
       float midStr = 0.5 * (a.w + b.w);
-      float lifeFade = pow(1.0 - midAge, 1.75);
+      float lifeFade = pow(max(0.0001, 1.0 - midAge), 1.75);
       float segWeight = lifeFade * midStr;
 
       float coreR = mix(0.022, 0.044, midAge);
@@ -582,7 +610,7 @@ const SILK_CLOTH_FRAG = /* glsl */ `
       if (diff * diff * invW2 > 14.0) continue;
 
       float env = exp(-(diff * diff) * invW2);
-      float life = pow(1.0 - age, 1.65) * smoothstep(0.0, 0.04, age);
+      float life = pow(max(0.0001, 1.0 - age), 1.65) * smoothstep(0.0, 0.04, age);
       float amp = str * life * 0.24;
       float freq = 58.0;
       float phase = diff * freq;
@@ -652,10 +680,11 @@ const SILK_CLOTH_FRAG = /* glsl */ `
         (2.0 * mDelta * mInvWideR2 * mWideDip) * 0.044;
 
       // Taut radial silk gather pleats pulling into the deeply sunken marble collar
-      float mAng = atan(mDelta.y, mDelta.x + 0.00001);
+      float mAng = (abs(mDelta.x) + abs(mDelta.y) > 0.0001) ? atan(mDelta.y, mDelta.x) : 0.0;
+      float gatherT = (mDist - uMarbleRadius * 2.35) / max(0.030, uMarbleRadius * 1.85);
       float gatherRing =
         smoothstep(0.0, uMarbleRadius * 0.72, mDist) *
-        exp(-pow((mDist - uMarbleRadius * 2.35) / max(0.030, uMarbleRadius * 1.85), 2.0));
+        exp(-(gatherT * gatherT));
       float gatherWave =
         sin(mAng * 8.0 + sin(mAng * 3.0) * 0.65) * 0.62 + cos(mAng * 13.0 - 0.5) * 0.38;
       vec2 mTang = vec2(-mDelta.y, mDelta.x) / mDist;
@@ -711,8 +740,9 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     float bdH2 = dot(B, H2);
     float satinAniso2 = exp(-(tdH2 * tdH2 * 6.0 + bdH2 * bdH2 * 22.0)) * ndl2;
 
-    float sheen1 = charlieSheen(0.36, ndh1) * (0.14 + 0.42 * ndl1) * pow(1.0 - ndv, 1.55);
-    float sheen2 = charlieSheen(0.42, ndh2) * (0.10 + 0.30 * ndl2) * pow(1.0 - ndv, 1.65);
+    float fresnelRimBase = max(0.0001, 1.0 - ndv);
+    float sheen1 = charlieSheen(0.36, ndh1) * (0.14 + 0.42 * ndl1) * pow(fresnelRimBase, 1.55);
+    float sheen2 = charlieSheen(0.42, ndh2) * (0.10 + 0.30 * ndl2) * pow(fresnelRimBase, 1.65);
 
     // Sculptural concave bowl dipole: dark shadowed upper-left inner wall vs luminous lower-right inner bowl catchlight
     float pitRimCatch = 0.0;
@@ -722,12 +752,13 @@ const SILK_CLOTH_FRAG = /* glsl */ `
       vec2 mDir = mDelta / mDist;
       float rimFacingLight = clamp(dot(mDir, -lightDir2D), 0.0, 1.0);
       float wallAwayFromLight = clamp(dot(mDir, lightDir2D), 0.0, 1.0);
-      float pitRimRing =
-        exp(-pow((mDist - uMarbleRadius * 1.92) / max(0.026, uMarbleRadius * 1.38), 2.0)) * mPress;
+      float pitRimT = (mDist - uMarbleRadius * 1.92) / max(0.026, uMarbleRadius * 1.38);
+      float pitRimRing = exp(-(pitRimT * pitRimT)) * mPress;
       pitRimCatch =
         pitRimRing * pow(max(0.0001, rimFacingLight), 1.25) * (0.58 + 0.42 * wrapDiff1);
+      float pitWallT = (mDist - uMarbleRadius * 1.68) / max(0.028, uMarbleRadius * 1.48);
       pitShadowWall =
-        exp(-pow((mDist - uMarbleRadius * 1.68) / max(0.028, uMarbleRadius * 1.48), 2.0)) *
+        exp(-(pitWallT * pitWallT)) *
         pow(max(0.0001, wallAwayFromLight), 1.2) *
         mPress;
     }
@@ -757,10 +788,12 @@ const SILK_CLOTH_FRAG = /* glsl */ `
 
     float oledMask = 0.0;
     if (needDark) {
-      float oledFold = pow(
-        smoothstep(0.22, 0.94, crest * 0.68 + wrapDiff1 * 0.38 + rippleLuminance * 0.24 + pitRimCatch * 0.38),
-        1.85
+      float oledSmooth = smoothstep(
+        0.22,
+        0.94,
+        crest * 0.68 + wrapDiff1 * 0.38 + rippleLuminance * 0.24 + pitRimCatch * 0.38
       );
+      float oledFold = oledSmooth > 0.0001 ? pow(oledSmooth, 1.85) : 0.0;
       float edgeDist = length((suv - 0.5) * vec2(1.06, 1.0));
       float oledEdgeFade = 1.0 - smoothstep(0.52, 1.02, edgeDist) * 0.58;
       oledMask = oledFold * oledEdgeFade;
@@ -834,7 +867,8 @@ const SILK_CLOTH_FRAG = /* glsl */ `
       col = mix(colLuxury, colAurora, activeAurora);
 
       float waveActive = smoothstep(0.01, 0.08, uVariantSweep) * (1.0 - smoothstep(1.38, 2.0, uVariantSweep));
-      float ringBand = exp(-pow((distFromBtn - uVariantSweep) / 0.062, 2.0)) * waveActive;
+      float ringT = (distFromBtn - uVariantSweep) / 0.062;
+      float ringBand = exp(-(ringT * ringT)) * waveActive;
       vec3 ringTint = mix(vec3(0.97, 0.94, 0.90), vec3(0.90, 0.82, 0.68), uThemeDark);
       col += ringTint * ringBand * mix(0.25, 0.34, uThemeDark) * (0.40 + 0.60 * clothAO);
     }
@@ -959,7 +993,8 @@ const MARBLE_FRAG = /* glsl */ `
     vec3 refrB = refract(I, N, 1.0 / (1.54 + 0.036 * dispBoost));
 
     // Spherical dome magnifying refraction offset in aspect-corrected screen UV (deepens as marble sinks into crater)
-    float lensCurve = mix(1.26, 2.02, pow(1.0 - ndv, 1.2)) * (1.0 + clamp(uMarbleSink, 0.0, 1.85) * 0.11);
+    float oneMinusNdv = max(0.0001, 1.0 - ndv);
+    float lensCurve = mix(1.26, 2.02, pow(oneMinusNdv, 1.2)) * (1.0 + clamp(uMarbleSink, 0.0, 1.85) * 0.11);
     vec2 uvScale = vec2(1.0 / max(0.25, uAspect), 1.0) * uMarbleRadius * lensCurve;
     vec2 uvR = clamp(screenUv + refrR.xy * uvScale, vec2(0.004), vec2(0.996));
     vec2 uvG = clamp(screenUv + refrG.xy * uvScale, vec2(0.004), vec2(0.996));
@@ -977,8 +1012,8 @@ const MARBLE_FRAG = /* glsl */ `
     float internalVein = smoothstep(0.35, 0.96, 0.5 + 0.5 * swirlA * swirlB);
 
     // Physical Schlick Fresnel: crystal clear at center, luminous glassy reflection at rim
-    float fresnel = 0.04 + 0.96 * pow(1.0 - ndv, 3.35);
-    float rimThin = pow(1.0 - ndv, 5.2);
+    float fresnel = 0.04 + 0.96 * pow(oneMinusNdv, 3.35);
+    float rimThin = pow(oneMinusNdv, 5.2);
 
     // Dual fashion-studio softbox reflections
     vec3 L1 = normalize(vec3(-0.52, 0.68, 0.72));
@@ -987,11 +1022,14 @@ const MARBLE_FRAG = /* glsl */ `
     vec3 H2 = normalize(L2 + V);
 
     // Primary sharp studio window highlight + broad soft halo
-    float specSharp1 = pow(max(dot(N, H1), 0.0), 140.0);
-    float specBroad1 = pow(max(dot(N, H1), 0.0), 22.0);
+    float ndh1 = max(dot(N, H1), 0.0);
+    float ndh2 = max(dot(N, H2), 0.0);
+    float specSharp1 = ndh1 > 0.0001 ? pow(ndh1, 140.0) : 0.0;
+    float specBroad1 = ndh1 > 0.0001 ? pow(ndh1, 22.0) : 0.0;
     // Lower-right internal caustic bounce glow (light passing through sphere and focusing at back rim)
-    float causticFocus = pow(max(dot(-N, normalize(vec3(-0.55, 0.65, -0.52))), 0.0), 5.0) * (1.0 - ndv * 0.55);
-    float specRim2 = pow(max(dot(N, H2), 0.0), 36.0);
+    float causticDot = max(dot(-N, normalize(vec3(-0.55, 0.65, -0.52))), 0.0);
+    float causticFocus = (causticDot > 0.0001 ? pow(causticDot, 5.0) : 0.0) * (1.0 - ndv * 0.55);
+    float specRim2 = ndh2 > 0.0001 ? pow(ndh2, 36.0) : 0.0;
 
     // --- Theme-Reactive Glass Tint & Spectral Optics ---
     // Luxury: Smoked Champagne-Obsidian Crystal (Dark) / Clear Quartz-Pearl Dewdrop (Light)
@@ -1097,7 +1135,7 @@ export function createLoginThreeController(
   try {
     renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: !isIosSafari,
+      antialias: true,
       alpha: false,
       powerPreference: isIosSafari ? 'default' : 'high-performance',
       preserveDrawingBuffer: false,
@@ -1107,8 +1145,8 @@ export function createLoginThreeController(
   }
 
   const isSoftwareGl = isSoftwareWebGLRenderer(renderer);
-  const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 1.25 : 1.75;
-  const backdropScale = isIosSafari ? 0.56 : 1.0;
+  const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 2.0 : 1.75;
+  const backdropScale = isIosSafari ? 0.85 : 1.0;
   const initialDpr = Math.min(window.devicePixelRatio || 1, maxDpr);
   renderer.setPixelRatio(initialDpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1123,9 +1161,9 @@ export function createLoginThreeController(
   const initialW = Math.max(2, canvas.clientWidth || window.innerWidth || 1280);
   const initialH = Math.max(2, canvas.clientHeight || window.innerHeight || 720);
   const getSimDims = (w: number, h: number) => {
-    const scale = isSoftwareGl ? 0.28 : isIosSafari ? 0.24 : 0.44;
-    const minDim = isIosSafari ? 128 : 192;
-    const maxDim = isSoftwareGl ? 256 : isIosSafari ? 192 : 460;
+    const scale = isSoftwareGl ? 0.28 : isIosSafari ? 0.30 : 0.44;
+    const minDim = isIosSafari ? 160 : 192;
+    const maxDim = isSoftwareGl ? 256 : isIosSafari ? 256 : 460;
     return {
       sw: clamp(Math.round(w * scale), minDim, maxDim),
       sh: clamp(Math.round(h * scale), minDim, maxDim),
@@ -1214,7 +1252,7 @@ export function createLoginThreeController(
   const clothCam = new THREE.PerspectiveCamera(42, initialW / initialH, 0.1, 40);
   clothCam.position.set(0, 0, 7.6);
 
-  const meshSegs = isSoftwareGl ? 52 : isIosSafari ? 40 : 120;
+  const meshSegs = isSoftwareGl ? 52 : isIosSafari ? 72 : 120;
   const clothGeo = new THREE.PlaneGeometry(20.0, 18.0, meshSegs, meshSegs);
   const initVarNum = options.initialVariant === 'aurora' ? 1 : 0;
 
@@ -1293,8 +1331,8 @@ export function createLoginThreeController(
 
   const marbleGeo = new THREE.SphereGeometry(
     1,
-    isSoftwareGl ? 28 : isIosSafari ? 36 : 48,
-    isSoftwareGl ? 20 : isIosSafari ? 28 : 36
+    isSoftwareGl ? 28 : 48,
+    isSoftwareGl ? 20 : 36
   );
   const marbleMat = new THREE.ShaderMaterial({
     uniforms: {
@@ -1536,8 +1574,9 @@ export function createLoginThreeController(
     marbleCam.bottom = -1;
     marbleCam.updateProjectionMatrix();
 
-    const fbW = Math.max(2, Math.round(width * dpr));
-    const fbH = Math.max(2, Math.round(height * dpr));
+    const drawingSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const fbW = Math.max(2, Math.round(drawingSize.x || width * dpr));
+    const fbH = Math.max(2, Math.round(drawingSize.y || height * dpr));
     const bw = Math.max(2, Math.round(fbW * backdropScale));
     const bh = Math.max(2, Math.round(fbH * backdropScale));
     backdropRT.setSize(bw, bh);
@@ -2158,7 +2197,7 @@ export function createLoginThreeController(
     lastNow = performance.now();
     resetPacerOnResume(pacer, lastNow);
     onOverlayContextRestored?.(renderer);
-    renderFrame(0.016);
+    safeRenderFrame(0.016);
     syncLoopLifecycle();
   };
   canvas.addEventListener('webglcontextlost', onContextLost, false);
@@ -2170,9 +2209,25 @@ export function createLoginThreeController(
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
 
-  const tick = (now: number) => {
+  let lastRenderError: string | null = null;
+  let lastGlError = 0;
+
+  const safeRenderFrame = (dt: number) => {
+    try {
+      renderFrame(dt);
+    } catch (err) {
+      lastRenderError = err instanceof Error ? err.message : String(err);
+    }
+  };
+
+  const tick = (rawNow: number) => {
     rafId = 0;
     if (isLoopPaused()) return;
+    const perfNow = performance.now();
+    const now =
+      typeof rawNow === 'number' && Number.isFinite(rawNow) && Math.abs(rawNow - perfNow) < 500
+        ? rawNow
+        : perfNow;
 
     if (!isSoftwareGl) {
       sampleDisplayRefreshHz(pacer, now);
@@ -2211,29 +2266,31 @@ export function createLoginThreeController(
       }
 
       const workStart = performance.now();
-      const dt = clamp((now - lastNow) / 1000, 0.001, 0.05);
+      const rawDt = (now - lastNow) / 1000;
+      const dt = Number.isFinite(rawDt) ? clamp(rawDt, 0.001, 0.05) : 0.016;
       lastNow = now;
       pacer.lastCommitNow = now;
       pacer.committedFrames += 1;
       elapsed += dt;
-      renderFrame(dt);
+      safeRenderFrame(dt);
       recordFrameWorkCost(pacer, Math.max(0, performance.now() - workStart), now, tier);
       scheduleNextFrame();
       return;
     }
 
     // Software WebGL path (paced via afterDraw GPU fence + 80ms wait)
-    const dt = clamp((now - lastNow) / 1000, 0.001, 0.05);
+    const rawDt = (now - lastNow) / 1000;
+    const dt = Number.isFinite(rawDt) ? clamp(rawDt, 0.001, 0.05) : 0.016;
     lastNow = now;
     pacer.lastCommitNow = now;
     pacer.committedFrames += 1;
     elapsed += dt;
-    renderFrame(dt);
+    safeRenderFrame(dt);
     scheduleNextFrame();
   };
 
   resize(initialW, initialH);
-  renderFrame(0.016);
+  safeRenderFrame(0.016);
   syncLoopLifecycle();
 
   return {
@@ -2242,7 +2299,7 @@ export function createLoginThreeController(
       markPacerActivity(pacer, performance.now(), true);
       if (snapImmediately || reducedMotion) {
         currentThemeDark = targetThemeDark;
-        renderFrame(0.001);
+        safeRenderFrame(0.001);
       }
     },
     setStage(stage: 'intro' | 'auth' | 'portal') {
@@ -2252,7 +2309,7 @@ export function createLoginThreeController(
       if (reducedMotion) {
         currentAuthBlend = targetAuthBlend;
         currentSurge = targetSurge;
-        renderFrame(0.001);
+        safeRenderFrame(0.001);
       }
     },
     setPaused(paused: boolean) {
@@ -2278,7 +2335,7 @@ export function createLoginThreeController(
       }
       syncLoopLifecycle();
       if (!isDisposed && !isContextLost && !isDocHidden && !isExternallyPaused) {
-        renderFrame(0.001);
+        safeRenderFrame(0.001);
       }
     },
     setVariant(variant: LoginThreeVariantId, originNx?: number, originNy?: number) {
@@ -2306,7 +2363,7 @@ export function createLoginThreeController(
         variantSweep = 2.2;
         prevVariantVal = nextVal;
         clothMat.uniforms.uPrevVariant.value = nextVal;
-        renderFrame(0.001);
+        safeRenderFrame(0.001);
       } else {
         variantSweep = 0.01;
         pendingBurstU = u;
@@ -2346,10 +2403,23 @@ export function createLoginThreeController(
           userDrivenMarble = true;
         }
 
-        if (!isGrabbingMarble && moveDist > 0.0008) {
+        if (reducedMotion && !isExternalMarbleHidden && moveDist > 0.0008) {
+          // Even under prefers-reduced-motion, direct user finger dragging moves the marble smoothly
+          const pad = marbleR * 2.2;
+          const nextX = isGrabbingMarble ? wx : marbleX + dx;
+          const nextY = isGrabbingMarble ? wy : marbleY + dy;
+          marbleX = clamp(nextX, -currentAspect + playLeftInset + pad, currentAspect - playRightInset - pad);
+          marbleY = clamp(nextY, -1.0 + playBottomInset + pad, 1.0 - playTopInset - pad);
+          if (!isDisposed && !isContextLost && !isDocHidden && !isExternallyPaused) {
+            safeRenderFrame(0.016);
+          }
+        } else if (!isGrabbingMarble && moveDist > 0.0008) {
           // Swiping anywhere on the open screen rolls the marble in the EXACT direction of your hand!
           marbleVx = clamp(marbleVx + dx * 12.5, -3.4, 3.4);
           marbleVy = clamp(marbleVy + dy * 12.5, -3.4, 3.4);
+        }
+        if (!isLoopPaused() && !rafId && !softTimerId && !fenceRafId) {
+          syncLoopLifecycle();
         }
       } else if (moveDist > 0.0015) {
         // Desktop hover brush: brushing past the marble rolls it cleanly in the cursor's travel direction
@@ -2362,11 +2432,17 @@ export function createLoginThreeController(
           const proximity = 0.35 + 0.65 * (1.0 - distToMarble / touchRange);
           marbleVx = clamp(marbleVx + dx * 14.5 * proximity, -3.2, 3.2);
           marbleVy = clamp(marbleVy + dy * 14.5 * proximity, -3.2, 3.2);
+          if (!isLoopPaused() && !rafId && !softTimerId && !fenceRafId) {
+            syncLoopLifecycle();
+          }
         }
       }
     },
     setPointerDown(down: boolean, nx?: number, ny?: number) {
       markPacerActivity(pacer, performance.now(), true);
+      if (!isLoopPaused() && !rafId && !softTimerId && !fenceRafId) {
+        syncLoopLifecycle();
+      }
       if (down) {
         isPointerDown = true;
         ptrSamples.length = 0;
@@ -2429,6 +2505,9 @@ export function createLoginThreeController(
       const dy = dyWorldNorm;
       marbleVx = clamp(marbleVx + dx * 12.0, -3.4, 3.4);
       marbleVy = clamp(marbleVy + dy * 12.0, -3.4, 3.4);
+      if (!isLoopPaused() && !rafId && !softTimerId && !fenceRafId) {
+        syncLoopLifecycle();
+      }
     },
     pushScrollImpulse(_nx: number, deltaY: number) {
       if (!Number.isFinite(deltaY) || deltaY === 0) return;
@@ -2445,6 +2524,9 @@ export function createLoginThreeController(
       const tiltMag = Math.hypot(targetGyroX, targetGyroY);
       if (tiltMag > 0.05) {
         markPacerActivity(pacer, performance.now(), tiltMag > 0.16);
+        if (!isLoopPaused() && !rafId && !softTimerId && !fenceRafId) {
+          syncLoopLifecycle();
+        }
       }
       if (tiltMag > 0.09) {
         userDrivenMarble = true;
@@ -2531,7 +2613,7 @@ export function createLoginThreeController(
       }
       markPacerActivity(pacer, performance.now(), true);
       if (reducedMotion && !isDisposed && !isContextLost && !isDocHidden && !isExternallyPaused) {
-        renderFrame(0.001);
+        safeRenderFrame(0.001);
       }
     },
     resetHeroMarble() {
@@ -2561,10 +2643,43 @@ export function createLoginThreeController(
       marbleSnapshot.elapsed = elapsed;
       return { ...marbleSnapshot };
     },
+    getDiagnostics() {
+      const [u, v] = worldToUv(marbleX, marbleY);
+      try {
+        const gl = renderer.getContext();
+        const err = gl ? gl.getError() : -1;
+        if (err !== 0) lastGlError = err;
+      } catch {
+        // ignore if context lost
+      }
+      return {
+        committedFrames: pacer.committedFrames,
+        skippedFrames: pacer.skippedFrames,
+        fpsTier: pacer.fpsTier,
+        detectedRefreshHz: pacer.detectedRefreshHz,
+        reducedMotion,
+        paused: isExternallyPaused,
+        isDocHidden,
+        isContextLost,
+        isSoftwareGl,
+        isIosSafari,
+        useHalfFloat,
+        antialias: Boolean(renderer.getContextAttributes?.()?.antialias),
+        dpr: renderer.getPixelRatio(),
+        canvasW: canvas.width,
+        canvasH: canvas.height,
+        marbleU: Number(u.toFixed(3)),
+        marbleV: Number(v.toFixed(3)),
+        marbleSpeed: Number(Math.hypot(marbleVx, marbleVy).toFixed(3)),
+        elapsed: Number(elapsed.toFixed(2)),
+        glError: lastGlError,
+        lastError: lastRenderError,
+      };
+    },
     requestRender() {
       markPacerActivity(pacer, performance.now(), true);
       if (reducedMotion && !isDisposed && !isContextLost && !isDocHidden && !isExternallyPaused) {
-        renderFrame(0.016);
+        safeRenderFrame(0.016);
       } else if (isSoftwareGl && softTimerId && !isLoopPaused()) {
         window.clearTimeout(softTimerId);
         softTimerId = 0;

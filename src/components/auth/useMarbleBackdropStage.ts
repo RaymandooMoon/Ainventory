@@ -28,6 +28,28 @@ export interface MarbleHitParams {
   readonly extraStageCooldownMs?: number;
 }
 
+export interface MarbleInputDiagnostics {
+  readonly touchStarts: number;
+  readonly touchMoves: number;
+  readonly pointerDowns: number;
+  readonly gyroEvents: number;
+  readonly gyroAttached: boolean;
+  readonly gyroRequiresPermission: boolean;
+  readonly gyroStatus:
+    | 'idle'
+    | 'pending'
+    | 'granted'
+    | 'denied'
+    | 'rejected'
+    | 'attached'
+    | 'unsupported';
+  readonly modalPaused: boolean;
+  readonly propPaused: boolean;
+  readonly effectivePaused: boolean;
+  readonly reducedMotionMatch: boolean;
+  readonly lastTouchTarget: string;
+}
+
 export interface UseMarbleBackdropStageOptions {
   readonly isDark: boolean;
   readonly stage?: 'intro' | 'auth' | 'portal';
@@ -71,6 +93,7 @@ export interface UseMarbleBackdropStageOptions {
   readonly disableHeroMarbleInput?: boolean;
   readonly deferBootUntilPaint?: boolean;
   readonly onControllerReady?: (ctrl: LoginThreeController | null) => void;
+  readonly onInputDiagnosticsReady?: (getter: (() => MarbleInputDiagnostics) | null) => void;
 }
 
 export interface UseMarbleBackdropStageResult {
@@ -536,6 +559,21 @@ export function useMarbleBackdropStage(
     let touchStartX = 0;
     let touchStartY = 0;
     let touchTotalMovedPx = 0;
+    let touchStartCount = 0;
+    let touchMoveCount = 0;
+    let pointerDownCount = 0;
+    let gyroEventCount = 0;
+    let lastTouchTarget = '';
+
+    const describeEventTarget = (rawTarget: EventTarget | null): string => {
+      const el = rawTarget as HTMLElement | null;
+      if (!el || typeof el.tagName !== 'string') return '';
+      const cls =
+        typeof el.className === 'string' && el.className.trim()
+          ? `.${el.className.trim().split(/\s+/).slice(0, 2).join('.')}`
+          : '';
+      return `${el.tagName.toLowerCase()}${cls}`;
+    };
 
     const findTouchById = (list: TouchList, id: number): Touch | null => {
       for (let i = 0; i < list.length; i += 1) {
@@ -576,6 +614,8 @@ export function useMarbleBackdropStage(
       if (opts.isEventExcluded?.(e.target)) return;
       if (shouldIgnoreStartTarget(e.target, opts)) return;
 
+      pointerDownCount += 1;
+      lastTouchTarget = describeEventTarget(e.target);
       const { nx, ny } = getNormalizedPointer(e.clientX, e.clientY);
       controller.setPointerDown?.(true, nx, ny);
       pushPointer(e.clientX, e.clientY, false);
@@ -619,6 +659,8 @@ export function useMarbleBackdropStage(
 
     const onTouchStart = (e: TouchEvent) => {
       lastNativeTouchAt = performance.now();
+      touchStartCount += 1;
+      lastTouchTarget = describeEventTarget(e.target);
       if (document.hidden || pausedModeRef.current) return;
       const opts = optionsRef.current;
       if (opts.disableHeroMarbleInput) {
@@ -661,6 +703,7 @@ export function useMarbleBackdropStage(
       }
       const t = findTouchById(e.touches, activeTouchId);
       if (!t) return;
+      touchMoveCount += 1;
       touchTotalMovedPx = Math.max(
         touchTotalMovedPx,
         Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY)
@@ -691,6 +734,7 @@ export function useMarbleBackdropStage(
       if (optionsRef.current.disableHeroMarbleInput) return;
       if (typeof e.beta !== 'number' || typeof e.gamma !== 'number') return;
       if (!Number.isFinite(e.beta) || !Number.isFinite(e.gamma)) return;
+      gyroEventCount += 1;
 
       if (calibSamples < 5) {
         calibSamples += 1;
@@ -729,17 +773,16 @@ export function useMarbleBackdropStage(
       controller.setTilt(tx, ty, dtx, dty);
     };
 
-    const attachGyro = () => {
-      if (gyroAttached) return;
-      gyroAttached = true;
-      window.addEventListener('deviceorientation', onDeviceOrientation, { passive: true });
-    };
-
     const devOrientCtor =
       typeof window.DeviceOrientationEvent !== 'undefined'
         ? (window.DeviceOrientationEvent as unknown as DeviceOrientationConstructorWithPermission)
         : null;
     const requiresIosPermission = typeof devOrientCtor?.requestPermission === 'function';
+    let gyroStatus: MarbleInputDiagnostics['gyroStatus'] = !devOrientCtor
+      ? 'unsupported'
+      : requiresIosPermission
+        ? 'idle'
+        : 'attached';
     const isTopLevelWindow = (() => {
       try {
         return window.self === window.top;
@@ -748,11 +791,21 @@ export function useMarbleBackdropStage(
       }
     })();
 
+    const attachGyro = () => {
+      if (gyroAttached) return;
+      gyroAttached = true;
+      if (gyroStatus === 'idle' || gyroStatus === 'pending') {
+        gyroStatus = 'attached';
+      }
+      window.addEventListener('deviceorientation', onDeviceOrientation, { passive: true });
+    };
+
     const GYRO_IGNORE_SELECTOR =
       'button, a, input, select, textarea, label, [role="button"], [role="tab"], [role="dialog"], [aria-modal="true"], [data-hud-surface="true"], [data-no-marble="true"]';
 
     const detachGyroPermissionListeners = () => {
       window.removeEventListener('click', requestIosGyro, false);
+      stageEl.removeEventListener('click', requestIosGyro, false);
       stageEl.removeEventListener('touchend', requestIosGyroOnStageTap, false);
     };
 
@@ -776,6 +829,7 @@ export function useMarbleBackdropStage(
         return;
       }
       gyroPermissionInFlight = true;
+      gyroStatus = 'pending';
       try {
         const resultPromise = devOrientCtor.requestPermission();
         if (resultPromise && typeof resultPromise.then === 'function') {
@@ -784,10 +838,12 @@ export function useMarbleBackdropStage(
               gyroPermissionInFlight = false;
               if (state === 'granted') {
                 gyroPermissionResolved = true;
+                gyroStatus = 'granted';
                 detachGyroPermissionListeners();
                 attachGyro();
               } else if (state === 'denied') {
                 gyroPermissionResolved = true;
+                gyroStatus = 'denied';
                 detachGyroPermissionListeners();
               }
             })
@@ -795,12 +851,14 @@ export function useMarbleBackdropStage(
               // iOS Safari rejects non-activation gestures (such as prevented drags) with
               // NotAllowedError; keep listeners armed so the user's next clean tap prompts normally.
               gyroPermissionInFlight = false;
+              gyroStatus = 'rejected';
             });
         } else {
           gyroPermissionInFlight = false;
         }
       } catch {
         gyroPermissionInFlight = false;
+        gyroStatus = 'rejected';
       }
     };
 
@@ -824,12 +882,28 @@ export function useMarbleBackdropStage(
       if (requiresIosPermission) {
         if (isTopLevelWindow) {
           window.addEventListener('click', requestIosGyro, false);
+          stageEl.addEventListener('click', requestIosGyro, false);
           stageEl.addEventListener('touchend', requestIosGyroOnStageTap, { passive: true });
         }
       } else {
         attachGyro();
       }
     }
+
+    optionsRef.current.onInputDiagnosticsReady?.(() => ({
+      touchStarts: touchStartCount,
+      touchMoves: touchMoveCount,
+      pointerDowns: pointerDownCount,
+      gyroEvents: gyroEventCount,
+      gyroAttached,
+      gyroRequiresPermission: requiresIosPermission,
+      gyroStatus,
+      modalPaused: modalPausedRef.current,
+      propPaused: propPausedRef.current,
+      effectivePaused: pausedModeRef.current,
+      reducedMotionMatch: reducedMotion,
+      lastTouchTarget,
+    }));
 
     const handleResize = () => {
       invalidateCache();
@@ -910,6 +984,7 @@ export function useMarbleBackdropStage(
         window.removeEventListener('touchend', onTouchEnd);
         window.removeEventListener('touchcancel', onTouchEnd);
         stageEl.removeEventListener('touchmove', onStageTouchMove);
+        stageEl.removeEventListener('click', requestIosGyro, false);
         stageEl.removeEventListener('touchend', requestIosGyroOnStageTap, false);
         window.removeEventListener('click', requestIosGyro, false);
         if (gyroAttached) {
@@ -918,6 +993,7 @@ export function useMarbleBackdropStage(
         resizeObserver?.disconnect();
         stopModalObserver();
         modalPausedRef.current = false;
+        optionsRef.current.onInputDiagnosticsReady?.(null);
         optionsRef.current.onControllerReady?.(null);
         controller.dispose();
         controllerRef.current = null;

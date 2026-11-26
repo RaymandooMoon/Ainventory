@@ -131,7 +131,7 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
     );
   });
 
-  it('applies iOS Safari WebGL GPU memory, native HalfFloat FBO, direct 3D-stage cloth pass, and CoreAnimation fast path', () => {
+  it('applies iOS Safari WebGL GPU memory, native HalfFloat FBO, direct 3D-stage cloth pass, Metal NaN guards, and Retina MSAA quality', () => {
     const scenesSrc = readRepoFile('src/components/auth/loginThreeScenes.ts');
     const hookSrc = readRepoFile('src/components/auth/useMarbleBackdropStage.ts');
     const pacerSrc = readRepoFile('src/utils/adaptiveFramePacer.ts');
@@ -141,7 +141,24 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
     const relightSrc = readRepoFile('src/components/three/StudioCharacterRelightCanvas.tsx');
 
     assert.ok(scenesSrc.includes('isIosSafariRuntime'));
-    assert.ok(scenesSrc.includes('antialias: !isIosSafari'));
+    assert.ok(
+      scenesSrc.includes('antialias: true'),
+      'Apple Silicon TBDR GPU runs tile-memory MSAA cleanly and needs antialias: true for crisp 3D edges'
+    );
+    assert.ok(
+      scenesSrc.includes('const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 2.0 : 1.75;'),
+      'iPhone Air OLED Retina should render at 2.0x DPR instead of blurry 1.25x'
+    );
+    assert.equal(
+      /pow\(\s*\([^)]*-\s*[^)]*\)\s*\/[^,]+,\s*2\.0\s*\)/.test(scenesSrc),
+      false,
+      'GLSL shaders must never pass potentially negative bases into pow(x, 2.0) (NaN on Apple Silicon Metal)'
+    );
+    assert.ok(
+      scenesSrc.includes('const safeRenderFrame = (dt: number) =>') &&
+        scenesSrc.includes('getDiagnostics()'),
+      'Render loop must isolate renderFrame exceptions and expose live diagnostics'
+    );
     assert.ok(
       scenesSrc.includes('const useHalfFloat = !isSoftwareGl && supportsHalfFloatRenderTarget(renderer);'),
       'iOS Safari should use native Metal HalfFloat wave FBO instead of slow 12-loop analytic fallback'
@@ -158,6 +175,10 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
       tokensCss,
       /\.site-marble-stage\s*\{[^}]*pointer-events:\s*auto[^}]*touch-action:\s*none/
     );
+    assert.match(
+      tokensCss,
+      /\.site-marble-stage\[data-active-stage='hero'\]\s*\{[^}]*cursor:\s*pointer/
+    );
     assert.ok(
       tokensCss.includes("html[data-ios-safari='true'] .site-root :is(") &&
         tokensCss.includes('backdrop-filter: none;'),
@@ -168,13 +189,26 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
       'Marble stage must prevent iOS rubber-band pointercancel during single-finger drags'
     );
     assert.ok(
+      hookSrc.includes("stageEl.addEventListener('click', requestIosGyro, false)"),
+      'Hero canvas must register direct stageEl click activation for iOS gyro permission'
+    );
+    assert.ok(
       pacerSrc.includes('if (tier === \'active60\' && state.detectedRefreshHz <= 60)'),
       'adaptiveFramePacer must never drop 60Hz ticks to 30fps on Safari 1ms-quantized timestamps'
     );
+    assert.ok(
+      pacerSrc.includes('if (!Number.isFinite(elapsed) || elapsed < 0)'),
+      'shouldCommitFrame must recover cleanly from negative or non-finite rAF timestamp skew'
+    );
     assert.ok(heroSrc.includes('setSoftwareGlGlassFallback(isSoftwareGl || isIosSafariRuntime())'));
     assert.ok(heroSrc.includes('deferBootUntilPaint: false'));
+    assert.ok(heroSrc.includes('__AINVTRY_3D_DIAG__'));
     assert.ok(studioLayerSrc.includes('isIosSafariRuntime'));
     assert.ok(relightSrc.includes('isIosSafariRuntime'));
+    assert.ok(
+      relightSrc.includes('edgeBase > 0.0001 ? pow(edgeBase, 2.15) : 0.0'),
+      'StudioCharacterRelightCanvas should guard zero-base pow() against Metal fast-math NaN'
+    );
   });
 
   it('prevents WebKit preserve-3d lazy-image blackouts, WebGL buffer wipe, and double-character relight ghosting', () => {
@@ -237,17 +271,19 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
     assert.ok(siteHtml.includes('apple-touch-icon'));
   });
 
-  it('builds a pre-filtered 5-level PMREM CubeTexture bypassing Three.js 0.187 256-sample GGX PMREMGenerator stalls on iOS Metal', () => {
+  it('builds a pre-filtered mipmap-complete 64x64 PMREM CubeTexture bypassing Three.js 0.187 256-sample GGX PMREMGenerator stalls on iOS Metal', () => {
     const cubeEnv = createLightweightStudioCubeEnvMap();
     const flagged = cubeEnv as THREE.CubeTexture & { isPMREMTexture?: boolean };
     assert.equal(flagged.isPMREMTexture, true, 'Lightweight studio envMap must set isPMREMTexture=true so WebGLRenderer skips PMREMGenerator');
     assert.equal(cubeEnv.mapping, THREE.CubeReflectionMapping);
     assert.equal(cubeEnv.generateMipmaps, false);
     assert.equal(Array.isArray(cubeEnv.image) && cubeEnv.image.length, 6);
+    const baseFace0 = (cubeEnv.image as unknown as Array<{ image?: { width?: number } }>)[0];
+    assert.equal(baseFace0?.image?.width, 64);
 
-    // 4 custom mip levels (16, 8, 4, 2) below base 32x32, each carrying .width for Three.js 0.187 uploadCubeTexture
-    assert.equal(cubeEnv.mipmaps.length, 4);
-    const expectedMipSizes = [16, 8, 4, 2];
+    // Complete 6 custom mip levels (32, 16, 8, 4, 2, 1) below base 64x64 for WebGL2/Metal completeness
+    assert.equal(cubeEnv.mipmaps.length, 6);
+    const expectedMipSizes = [32, 16, 8, 4, 2, 1];
     for (let i = 0; i < expectedMipSizes.length; i += 1) {
       const mip = cubeEnv.mipmaps[i] as unknown as { width?: number; image?: unknown[] };
       assert.equal(mip.width, expectedMipSizes[i]);

@@ -36,10 +36,10 @@
     "unitSuites": 46,
     "apiSuites": 9,
     "e2eSuites": 5,
-    "caseCount": 406,
+    "caseCount": 407,
     "roundedPlus": "400+",
-    "summaryShort": "60스위트 · 406케이스 통과",
-    "summaryLine": "단위·API·WebGL E2E 60스위트(406케이스) · 3플랫폼"
+    "summaryShort": "60스위트 · 407케이스 통과",
+    "summaryLine": "단위·API·WebGL E2E 60스위트(407케이스) · 3플랫폼"
   },
   "garment": {
     "beforeBytes": 582332,
