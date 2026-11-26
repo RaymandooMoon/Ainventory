@@ -64,6 +64,10 @@ import {
   searchPlacesWithLocation,
 } from './mapsProxyService.js';
 import {
+  dispatchNewsletterNotifications,
+  resolveSafeWebhookUrl,
+} from './newsletterNotifications.js';
+import {
   fetchPlaceBackdropBundle,
   proxyPlacePhotoMedia,
   proxyStreetViewImage,
@@ -1136,6 +1140,17 @@ export function createApiRouter(options = {}) {
     return normalized;
   }
 
+  router.get('/newsletter/health', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({
+      ok: true,
+      service: 'ainventory-express-newsletter',
+      storage: 'sqlite',
+      emailConfigured: Boolean(String(process.env.RESEND_API_KEY || '').trim()),
+      webhookConfigured: Boolean(resolveSafeWebhookUrl(process.env.NEWSLETTER_WEBHOOK_URL)),
+    });
+  });
+
   router.post('/newsletter/subscribe', (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 64);
@@ -1173,6 +1188,7 @@ export function createApiRouter(options = {}) {
     const lang = body.lang === 'en' ? 'en' : 'ko';
     const rawSource = typeof body.source === 'string' ? body.source.trim() : 'site_modal';
     const source = NEWSLETTER_ALLOWED_SOURCES.has(rawSource) ? rawSource : 'site_modal';
+    const notifyHandledAtEdge = String(req.headers['x-newsletter-notify-handled'] || '') === '1';
 
     try {
       const existing = db
@@ -1193,6 +1209,16 @@ export function createApiRouter(options = {}) {
         db.prepare(
           "UPDATE newsletter_subscribers SET status = 'subscribed', lang = ?, source = ?, consent_at = datetime('now'), updated_at = datetime('now'), unsubscribed_at = NULL WHERE id = ?"
         ).run(lang, source, existing.id);
+        if (!notifyHandledAtEdge) {
+          void dispatchNewsletterNotifications({
+            type: 'subscribed',
+            email,
+            lang,
+            source,
+            resubscribed: true,
+            storage: 'express',
+          });
+        }
         return res.status(200).json({
           ok: true,
           status: 'subscribed',
@@ -1205,6 +1231,17 @@ export function createApiRouter(options = {}) {
         `INSERT INTO newsletter_subscribers (email, lang, source, status)
          VALUES (?, ?, ?, 'subscribed')`
       ).run(email, lang, source);
+
+      if (!notifyHandledAtEdge) {
+        void dispatchNewsletterNotifications({
+          type: 'subscribed',
+          email,
+          lang,
+          source,
+          resubscribed: false,
+          storage: 'express',
+        });
+      }
 
       return res.status(201).json({
         ok: true,
@@ -1245,10 +1282,21 @@ export function createApiRouter(options = {}) {
       });
     }
 
+    const notifyHandledAtEdge = String(req.headers['x-newsletter-notify-handled'] || '') === '1';
+
     try {
-      db.prepare(
-        "UPDATE newsletter_subscribers SET status = 'unsubscribed', unsubscribed_at = datetime('now'), updated_at = datetime('now') WHERE email = ?"
-      ).run(email);
+      const updated = db
+        .prepare(
+          "UPDATE newsletter_subscribers SET status = 'unsubscribed', unsubscribed_at = datetime('now'), updated_at = datetime('now') WHERE email = ?"
+        )
+        .run(email);
+      if (!notifyHandledAtEdge && Number(updated?.changes || 0) > 0) {
+        void dispatchNewsletterNotifications({
+          type: 'unsubscribed',
+          email,
+          storage: 'express',
+        });
+      }
       // Uniform response to avoid subscriber email enumeration
       return res.status(200).json({
         ok: true,
@@ -4878,12 +4926,76 @@ export function createApiRouter(options = {}) {
       )
       .all();
     const activeCount = rows.filter((r) => r.status === 'subscribed').length;
+    const unsubscribedCount = rows.length - activeCount;
     return res.json({
       total: rows.length,
       activeCount,
+      unsubscribedCount,
+      emailConfigured: Boolean(String(process.env.RESEND_API_KEY || '').trim()),
+      webhookConfigured: Boolean(resolveSafeWebhookUrl(process.env.NEWSLETTER_WEBHOOK_URL)),
       subscribers: rows,
     });
   });
+
+  router.patch(
+    '/admin/newsletter/subscribers/:id',
+    requireStrictUserAuth,
+    requireAdmin,
+    (req, res) => {
+      res.setHeader('Cache-Control', 'private, no-store');
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: '유효하지 않은 구독자 ID입니다.', code: 'INVALID_ID' });
+      }
+      const nextStatus = req.body?.status === 'unsubscribed' ? 'unsubscribed' : req.body?.status === 'subscribed' ? 'subscribed' : null;
+      if (!nextStatus) {
+        return res.status(400).json({
+          error: '상태 값은 subscribed 또는 unsubscribed여야 합니다.',
+          code: 'INVALID_STATUS',
+        });
+      }
+      const existing = db
+        .prepare('SELECT id, email, status FROM newsletter_subscribers WHERE id = ?')
+        .get(id);
+      if (!existing) {
+        return res.status(404).json({ error: '구독자를 찾을 수 없습니다.', code: 'NOT_FOUND' });
+      }
+      if (nextStatus === 'unsubscribed') {
+        db.prepare(
+          "UPDATE newsletter_subscribers SET status = 'unsubscribed', unsubscribed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+        ).run(id);
+      } else {
+        db.prepare(
+          "UPDATE newsletter_subscribers SET status = 'subscribed', consent_at = datetime('now'), unsubscribed_at = NULL, updated_at = datetime('now') WHERE id = ?"
+        ).run(id);
+      }
+      const updated = db
+        .prepare(
+          `SELECT id, email, lang, source, status, consent_at, created_at, updated_at, unsubscribed_at
+           FROM newsletter_subscribers WHERE id = ?`
+        )
+        .get(id);
+      return res.json({ ok: true, subscriber: updated });
+    }
+  );
+
+  router.delete(
+    '/admin/newsletter/subscribers/:id',
+    requireStrictUserAuth,
+    requireAdmin,
+    (req, res) => {
+      res.setHeader('Cache-Control', 'private, no-store');
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: '유효하지 않은 구독자 ID입니다.', code: 'INVALID_ID' });
+      }
+      const info = db.prepare('DELETE FROM newsletter_subscribers WHERE id = ?').run(id);
+      if (Number(info?.changes || 0) === 0) {
+        return res.status(404).json({ error: '구독자를 찾을 수 없습니다.', code: 'NOT_FOUND' });
+      }
+      return res.json({ ok: true, deletedId: id });
+    }
+  );
 
   router.use((err, _req, res, _next) => {
     const status = Number(err?.status || err?.statusCode) || 500;

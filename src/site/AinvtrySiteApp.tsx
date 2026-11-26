@@ -29,6 +29,10 @@ import { scheduleAfterFirstPaint } from '../utils/resourcePriority.ts';
 import LiveAppStageOverlay from './LiveAppStageOverlay.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteNewsletterModal from './SiteNewsletterModal.tsx';
+import {
+  readStoredNewsletterSubscription,
+  syncOfflineNewsletterSubscription,
+} from './newsletterClient.ts';
 import SiteStageAnalytics from './SiteStageAnalytics.tsx';
 import SiteStageHud from './SiteStageHud.tsx';
 
@@ -487,6 +491,15 @@ export default function AinvtrySiteApp() {
 
   const handleCloseLegal = useCallback(() => {
     setLegalDoc(null);
+  }, []);
+
+  useEffect(() => {
+    return scheduleAfterFirstPaint(() => {
+      const saved = readStoredNewsletterSubscription();
+      if (saved && saved.status === 'offline_saved') {
+        void syncOfflineNewsletterSubscription(saved, 'site_about');
+      }
+    });
   }, []);
 
   const handleOpacityPointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {

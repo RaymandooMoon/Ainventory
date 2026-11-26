@@ -15,6 +15,7 @@ export type NewsletterSubscribeResult =
       readonly ok: true;
       readonly status: 'subscribed' | 'already_subscribed' | 'offline_saved';
       readonly email: string;
+      readonly storage?: string;
     }
   | {
       readonly ok: false;
@@ -28,7 +29,13 @@ export type NewsletterUnsubscribeResult =
 
 const STORAGE_KEY = 'ainvtry_newsletter_sub_v1';
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"']+@[^\s@<>()[\]\\,;:"']+\.[a-z]{2,63}$/i;
-const REQUEST_TIMEOUT_MS = 7000;
+const REQUEST_TIMEOUT_MS = 28_000;
+const PUBLIC_PRODUCTION_API_BASE = 'https://ainventory-api.onrender.com/api';
+const PUBLIC_SITE_HOSTS = new Set([
+  'ainvtry.com',
+  'www.ainvtry.com',
+  'raymandoomoon.github.io',
+]);
 
 export function normalizeClientEmail(raw: string): string | null {
   if (typeof raw !== 'string') return null;
@@ -41,19 +48,31 @@ export function normalizeClientEmail(raw: string): string | null {
   return normalized;
 }
 
-function resolveNewsletterEndpoints(): {
-  subscribeUrl: string;
-  unsubscribeUrl: string;
-  isStaticOnly: boolean;
-} {
-  const env = import.meta.env as Record<string, string | undefined>;
+export interface ResolvedNewsletterEndpoints {
+  readonly subscribeUrls: readonly string[];
+  readonly unsubscribeUrls: readonly string[];
+  readonly isStaticOnly: boolean;
+}
+
+export function resolveNewsletterEndpoints(
+  envOverride?: Record<string, string | undefined>,
+  hostnameOverride?: string
+): ResolvedNewsletterEndpoints {
+  const env = (envOverride ?? (import.meta.env as Record<string, string | undefined>)) || {};
+  const hostname =
+    hostnameOverride !== undefined
+      ? hostnameOverride.toLowerCase()
+      : typeof window !== 'undefined'
+        ? String(window.location?.hostname || '').toLowerCase()
+        : '';
+
   const customEndpoint = String(env.VITE_NEWSLETTER_ENDPOINT || '').trim();
   if (customEndpoint) {
     if (customEndpoint.startsWith('/') && !customEndpoint.startsWith('//')) {
       const clean = customEndpoint.replace(/\/+$/, '');
       return {
-        subscribeUrl: clean,
-        unsubscribeUrl: clean.replace(/\/subscribe$/, '/unsubscribe'),
+        subscribeUrls: [clean],
+        unsubscribeUrls: [clean.replace(/\/subscribe$/, '/unsubscribe')],
         isStaticOnly: false,
       };
     }
@@ -62,8 +81,8 @@ function resolveNewsletterEndpoints(): {
       if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) {
         const clean = parsed.toString().replace(/\/+$/, '');
         return {
-          subscribeUrl: clean,
-          unsubscribeUrl: clean.replace(/\/subscribe$/, '/unsubscribe'),
+          subscribeUrls: [clean],
+          unsubscribeUrls: [clean.replace(/\/subscribe$/, '/unsubscribe')],
           isStaticOnly: false,
         };
       }
@@ -73,10 +92,23 @@ function resolveNewsletterEndpoints(): {
   }
 
   const runtime = resolveApiRuntimeConfig(env);
+  const primarySubscribe = `${runtime.apiBaseUrl}/newsletter/subscribe`;
+  const primaryUnsubscribe = `${runtime.apiBaseUrl}/newsletter/unsubscribe`;
+  const isPublicHosted = PUBLIC_SITE_HOSTS.has(hostname);
+
+  const subscribeUrls: string[] = [primarySubscribe];
+  const unsubscribeUrls: string[] = [primaryUnsubscribe];
+
+  // On hosted ainvtry.com / github.io, keep Render API as an automatic backup if same-origin /api is unavailable
+  if (isPublicHosted && primarySubscribe.startsWith('/')) {
+    subscribeUrls.push(`${PUBLIC_PRODUCTION_API_BASE}/newsletter/subscribe`);
+    unsubscribeUrls.push(`${PUBLIC_PRODUCTION_API_BASE}/newsletter/unsubscribe`);
+  }
+
   return {
-    subscribeUrl: `${runtime.apiBaseUrl}/newsletter/subscribe`,
-    unsubscribeUrl: `${runtime.apiBaseUrl}/newsletter/unsubscribe`,
-    isStaticOnly: runtime.isStaticStandaloneWithoutApi,
+    subscribeUrls,
+    unsubscribeUrls,
+    isStaticOnly: runtime.isStaticStandaloneWithoutApi && !isPublicHosted,
   };
 }
 
@@ -123,13 +155,70 @@ export function clearStoredNewsletterSubscription(): void {
   }
 }
 
-export async function subscribeToNewsletter(params: {
-  readonly email: string;
-  readonly consent: boolean;
-  readonly lang: SiteLang;
-  readonly source: NewsletterSource;
-  readonly website?: string;
-}): Promise<NewsletterSubscribeResult> {
+async function postJsonWithTimeout(
+  url: string,
+  payload: Record<string, unknown>,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+  fetchImpl: typeof fetch = fetch
+): Promise<{
+  readonly kind: 'json' | 'non_json' | 'network_error';
+  readonly status: number;
+  readonly data: {
+    ok?: boolean;
+    status?: string;
+    code?: string;
+    error?: string;
+    email?: string;
+    storage?: string;
+  } | null;
+}> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return { kind: 'non_json', status: response.status, data: null };
+    }
+    const data = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      status?: string;
+      code?: string;
+      error?: string;
+      email?: string;
+      storage?: string;
+    } | null;
+    return { kind: 'json', status: response.status, data };
+  } catch {
+    return { kind: 'network_error', status: 0, data: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function subscribeToNewsletter(
+  params: {
+    readonly email: string;
+    readonly consent: boolean;
+    readonly lang: SiteLang;
+    readonly source: NewsletterSource;
+    readonly website?: string;
+  },
+  options?: {
+    readonly fetchImpl?: typeof fetch;
+    readonly envOverride?: Record<string, string | undefined>;
+    readonly hostnameOverride?: string;
+    readonly timeoutMs?: number;
+  }
+): Promise<NewsletterSubscribeResult> {
   const email = normalizeClientEmail(params.email);
   if (!email) {
     return { ok: false, code: 'INVALID_EMAIL' };
@@ -138,7 +227,10 @@ export async function subscribeToNewsletter(params: {
     return { ok: false, code: 'CONSENT_REQUIRED' };
   }
 
-  const { subscribeUrl, isStaticOnly } = resolveNewsletterEndpoints();
+  const { subscribeUrls, isStaticOnly } = resolveNewsletterEndpoints(
+    options?.envOverride,
+    options?.hostnameOverride
+  );
   if (isStaticOnly) {
     const record: StoredNewsletterSubscription = {
       email,
@@ -150,74 +242,71 @@ export async function subscribeToNewsletter(params: {
     return { ok: true, status: 'offline_saved', email };
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const payload = {
+    email,
+    consent: true,
+    lang: params.lang,
+    source: params.source,
+    website: params.website || '',
+  };
 
-  try {
-    const response = await fetch(subscribeUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        email,
-        consent: true,
-        lang: params.lang,
-        source: params.source,
-        website: params.website || '',
-      }),
-      signal: controller.signal,
-    });
+  let sawRetryableFailure = false;
 
-    const contentType = response.headers.get('content-type') || '';
-    const isJson = contentType.includes('application/json');
+  for (let i = 0; i < subscribeUrls.length; i += 1) {
+    const url = subscribeUrls[i];
+    const hasNextFallback = i < subscribeUrls.length - 1;
+    const attempt = await postJsonWithTimeout(
+      url,
+      payload,
+      options?.timeoutMs ?? REQUEST_TIMEOUT_MS,
+      options?.fetchImpl ?? fetch
+    );
 
-    // Static-only Cloudflare / SPA hosts return HTML or 404/405 for /api/* routes
-    if (!isJson && (response.status === 404 || response.status === 405 || response.ok)) {
-      const record: StoredNewsletterSubscription = {
-        email,
-        lang: params.lang,
-        status: 'offline_saved',
-        subscribedAt: new Date().toISOString(),
-      };
-      writeStoredNewsletterSubscription(record);
-      return { ok: true, status: 'offline_saved', email };
+    if (attempt.kind === 'network_error' || attempt.kind === 'non_json') {
+      sawRetryableFailure = true;
+      if (hasNextFallback) continue;
+      break;
     }
 
-    const data = isJson
-      ? ((await response.json().catch(() => null)) as {
-          ok?: boolean;
-          status?: string;
-          code?: string;
-          error?: string;
-          email?: string;
-        } | null)
-      : null;
-
-    if (response.status === 429 || data?.code === 'RATE_LIMITED') {
+    const { status, data } = attempt;
+    if (status === 429 || data?.code === 'RATE_LIMITED') {
       return { ok: false, code: 'RATE_LIMITED', error: data?.error };
     }
-    if (response.status === 400 && data?.code === 'INVALID_EMAIL') {
+    if (status === 400 && data?.code === 'INVALID_EMAIL') {
       return { ok: false, code: 'INVALID_EMAIL', error: data?.error };
     }
-    if (response.status === 400 && data?.code === 'CONSENT_REQUIRED') {
+    if (status === 400 && data?.code === 'CONSENT_REQUIRED') {
       return { ok: false, code: 'CONSENT_REQUIRED', error: data?.error };
     }
-    if (!response.ok || !data?.ok) {
-      return { ok: false, code: 'SERVER_ERROR', error: data?.error };
+    if ((status >= 500 || status === 404 || status === 405) && hasNextFallback) {
+      sawRetryableFailure = true;
+      continue;
+    }
+    if (status >= 200 && status < 300 && data?.ok) {
+      const finalStatus = data.status === 'already_subscribed' ? 'already_subscribed' : 'subscribed';
+      const resolvedEmail = typeof data.email === 'string' ? data.email : email;
+      writeStoredNewsletterSubscription({
+        email: resolvedEmail,
+        lang: params.lang,
+        status: finalStatus,
+        subscribedAt: new Date().toISOString(),
+      });
+      return {
+        ok: true,
+        status: finalStatus,
+        email: resolvedEmail,
+        storage: typeof data.storage === 'string' ? data.storage : undefined,
+      };
     }
 
-    const finalStatus = data.status === 'already_subscribed' ? 'already_subscribed' : 'subscribed';
-    const resolvedEmail = typeof data.email === 'string' ? data.email : email;
-    writeStoredNewsletterSubscription({
-      email: resolvedEmail,
-      lang: params.lang,
-      status: finalStatus,
-      subscribedAt: new Date().toISOString(),
-    });
-    return { ok: true, status: finalStatus, email: resolvedEmail };
-  } catch {
+    if (status >= 500) {
+      sawRetryableFailure = true;
+      break;
+    }
+    return { ok: false, code: 'SERVER_ERROR', error: data?.error };
+  }
+
+  if (sawRetryableFailure) {
     const record: StoredNewsletterSubscription = {
       email,
       lang: params.lang,
@@ -226,44 +315,74 @@ export async function subscribeToNewsletter(params: {
     };
     writeStoredNewsletterSubscription(record);
     return { ok: true, status: 'offline_saved', email };
-  } finally {
-    clearTimeout(timer);
   }
+
+  return { ok: false, code: 'SERVER_ERROR' };
+}
+
+/**
+ * Attempts to upgrade a previously device-saved (`offline_saved`) subscription
+ * to a real server-persisted subscription once the live edge/API server is reachable.
+ */
+export async function syncOfflineNewsletterSubscription(
+  sub: StoredNewsletterSubscription,
+  source: NewsletterSource = 'site_about',
+  options?: {
+    readonly fetchImpl?: typeof fetch;
+    readonly envOverride?: Record<string, string | undefined>;
+    readonly hostnameOverride?: string;
+    readonly timeoutMs?: number;
+  }
+): Promise<NewsletterSubscribeResult> {
+  return subscribeToNewsletter(
+    {
+      email: sub.email,
+      consent: true,
+      lang: sub.lang,
+      source,
+    },
+    options
+  );
 }
 
 export async function unsubscribeFromNewsletter(
-  rawEmail: string
+  rawEmail: string,
+  options?: {
+    readonly fetchImpl?: typeof fetch;
+    readonly envOverride?: Record<string, string | undefined>;
+    readonly hostnameOverride?: string;
+    readonly timeoutMs?: number;
+  }
 ): Promise<NewsletterUnsubscribeResult> {
   const email = normalizeClientEmail(rawEmail);
   if (!email) {
     return { ok: false, code: 'INVALID_EMAIL' };
   }
 
-  const { unsubscribeUrl, isStaticOnly } = resolveNewsletterEndpoints();
+  const { unsubscribeUrls, isStaticOnly } = resolveNewsletterEndpoints(
+    options?.envOverride,
+    options?.hostnameOverride
+  );
   clearStoredNewsletterSubscription();
   if (isStaticOnly) {
     return { ok: true };
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(unsubscribeUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ email }),
-      signal: controller.signal,
-    });
-    if (response.status === 429) {
-      return { ok: false, code: 'RATE_LIMITED' };
+  for (let i = 0; i < unsubscribeUrls.length; i += 1) {
+    const attempt = await postJsonWithTimeout(
+      unsubscribeUrls[i],
+      { email },
+      options?.timeoutMs ?? REQUEST_TIMEOUT_MS,
+      options?.fetchImpl ?? fetch
+    );
+    if (attempt.kind === 'json') {
+      if (attempt.status === 429) {
+        return { ok: false, code: 'RATE_LIMITED' };
+      }
+      if (attempt.status >= 200 && attempt.status < 300) {
+        return { ok: true };
+      }
     }
-    return { ok: true };
-  } catch {
-    return { ok: true };
-  } finally {
-    clearTimeout(timer);
   }
+  return { ok: true };
 }
