@@ -49,6 +49,7 @@
 
   --device-bezel: #D9D3C7;
   --device-inner: #FAF8F4;
+  --device-screen-bg: #FFFFFF;
   --device-shadow: 0 22px 44px rgba(20, 20, 22, 0.14), 0 4px 12px rgba(20, 20, 22, 0.06);
   --card-shadow: 0 6px 24px rgba(20, 20, 22, 0.045);
 
@@ -92,6 +93,7 @@
 
   --device-bezel: #272930;
   --device-inner: #050507;
+  --device-screen-bg: #000000;
   --device-shadow: 0 28px 60px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(214, 184, 137, 0.14);
   --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
 
@@ -609,27 +611,32 @@ html, body {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 15px;
   border-radius: 22px;
   overflow: hidden;
-  background: var(--device-inner);
+  background: var(--device-screen-bg, #000000);
   border: 1px solid var(--hairline);
 }
 
 .device-screen img {
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   height: 100%;
-  object-fit: cover;
-  object-position: top center;
+  object-fit: contain;
+  object-position: center center;
   display: block;
 }
 
 .device-island {
   position: absolute;
-  top: 7px;
+  top: 4px;
   left: 50%;
   transform: translateX(-50%);
-  width: 52px;
-  height: 13px;
+  width: 44px;
+  height: 8px;
   border-radius: 999px;
   background: #000000;
   z-index: 3;
@@ -2588,6 +2595,13 @@ html, body {
 
 .s05-phone-hub .device-screen {
   border-radius: 17px;
+  padding-top: 11px;
+}
+
+.s05-phone-hub .device-island {
+  width: 30px;
+  height: 6px;
+  top: 2.5px;
 }
 
 .s05-garments-mini {
@@ -2666,22 +2680,27 @@ html, body {
 .s07-grid--5 {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 13px;
+  align-items: center;
 }
 
 .s07-grid--5 .s07-phone {
-  max-width: 204px;
+  width: 100%;
+  max-width: 214px;
+  aspect-ratio: 444 / 906;
+  flex: none;
   border-radius: 26px;
   padding: 6px;
 }
 
 .s07-grid--5 .s07-phone .device-screen {
   border-radius: 20px;
+  padding-top: 13px;
 }
 
 .s07-grid--5 .s07-phone .device-island {
-  width: 50px;
-  height: 11px;
-  top: 5px;
+  width: 38px;
+  height: 7.5px;
+  top: 3px;
 }
 
 .s07-grid--5 .s07-cap-title {
@@ -3006,6 +3025,13 @@ html, body {
 
 .s18-floating-phone .device-screen {
   border-radius: 19px;
+  padding-top: 12px;
+}
+
+.s18-floating-phone .device-island {
+  width: 34px;
+  height: 6.5px;
+  top: 2.5px;
 }
 
 .s18-faq-strip {

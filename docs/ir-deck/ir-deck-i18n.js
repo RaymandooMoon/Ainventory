@@ -397,7 +397,7 @@
     '8-Cut 4겹+': '8-Cut 4+ Layers',
     '8방향 VTON · 서울 명동 날씨': '8-Angle VTON · Seoul Weather',
     'AI 3중 원가 방어 메커니즘 (BEFORE vs iNVTRY)': '3-LAYER AI COST DEFENSE (BEFORE vs iNVTRY)',
-    'ARKET·LEMAIRE · 3초 대조': 'ARKET·LEMAIRE · 3-Sec Match',
+    'RICK OWENS·PRADA · 3초 대조': 'RICK OWENS·PRADA · 3-Sec Match',
     'CUT 01–02 · 옷장': 'CUT 01–02 · Closet',
     'CUT 03 · 8방향 피팅': 'CUT 03 · 8-Angle Fit',
     'CUT 04 · 캘린더': 'CUT 04 · Calendar',
