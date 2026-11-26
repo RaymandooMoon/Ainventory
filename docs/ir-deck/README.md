@@ -1,13 +1,21 @@
-# iNVTRY (Ainvtry) IR 사업계획서 데크 (`docs/ir-deck/`) — v3.1 (Auto-Sync · 18장)
+# iNVTRY (Ainvtry) IR 사업계획서 데크 (`docs/ir-deck/`) — v4.0 (KO/EN · Light/Dark · Auto-Sync · 18장)
 
-TIPS · 도전의IR · VC 투자 제안서 표준을 반영하고 **Ainventory 공식 홈페이지(`ainvtry.com`) 및 메인 로그인 페이지의 드레이프 실크 테마(구슬 제외) + Google Stitch 기반 아이콘·인포그래픽 시스템 + 앱/웹 자동 배치 동기화**를 적용한 **18슬라이드 듀얼 비율(`16:9` & `4:3`) HTML IR 사업계획서**입니다.
+TIPS · 도전의IR · 글로벌 VC 투자 제안서 표준을 반영하고 **Google Stitch IR v4 키노트 기준(프로젝트 `8882974820311759365`)으로 고도화된 한/영(`KO/EN`) 이중 언어 × 라이트/다크(`Light/Dark`) 아틀리에 테마 + 공식 홈페이지 드레이프 실크 배경(구슬 제외) + 앱/웹 자동 배치 동기화**를 적용한 **18슬라이드 듀얼 비율(`16:9` & `4:3`) HTML IR 사업계획서**입니다.
 
-## v3.1 주요 특징
+## v4.0 주요 특징
+- **완전한 한/영 (`KO | EN`) 실시간 전환 (`ir-deck-i18n.js`)**:
+  - 18개 슬라이드 전체 텍스트, 인라인 SVG 다이어그램(`TAM/SAM/SOM`, `2×2 포지셔닝`, `5단계 플라이휠`, `자금 배분 도넛`), `data-ir-bind` 실시간 동기화 수치, 툴바·목차·PDF 제목까지 한국어/영어로 즉시 전환합니다.
+  - Slide 01·07의 실구동 앱 프리뷰 5종도 언어(`KO/EN`) × 테마(`Light/Dark`) 4조합 실제 캡처(`app-*-{ko,en}-{light,dark}.webp`)로 자동 전환됩니다.
+- **Stitch-Elevated 라이트/다크 듀얼 테마 & 타이포그래피**:
+  - **Light (Atelier Daylight)**: 웜 알라바스터(`#F6F3EC`) 실크 캔버스 + 반투명 화이트 프로스티드 글래스 + 앤티크 샴페인(`#73552B`) 대비 강화.
+  - **Dark (OLED Obsidian Noir)**: 순흑(`#000000`) OLED 캔버스 + 옵시디언 글래스 + 샴페인 골드(`#E2CFA8`) 헤어라인.
+  - 영문 강조 이탤릭에 `Instrument Serif` / `Cormorant Garamond`를 적용하고, 라이트/다크 전환 시 원형 확산(View Transitions API, `prefers-reduced-motion` 존중)을 지원합니다.
+  - 상단 진행률 바 + 프레젠터 단축키(`←`/`→` 이동, `L` 한/영 전환, `T` 라이트/다크 전환, `R` 16:9·4:3 전환) 및 URL 쿼리(`?lang=ko|en&theme=light|dark&mood=luxury|aurora&ratio=16-9|4-3`) 완벽 지원.
 - **정확한 기술 용어 정책 (`Three.js` 전용 3D 표기)**:
   - 실제 포토리얼 가상 피팅 모델은 **8방향 멀티앵글 2D VTON**으로, 플랫폼은 **디지털 순환 옷장 OS**로 정직하게 표기합니다.
   - **`3D` 표기는 `Three.js`를 실제 사용하는 영역**(Three.js 3D 아바타·SpringBone 물리, Three.js 3D 우산·바람 기상 스테이지, Three.js 3D 공식 웹/실크 셰이더)에만 엄격히 사용합니다.
 - **앱 · 홈페이지 자동 배치 동기화 (Living IR Deck)**:
-  - [`scripts/sync-ir-deck.mjs`](../../scripts/sync-ir-deck.mjs)가 실제 코드베이스(`package.json`, `src/data/content.ts`, `tests/**`, `site/public/assets/**`)를 읽어 [`ir-deck.data.json`](./ir-deck.data.json)과 [`index.html`](./index.html)의 `data-ir-bind` 슬롯을 비파괴 자동 갱신합니다.
+  - [`scripts/sync-ir-deck.mjs`](../../scripts/sync-ir-deck.mjs)가 실제 코드베이스(`package.json`, `src/data/content.ts`, `tests/**`, `site/public/assets/**`)를 읽어 [`ir-deck.data.json`](./ir-deck.data.json)과 [`index.html`](./index.html)의 `data-ir-bind` 슬롯을 비파괴 자동 갱신하고 `site/public/ir/`에 미러링합니다.
   - 로컬 수동 배치: `npm run ir:sync` (동기화 실행) / `npm run ir:sync:check` (드리프트 검증)
   - 자동 CI 배치([`.github/workflows/ir-deck-sync.yml`](../../.github/workflows/ir-deck-sync.yml)): `main` 브랜치에 앱/웹 변경사항 푸시 시 자동 실행 + 매주 월요일 09:00 KST 정기 배치 + GitHub Actions 수동 1클릭 실행 지원
 - **공식 홈페이지 · 메인페이지 4종 실크 테마(구슬 제외)**: [`src/components/auth/loginThreeScenes.ts`](../../src/components/auth/loginThreeScenes.ts)의 Three.js 3D 실크 셰이더에서 구슬(`uMarbleOpacity=0`)을 제외한 4종 배경(`assets/bg/silk-{luxury,aurora}-{light,dark}.webp`)과 프로스티드 글래스 카드를 적용했습니다.

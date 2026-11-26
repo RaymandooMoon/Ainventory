@@ -1,0 +1,56 @@
+{
+  "name": "projects/8882974820311759365",
+  "projectId": "8882974820311759365",
+  "title": "Ainvtry IR Business Plan v4 — Bilingual Light & Dark Keynote",
+  "url": "https://stitch.withgoogle.com/projects/8882974820311759365",
+  "designSystems": {
+    "dark": "assets/3215707099419846485",
+    "light": "assets/6263751231524140529"
+  },
+  "screens": {
+    "ir-v4-cover-dark": {
+      "slug": "ir-v4-cover-dark",
+      "label": "IR v4 Slide 01 — Cover (Dark · EN)",
+      "mode": "dark",
+      "id": "1a6cd02b2af74dff8c893ca8e0c66016",
+      "sourceScreen": "projects/8882974820311759365/screens/1a6cd02b2af74dff8c893ca8e0c66016",
+      "title": "iNVTRY IR Deck — Cover Slide (Dark OLED Noir)",
+      "designSystem": "assets/3215707099419846485",
+      "renderWidth": 2560,
+      "renderHeight": 2048
+    },
+    "ir-v4-cover-light": {
+      "slug": "ir-v4-cover-light",
+      "label": "IR v4 Slide 01 — Cover (Light · KO)",
+      "mode": "light",
+      "id": "28ea0376a0c54ce988d06312057c42d3",
+      "sourceScreen": "projects/8882974820311759365/screens/28ea0376a0c54ce988d06312057c42d3",
+      "title": "iNVTRY IR Deck Cover Slide (Daylight)",
+      "designSystem": "assets/6263751231524140529",
+      "renderWidth": 2560,
+      "renderHeight": 2208
+    },
+    "ir-v4-tech-dark": {
+      "slug": "ir-v4-tech-dark",
+      "label": "IR v4 Slide 08 — Tech & Privacy (Dark · EN)",
+      "mode": "dark",
+      "id": "e089ba5b899a474a96d182df6c0f58d2",
+      "sourceScreen": "projects/8882974820311759365/screens/e089ba5b899a474a96d182df6c0f58d2",
+      "title": "Slide 08: Core Technology & Privacy Moat — iNVTRY IR Deck",
+      "designSystem": "assets/3215707099419846485",
+      "renderWidth": 2560,
+      "renderHeight": 2048
+    },
+    "ir-v4-market-light": {
+      "slug": "ir-v4-market-light",
+      "label": "IR v4 Slide 10/12 — Market & Revenue (Light · EN)",
+      "mode": "light",
+      "id": "88e3aa3d9d7e47cea6d363cbe3dc0bbf",
+      "sourceScreen": "projects/8882974820311759365/screens/88e3aa3d9d7e47cea6d363cbe3dc0bbf",
+      "title": "Market Opportunity & 4-Engine Business Model — iNVTRY IR Deck",
+      "designSystem": "assets/6263751231524140529",
+      "renderWidth": 2560,
+      "renderHeight": 2180
+    }
+  }
+}

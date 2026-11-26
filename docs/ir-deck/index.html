@@ -1,20 +1,26 @@
 <!doctype html>
-<html lang="ko" data-ratio="16-9" data-mood="luxury" data-theme="light" data-view="deck">
+<html lang="ko" data-lang="ko" data-ratio="16-9" data-mood="luxury" data-theme="light" data-view="deck">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>iNVTRY (Ainvtry) — IR 사업계획서 v3.1 (Silk Theme · Auto-Sync · 16:9 · 4:3)</title>
+    <title>iNVTRY (Ainvtry) — IR 사업계획서 v4.0 (KO/EN · Light/Dark · Auto-Sync · 16:9 · 4:3)</title>
     <link
       rel="icon"
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23141418'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='sans-serif' font-size='16' font-weight='800' fill='%23e2cfa8'%3Ei%3C/text%3E%3C/svg%3E"
     />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       as="style"
       crossorigin
       href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400;1,500;1,600&family=Instrument+Serif:ital@0;1&display=swap"
     />
     <link rel="stylesheet" href="./ir-deck.css" />
     <style id="ir-dynamic-page-style">
@@ -170,20 +176,43 @@
           <rect x="2" y="7" width="20" height="14" rx="2" />
           <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
         </symbol>
+        <symbol id="ic-sun" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+        </symbol>
+        <symbol id="ic-moon" viewBox="0 0 24 24">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </symbol>
       </defs>
     </svg>
+
+    <div class="ir-progress-rail" aria-hidden="true">
+      <div id="ir-progress-bar" class="ir-progress-bar"></div>
+    </div>
 
     <!-- Floating Presentation Controls (Auto-Hidden on Print / PDF) -->
     <nav class="ir-toolbar" aria-label="프레젠테이션 제어 바">
       <a id="ir-site-back" href="/" class="ir-tb-btn ir-tb-site-back" aria-label="ainvtry.com 공식 사이트로 돌아가기">
         ← 사이트
       </a>
-      <div class="ir-tb-group" role="group" aria-label="화면 비율 선택">
-        <button type="button" class="ir-tb-btn is-active" data-set-ratio="16-9" aria-pressed="true">
-          16:9
+
+      <div class="ir-tb-group" role="group" aria-label="언어 선택">
+        <button type="button" class="ir-tb-btn is-active" data-set-lang="ko" aria-pressed="true">
+          KO
         </button>
-        <button type="button" class="ir-tb-btn" data-set-ratio="4-3" aria-pressed="false">
-          4:3
+        <button type="button" class="ir-tb-btn" data-set-lang="en" aria-pressed="false">
+          EN
+        </button>
+      </div>
+
+      <div class="ir-tb-group" role="group" aria-label="라이트 다크 테마 선택">
+        <button type="button" class="ir-tb-btn is-active" data-set-theme="light" aria-pressed="true">
+          <svg class="ic ic--xs" aria-hidden="true"><use href="#ic-sun" /></svg>
+          <span>라이트</span>
+        </button>
+        <button type="button" class="ir-tb-btn" data-set-theme="dark" aria-pressed="false">
+          <svg class="ic ic--xs" aria-hidden="true"><use href="#ic-moon" /></svg>
+          <span>다크</span>
         </button>
       </div>
 
@@ -196,12 +225,12 @@
         </button>
       </div>
 
-      <div class="ir-tb-group" role="group" aria-label="라이트 다크 테마 선택">
-        <button type="button" class="ir-tb-btn is-active" data-set-theme="light" aria-pressed="true">
-          라이트
+      <div class="ir-tb-group" role="group" aria-label="화면 비율 선택">
+        <button type="button" class="ir-tb-btn is-active" data-set-ratio="16-9" aria-pressed="true">
+          16:9
         </button>
-        <button type="button" class="ir-tb-btn" data-set-theme="dark" aria-pressed="false">
-          다크
+        <button type="button" class="ir-tb-btn" data-set-ratio="4-3" aria-pressed="false">
+          4:3
         </button>
       </div>
 
@@ -313,14 +342,14 @@
                     <svg class="ic ic--xs"><use href="#ic-check" /></svg>
                   </div>
                   <strong data-ir-bind="tests.roundedPlus">400+</strong>
-                  <span data-ir-bind="tests.summaryShort">60스위트 · 402케이스 통과</span>
+                  <span data-ir-bind="tests.summaryShort">60스위트 · 403케이스 통과</span>
                 </div>
               </div>
 
               <div class="cover-meta-bar">
                 <span class="cover-meta-item">
                   <svg class="ic ic--xs"><use href="#ic-briefcase" /></svg>
-                  <strong>IR 사업계획서 v3.1</strong>
+                  <strong>IR 사업계획서 v4.0</strong>
                 </span>
                 <span class="cover-meta-item">
                   <svg class="ic ic--xs"><use href="#ic-globe" /></svg>
@@ -339,6 +368,8 @@
                   src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
                   data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
                   data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                  data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                  data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
                   alt="iNVTRY 360도 가상 피팅 실구동 화면"
                 />
                 <div class="cover-float-badge">
@@ -356,7 +387,7 @@
 
           <footer class="slide-footer">
             <span class="slide-footer-brand">
-              <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Deck v3.1
+              <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Deck v4.0
             </span>
             <span data-ir-bind="meta.locationDate">Seoul, Republic of Korea · 2026.11</span>
             <span class="slide-footer-num">01 / 18</span>
@@ -589,7 +620,7 @@
                   <span class="badge badge--live">LIVE MVP</span>
                 </div>
                 <div class="kpi-num" data-ir-bind="tests.roundedPlus">400+</div>
-                <p class="card-copy" data-ir-bind="tests.summaryLine">단위·API·WebGL E2E 60스위트(402케이스) · 3플랫폼</p>
+                <p class="card-copy" data-ir-bind="tests.summaryLine">단위·API·WebGL E2E 60스위트(403케이스) · 3플랫폼</p>
               </div>
               <div class="card">
                 <div class="row-between">
@@ -1129,6 +1160,8 @@
                     src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
                     data-light-src="../../site/public/assets/previews/app-fitting-live-ko-light.webp"
                     data-dark-src="../../site/public/assets/previews/app-fitting-live-ko-dark.webp"
+                    data-light-src-en="../../site/public/assets/previews/app-fitting-live-en-light.webp"
+                    data-dark-src-en="../../site/public/assets/previews/app-fitting-live-en-dark.webp"
                     alt="360도 가상 피팅 화면"
                   />
                 </div>
@@ -1147,6 +1180,8 @@
                     src="../../site/public/assets/previews/app-closet-ko-light.webp"
                     data-light-src="../../site/public/assets/previews/app-closet-ko-light.webp"
                     data-dark-src="../../site/public/assets/previews/app-closet-ko-dark.webp"
+                    data-light-src-en="../../site/public/assets/previews/app-closet-en-light.webp"
+                    data-dark-src-en="../../site/public/assets/previews/app-closet-en-dark.webp"
                     alt="AI 디지털 옷장 화면"
                   />
                 </div>
@@ -1165,6 +1200,8 @@
                     src="../../site/public/assets/previews/app-stats-ko-light.webp"
                     data-light-src="../../site/public/assets/previews/app-stats-ko-light.webp"
                     data-dark-src="../../site/public/assets/previews/app-stats-ko-dark.webp"
+                    data-light-src-en="../../site/public/assets/previews/app-stats-en-light.webp"
+                    data-dark-src-en="../../site/public/assets/previews/app-stats-en-dark.webp"
                     alt="옷장 CPW 및 활용률 통계 화면"
                   />
                 </div>
@@ -1183,6 +1220,8 @@
                     src="../../site/public/assets/previews/app-profile-ko-light.webp"
                     data-light-src="../../site/public/assets/previews/app-profile-ko-light.webp"
                     data-dark-src="../../site/public/assets/previews/app-profile-ko-dark.webp"
+                    data-light-src-en="../../site/public/assets/previews/app-profile-en-light.webp"
+                    data-dark-src-en="../../site/public/assets/previews/app-profile-en-dark.webp"
                     alt="온디바이스 피부톤 및 체형 프로필 화면"
                   />
                 </div>
@@ -2446,7 +2485,7 @@
 
           <footer class="slide-footer">
             <span class="slide-footer-brand">
-              <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Deck v3.1
+              <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Deck v4.0
             </span>
             <span data-ir-bind="meta.locationDate">Seoul, Republic of Korea · 2026.11</span>
             <span class="slide-footer-num">18 / 18</span>
@@ -2455,6 +2494,7 @@
       </div>
     </main>
 
+    <script src="./ir-deck-i18n.js"></script>
     <script src="./ir-deck.js"></script>
   </body>
 </html>

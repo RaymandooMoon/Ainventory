@@ -128,12 +128,20 @@ function collectAssetHashes(repoRoot) {
   const relPaths = [
     'site/public/assets/previews/app-fitting-live-ko-light.webp',
     'site/public/assets/previews/app-fitting-live-ko-dark.webp',
+    'site/public/assets/previews/app-fitting-live-en-light.webp',
+    'site/public/assets/previews/app-fitting-live-en-dark.webp',
     'site/public/assets/previews/app-closet-ko-light.webp',
     'site/public/assets/previews/app-closet-ko-dark.webp',
+    'site/public/assets/previews/app-closet-en-light.webp',
+    'site/public/assets/previews/app-closet-en-dark.webp',
     'site/public/assets/previews/app-stats-ko-light.webp',
     'site/public/assets/previews/app-stats-ko-dark.webp',
+    'site/public/assets/previews/app-stats-en-light.webp',
+    'site/public/assets/previews/app-stats-en-dark.webp',
     'site/public/assets/previews/app-profile-ko-light.webp',
     'site/public/assets/previews/app-profile-ko-dark.webp',
+    'site/public/assets/previews/app-profile-en-light.webp',
+    'site/public/assets/previews/app-profile-en-dark.webp',
     'site/public/assets/journey/clay-cut-01-v1.webp',
     'site/public/assets/journey/clay-cut-02-v1.webp',
     'site/public/assets/journey/clay-cut-03-v1.webp',
@@ -244,7 +252,7 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
   const roadmapPillText = liveDoneCount >= 2 ? `LIVE 01·02 완료` : `LIVE ${liveDoneCount} 완료`;
 
   return {
-    schemaVersion: '3.1',
+    schemaVersion: '4.0',
     syncMonth: git.syncMonth,
     meta: {
       brandName: siteMeta.brandName,
@@ -358,6 +366,7 @@ function syncHostedWebDeck(repoRoot, syncedDocsHtml, nextDataJson, checkOnly) {
   const expectedTextFiles = [
     { rel: 'index.html', content: toHostedWebHtml(syncedDocsHtml) },
     { rel: 'ir-deck.css', content: fs.readFileSync(path.join(docsDir, 'ir-deck.css'), 'utf8') },
+    { rel: 'ir-deck-i18n.js', content: fs.readFileSync(path.join(docsDir, 'ir-deck-i18n.js'), 'utf8') },
     { rel: 'ir-deck.js', content: fs.readFileSync(path.join(docsDir, 'ir-deck.js'), 'utf8') },
     { rel: 'ir-deck.data.json', content: nextDataJson },
   ];

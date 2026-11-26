@@ -1,7 +1,7 @@
 /* ==========================================================================
- * iNVTRY (Ainvtry) Official IR Business Plan Deck v3.0
- * Authentic Ainventory Homepage & Login Silk Backdrop (Zero Marble)
- * Frosted Atelier Glass × Stitch Infographic System · Dual Ratio (16:9 & 4:3)
+ * iNVTRY (Ainvtry) Official IR Business Plan Deck v4.0
+ * Stitch-Elevated Bilingual (KO/EN) · Dual Theme (Light Atelier / OLED Noir)
+ * Authentic Homepage & Login Silk Backdrop (Zero Marble) · Dual Ratio (16:9 & 4:3)
  * 4 Official Site Themes: (Luxury | Aurora) × (Light | Dark)
  * ========================================================================== */
 
@@ -15,113 +15,114 @@
   /* Default Backdrop: Homepage & Main Page Luxury Light Silk (Zero Marble) */
   --silk-bg-image: url('./assets/bg/silk-luxury-light.webp');
   --silk-veil: radial-gradient(
-    ellipse 92% 84% at 50% 48%,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(247, 244, 238, 0.24) 100%
+    ellipse 94% 86% at 50% 48%,
+    rgba(255, 253, 249, 0.14) 0%,
+    rgba(246, 243, 236, 0.32) 100%
   );
 
-  /* Light Theme — Translucent Frosted Atelier Glass (Ported from ainvtrySite.css & loginAtelier.css) */
-  --stage-backdrop: #e6e1d9;
-  --surface-slide-base: #f2eee7;
-  --glass-card: rgba(255, 255, 255, 0.72);
-  --glass-card-strong: rgba(255, 255, 255, 0.84);
-  --glass-recessed: rgba(248, 245, 240, 0.62);
-  --glass-gold-tint: rgba(255, 250, 242, 0.78);
-  --glass-border: rgba(29, 29, 31, 0.13);
-  --glass-border-strong: rgba(29, 29, 31, 0.22);
-  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.82);
-  --glass-shadow: 0 14px 36px -14px rgba(29, 29, 31, 0.12), 0 2px 6px -2px rgba(29, 29, 31, 0.06);
+  /* Light Theme — "Atelier Daylight" (Warm Alabaster × Translucent White Glass) */
+  --stage-backdrop: #eae4da;
+  --surface-slide-base: #f6f3ec;
+  --glass-card: rgba(255, 255, 255, 0.8);
+  --glass-card-strong: rgba(255, 255, 255, 0.91);
+  --glass-recessed: rgba(250, 247, 241, 0.72);
+  --glass-gold-tint: rgba(255, 250, 241, 0.86);
+  --glass-border: rgba(29, 29, 31, 0.11);
+  --glass-border-strong: rgba(29, 29, 31, 0.2);
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  --glass-shadow: 0 16px 38px -16px rgba(34, 28, 18, 0.11), 0 2px 6px -2px rgba(29, 29, 31, 0.05);
   --surface-pill-active: #1d1d1f;
 
   --ink-primary: #1d1d1f;
-  --ink-secondary: rgba(29, 29, 31, 0.78);
-  --ink-tertiary: rgba(29, 29, 31, 0.56);
-  --ink-inverse: #f7f4ee;
+  --ink-secondary: #43413d;
+  --ink-tertiary: #63605a;
+  --ink-inverse: #faf8f4;
 
-  --gold: #7a5f3e;
-  --gold-bright: #b69462;
-  --gold-line: rgba(122, 95, 62, 0.36);
-  --gold-soft: rgba(122, 95, 62, 0.12);
+  --gold: #73552b;
+  --gold-bright: #b8955f;
+  --gold-line: rgba(115, 85, 43, 0.34);
+  --gold-soft: rgba(184, 149, 95, 0.13);
 
   --status-live: #157a3c;
-  --status-live-bg: rgba(21, 122, 60, 0.11);
+  --status-live-bg: rgba(21, 122, 60, 0.1);
   --status-live-line: rgba(21, 122, 60, 0.28);
-  --status-hybrid: #7a5f3e;
-  --status-hybrid-bg: rgba(122, 95, 62, 0.12);
+  --status-hybrid: #73552b;
+  --status-hybrid-bg: rgba(184, 149, 95, 0.14);
   --status-todo: #52525e;
   --status-todo-bg: rgba(82, 82, 94, 0.11);
-  --status-risk: #b91c1c;
-  --status-risk-bg: rgba(185, 28, 28, 0.1);
-  --status-risk-line: rgba(185, 28, 28, 0.26);
+  --status-risk: #b42318;
+  --status-risk-bg: rgba(180, 35, 24, 0.09);
+  --status-risk-line: rgba(180, 35, 24, 0.24);
 
-  --svg-node-fill: rgba(255, 255, 255, 0.88);
+  --svg-node-fill: rgba(255, 255, 255, 0.92);
   --svg-track: rgba(29, 29, 31, 0.1);
 
-  --shadow-slide: 0 28px 72px -18px rgba(29, 29, 31, 0.24), 0 0 0 1px rgba(29, 29, 31, 0.08);
+  --shadow-slide: 0 30px 76px -18px rgba(34, 28, 18, 0.22), 0 0 0 1px rgba(29, 29, 31, 0.08);
 
   --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont,
     'SF Pro Display', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif;
-  --font-editorial: Georgia, 'Times New Roman', serif;
+  --font-editorial: 'Instrument Serif', 'Cormorant Garamond', Georgia, serif;
   --font-mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
 }
 
 /* Official Site Silk Mood × Theme Combinations */
 html[data-mood='aurora'][data-theme='light'] {
   --silk-bg-image: url('./assets/bg/silk-aurora-light.webp');
-  --stage-backdrop: #e4e5ef;
+  --stage-backdrop: #e4e6f0;
   --surface-slide-base: #eef0f7;
   --silk-veil: radial-gradient(
-    ellipse 92% 84% at 50% 48%,
-    rgba(255, 255, 255, 0.06) 0%,
-    rgba(244, 245, 252, 0.24) 100%
+    ellipse 94% 86% at 50% 48%,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(244, 245, 252, 0.28) 100%
   );
 }
 
 html[data-theme='dark'] {
   --silk-bg-image: url('./assets/bg/silk-luxury-dark.webp');
   --silk-veil: radial-gradient(
-    ellipse 92% 84% at 50% 48%,
-    rgba(0, 0, 0, 0.06) 0%,
-    rgba(0, 0, 0, 0.28) 100%
+    ellipse 94% 86% at 50% 48%,
+    rgba(0, 0, 0, 0.1) 0%,
+    rgba(0, 0, 0, 0.36) 100%
   );
 
-  --stage-backdrop: #040406;
+  /* Dark Theme — "OLED Obsidian Noir" (True #000000 Canvas × Frosted Obsidian Glass) */
+  --stage-backdrop: #050507;
   --surface-slide-base: #000000;
-  --glass-card: rgba(14, 14, 19, 0.66);
-  --glass-card-strong: rgba(18, 18, 24, 0.82);
-  --glass-recessed: rgba(24, 24, 32, 0.56);
-  --glass-gold-tint: rgba(28, 24, 19, 0.72);
+  --glass-card: rgba(13, 13, 18, 0.74);
+  --glass-card-strong: rgba(17, 17, 23, 0.88);
+  --glass-recessed: rgba(22, 22, 30, 0.64);
+  --glass-gold-tint: rgba(30, 25, 18, 0.78);
   --glass-border: rgba(245, 245, 247, 0.15);
-  --glass-border-strong: rgba(245, 245, 247, 0.24);
-  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  --glass-shadow: 0 20px 52px -16px rgba(0, 0, 0, 0.64), 0 4px 12px -4px rgba(0, 0, 0, 0.42);
+  --glass-border-strong: rgba(245, 245, 247, 0.25);
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  --glass-shadow: 0 22px 54px -16px rgba(0, 0, 0, 0.72), 0 4px 14px -4px rgba(0, 0, 0, 0.48);
   --surface-pill-active: #f5f5f7;
 
   --ink-primary: #f5f5f7;
-  --ink-secondary: rgba(235, 235, 242, 0.82);
-  --ink-tertiary: rgba(208, 208, 220, 0.64);
-  --ink-inverse: #0b0b0f;
+  --ink-secondary: rgba(235, 235, 242, 0.84);
+  --ink-tertiary: rgba(208, 208, 220, 0.66);
+  --ink-inverse: #101013;
 
   --gold: #e2cfa8;
-  --gold-bright: #f2e1bc;
-  --gold-line: rgba(226, 207, 168, 0.36);
-  --gold-soft: rgba(226, 207, 168, 0.14);
+  --gold-bright: #f3e4c2;
+  --gold-line: rgba(226, 207, 168, 0.38);
+  --gold-soft: rgba(214, 184, 137, 0.14);
 
   --status-live: #4ade80;
   --status-live-bg: rgba(74, 222, 128, 0.14);
-  --status-live-line: rgba(74, 222, 128, 0.32);
+  --status-live-line: rgba(74, 222, 128, 0.34);
   --status-hybrid: #e2cfa8;
-  --status-hybrid-bg: rgba(226, 207, 168, 0.15);
-  --status-todo: #b0b0be;
-  --status-todo-bg: rgba(255, 255, 255, 0.09);
-  --status-risk: #f87171;
-  --status-risk-bg: rgba(248, 113, 113, 0.14);
-  --status-risk-line: rgba(248, 113, 113, 0.32);
+  --status-hybrid-bg: rgba(226, 207, 168, 0.16);
+  --status-todo: #b4b4c2;
+  --status-todo-bg: rgba(255, 255, 255, 0.1);
+  --status-risk: #ff6961;
+  --status-risk-bg: rgba(255, 105, 97, 0.14);
+  --status-risk-line: rgba(255, 105, 97, 0.34);
 
-  --svg-node-fill: rgba(16, 16, 22, 0.92);
-  --svg-track: rgba(245, 245, 247, 0.11);
+  --svg-node-fill: rgba(16, 16, 22, 0.94);
+  --svg-track: rgba(245, 245, 247, 0.12);
 
-  --shadow-slide: 0 32px 84px -16px rgba(0, 0, 0, 0.82), 0 0 0 1px rgba(226, 207, 168, 0.2);
+  --shadow-slide: 0 36px 88px -16px rgba(0, 0, 0, 0.88), 0 0 0 1px rgba(226, 207, 168, 0.22);
 }
 
 html[data-mood='aurora'][data-theme='dark'] {
@@ -258,7 +259,29 @@ body {
   display: none;
 }
 
+.ir-progress-rail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  z-index: 120;
+  background: var(--glass-border);
+  pointer-events: none;
+}
+
+.ir-progress-bar {
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(0.0556);
+  background: linear-gradient(90deg, var(--gold) 0%, var(--gold-bright) 100%);
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .ir-tb-btn.is-active,
+html[data-lang='ko'] .ir-tb-btn[data-set-lang='ko'],
+html[data-lang='en'] .ir-tb-btn[data-set-lang='en'],
 html[data-ratio='16-9'] .ir-tb-btn[data-set-ratio='16-9'],
 html[data-ratio='4-3'] .ir-tb-btn[data-set-ratio='4-3'],
 html[data-mood='luxury'] .ir-tb-btn[data-set-mood='luxury'],
@@ -312,8 +335,42 @@ html[data-view='scroll'] .ir-tb-btn[data-set-view='scroll'] {
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;
-  max-width: 176px;
+  max-width: 184px;
   cursor: pointer;
+}
+
+html[data-theme='dark'] .ir-tb-select option {
+  background: #141418;
+  color: #f5f5f7;
+}
+
+/* Circular Button-Origin Theme Ripple (View Transitions API, respects reduced motion) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html.ir-theme-rippling::view-transition-new(root) {
+  animation: ir-theme-ripple-expand 540ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes ir-theme-ripple-expand {
+  from {
+    clip-path: circle(0px at var(--ripple-x, 50%) var(--ripple-y, 24px));
+  }
+  to {
+    clip-path: circle(var(--ripple-r, 140vmax) at var(--ripple-x, 50%) var(--ripple-y, 24px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ir-progress-bar {
+    transition: none;
+  }
+  html.ir-theme-rippling::view-transition-new(root) {
+    animation: none;
+  }
 }
 
 @media (pointer: coarse), (max-width: 720px) {
@@ -2247,6 +2304,68 @@ html[data-ratio='4-3'] .closing-title {
 }
 
 /* ==========================================================================
+ * BILINGUAL COUTURE TYPOGRAPHY & THEME ELEVATION (Stitch IR v4 Calibration)
+ * ========================================================================== */
+
+html[data-lang='ko'] .cover-headline em,
+html[data-lang='ko'] .slide-title em {
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-weight: 840;
+  color: var(--gold);
+  text-decoration: underline;
+  text-decoration-color: var(--gold-line);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+html[data-lang='en'] .cover-headline {
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: -0.032em;
+}
+
+html[data-lang='en'][data-ratio='4-3'] .cover-headline {
+  font-size: 32px;
+}
+
+html[data-lang='en'] .slide-title {
+  font-size: 23.5px;
+  letter-spacing: -0.026em;
+}
+
+html[data-lang='en'][data-ratio='4-3'] .slide-title {
+  font-size: 19.5px;
+}
+
+html[data-lang='en'] .cover-headline em,
+html[data-lang='en'] .slide-title em {
+  font-family: var(--font-editorial);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.14em;
+  letter-spacing: -0.008em;
+  color: var(--gold);
+}
+
+html[data-lang='en'] .cover-lead {
+  font-size: 13.8px;
+  line-height: 1.48;
+}
+
+html[data-lang='en'] .card-copy {
+  line-height: 1.38;
+}
+
+html[data-lang='en'] .bm-stream-card .bm-price {
+  font-size: 21px;
+}
+
+html[data-lang='en'][data-ratio='4-3'] .bm-stream-card .bm-price {
+  font-size: 18px;
+}
+
+/* ==========================================================================
  * PRINT / PDF EXPORT (Exact Silk Backdrop & Exact 16:9 / 4:3 Pagination)
  * ========================================================================== */
 
@@ -2258,7 +2377,8 @@ html[data-ratio='4-3'] .closing-title {
     padding: 0 !important;
   }
 
-  .ir-toolbar {
+  .ir-toolbar,
+  .ir-progress-rail {
     display: none !important;
   }
 
