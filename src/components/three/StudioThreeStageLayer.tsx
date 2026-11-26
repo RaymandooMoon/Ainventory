@@ -11,6 +11,7 @@ import {
   type WeatherOpticalInput,
   resolveStageLightingFrame,
 } from '../../utils/stageLightingEngine.ts';
+import { isIosSafariRuntime } from '../../utils/iosSafariCompat.ts';
 import {
   computeHeightAwareStageFraming,
   computeThreeCameraLookAtForSolePct,
@@ -486,12 +487,14 @@ export default function StudioThreeStageLayer({
     const bootStage = () => {
       if (unmounted) return;
       const cachedSw = peekCachedSoftwareWebGl();
+      const isIosSafari = isIosSafariRuntime();
       let renderer: THREE.WebGLRenderer;
       try {
         renderer = new THREE.WebGLRenderer({
           alpha: true,
-          antialias: cachedSw === false,
-          powerPreference: 'high-performance',
+          antialias: cachedSw === false && !isIosSafari,
+          powerPreference: isIosSafari ? 'default' : 'high-performance',
+          preserveDrawingBuffer: isIosSafari,
         });
       } catch {
         onWebGlAvailabilityChangeRef.current?.(false);
@@ -506,7 +509,9 @@ export default function StudioThreeStageLayer({
       renderer.toneMapping = isSoftwareGl ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.08;
       renderer.setClearColor(0x000000, 0);
-      renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setPixelRatio(
+        isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, isIosSafari ? 1.35 : 2)
+      );
       renderer.shadowMap.enabled = false;
 
       const canvas = renderer.domElement;
@@ -514,9 +519,7 @@ export default function StudioThreeStageLayer({
       container.replaceChildren(canvas);
 
       const scene = new THREE.Scene();
-      const envTexture = isSoftwareGl
-        ? createStudioEnvironmentTexture(renderer, true)
-        : createStudioEnvironmentTexture(renderer, false);
+      const envTexture = createStudioEnvironmentTexture(renderer, isSoftwareGl || isIosSafari);
       scene.environment = envTexture;
       if (!isSoftwareGl) {
         scene.fog = new THREE.FogExp2(0x1f2430, 0.045);

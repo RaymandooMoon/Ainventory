@@ -1,0 +1,198 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, it } from 'node:test';
+import {
+  isIosSafariRuntime,
+  isIosTouchDevice,
+  safeReleasePointerCapture,
+  safeSetPointerCapture,
+} from '../../src/utils/iosSafariCompat.ts';
+
+const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..');
+
+function readRepoFile(relPath: string): string {
+  return fs.readFileSync(path.join(REPO_ROOT, relPath), 'utf8');
+}
+
+describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
+  it('accurately identifies iPhone, iPad, iPadOS desktop-mode Safari while excluding Android and desktop Chrome', () => {
+    const iphoneAirSafari = {
+      userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1',
+      platform: 'iPhone',
+      maxTouchPoints: 5,
+    };
+    const ipadDesktopModeSafari = {
+      userAgent:
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15',
+      platform: 'MacIntel',
+      maxTouchPoints: 5,
+    };
+    const desktopMacChrome = {
+      userAgent:
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      platform: 'MacIntel',
+      maxTouchPoints: 0,
+    };
+    const androidChrome = {
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36',
+      platform: 'Linux armv8l',
+      maxTouchPoints: 5,
+    };
+
+    assert.equal(isIosTouchDevice(iphoneAirSafari), true);
+    assert.equal(isIosSafariRuntime(iphoneAirSafari), true);
+
+    assert.equal(isIosTouchDevice(ipadDesktopModeSafari), true);
+    assert.equal(isIosSafariRuntime(ipadDesktopModeSafari), true);
+
+    assert.equal(isIosTouchDevice(desktopMacChrome), false);
+    assert.equal(isIosSafariRuntime(desktopMacChrome), false);
+
+    assert.equal(isIosTouchDevice(androidChrome), false);
+    assert.equal(isIosSafariRuntime(androidChrome), false);
+  });
+
+  it('safely swallows InvalidStateError during pointer capture on iOS Safari touch cancel', () => {
+    const throwingEl = {
+      setPointerCapture() {
+        throw new Error('InvalidStateError');
+      },
+      hasPointerCapture() {
+        return true;
+      },
+      releasePointerCapture() {
+        throw new Error('InvalidStateError');
+      },
+    } as unknown as Element;
+
+    assert.equal(safeSetPointerCapture(throwingEl, 7), false);
+    assert.doesNotThrow(() => safeReleasePointerCapture(throwingEl, 7));
+    assert.equal(safeSetPointerCapture(null, 1), false);
+  });
+
+  it('never sets body { touch-action: none } and enables pan-y scrolling on HUD & modal scrollers', () => {
+    const tokensCss = readRepoFile('src/site/styles/tokensAndShell.css');
+    const stageHudCss = readRepoFile('src/site/styles/stageHud.css');
+    const modalsCss = readRepoFile('src/site/styles/modalsAndAnalytics.css');
+
+    const bodyRuleMatch = tokensCss.match(/body\s*\{[^}]*\}/);
+    assert.ok(bodyRuleMatch, 'body CSS rule should exist in tokensAndShell.css');
+    assert.ok(
+      !bodyRuleMatch[0].includes('touch-action: none'),
+      'body must NOT declare touch-action: none (breaks all scrolling on iOS Safari)'
+    );
+    assert.ok(
+      bodyRuleMatch[0].includes('touch-action: manipulation'),
+      'body should declare touch-action: manipulation'
+    );
+    assert.ok(
+      tokensCss.includes("html[data-ios-safari='true']"),
+      'tokensAndShell.css should include iOS Safari blur/animation safeguards'
+    );
+
+    assert.match(stageHudCss, /\.site-hud-scroll\s*\{[^}]*touch-action:\s*pan-y/);
+    assert.match(modalsCss, /\.site-modal-body\s*\{[^}]*touch-action:\s*pan-y/);
+    assert.match(modalsCss, /\.site-analytics-scroll\s*\{[^}]*touch-action:\s*pan-y/);
+  });
+
+  it('keeps mobile form inputs >= 16px to prevent iOS Safari focus auto-zoom lock', () => {
+    const modalsCss = readRepoFile('src/site/styles/modalsAndAnalytics.css');
+    const loginCss = readRepoFile('src/components/auth/loginAtelier.css');
+
+    assert.match(modalsCss, /\.site-newsletter-input\s*\{[^}]*font-size:\s*(?:1rem|16px)/);
+    assert.match(loginCss, /\.atelier-input\s*\{[^}]*font-size:\s*(?:16px|1rem)/);
+  });
+
+  it('does not attach capture-phase touchend DeviceOrientationEvent.requestPermission trap', () => {
+    const hookSrc = readRepoFile('src/components/auth/useMarbleBackdropStage.ts');
+    assert.ok(
+      !hookSrc.includes("addEventListener('touchend', requestIosGyro"),
+      'requestIosGyro must NOT intercept touchend on iOS Safari'
+    );
+    assert.ok(
+      !hookSrc.includes("addEventListener('click', requestIosGyro, true)"),
+      'requestIosGyro must NOT intercept clicks in capture phase'
+    );
+    assert.ok(
+      hookSrc.includes('GYRO_IGNORE_SELECTOR'),
+      'requestIosGyro must ignore clicks on buttons/HUD/modals'
+    );
+  });
+
+  it('applies iOS Safari WebGL GPU memory, single-pass glass, and fast-boot safeguards', () => {
+    const scenesSrc = readRepoFile('src/components/auth/loginThreeScenes.ts');
+    const heroSrc = readRepoFile('src/site/SiteMarbleHero.tsx');
+    const studioLayerSrc = readRepoFile('src/components/three/StudioThreeStageLayer.tsx');
+    const relightSrc = readRepoFile('src/components/three/StudioCharacterRelightCanvas.tsx');
+
+    assert.ok(scenesSrc.includes('isIosSafariRuntime'));
+    assert.ok(scenesSrc.includes('backdropScale'));
+    assert.ok(heroSrc.includes('setSoftwareGlGlassFallback(isSoftwareGl || isIosSafariRuntime())'));
+    assert.ok(heroSrc.includes('deferBootUntilPaint: false'));
+    assert.ok(studioLayerSrc.includes('isIosSafariRuntime'));
+    assert.ok(relightSrc.includes('isIosSafariRuntime'));
+  });
+
+  it('prevents WebKit preserve-3d lazy-image blackouts, WebGL buffer wipe, and double-character relight ghosting', () => {
+    const garmentImgSrc = readRepoFile('src/components/StudioGarmentImage.jsx');
+    const flatLaySrc = readRepoFile('src/components/EditorialFlatLayBoard.jsx');
+    const viewerCss = readRepoFile('src/components/Studio2DFittingViewer.css');
+    const relightSrc = readRepoFile('src/components/three/StudioCharacterRelightCanvas.tsx');
+    const prioritySrc = readRepoFile('src/utils/resourcePriority.ts');
+
+    assert.ok(
+      garmentImgSrc.includes('loading="eager"'),
+      'IntersectionObserver-gated StudioGarmentImage should use loading="eager" so WebKit loads inside preserve-3d'
+    );
+    assert.ok(garmentImgSrc.includes('[displaySrc, loadedSrc, isNearViewport]'));
+    assert.ok(garmentImgSrc.includes('supportsCanvasWebpEncode'));
+    assert.ok(
+      relightSrc.includes('preserveDrawingBuffer: true'),
+      'On-demand StudioCharacterRelightCanvas must preserve drawing buffer so WebKit never clears character to transparent'
+    );
+    assert.ok(
+      relightSrc.includes('if (cssW === lastCssW && cssH === lastCssH) return;'),
+      'syncSize must skip redundant renderer.setSize calls that wipe the WebGL drawing buffer'
+    );
+    const renderIdx = relightSrc.indexOf('renderer.render(scene, camera);');
+    const readyTrueIdx = relightSrc.indexOf('onReadyChangeRef.current?.(true);');
+    assert.ok(renderIdx > 0 && readyTrueIdx > renderIdx, 'WebGL ready signal must fire ONLY after renderer.render succeeds');
+    assert.equal(
+      relightSrc.indexOf('onReadyChangeRef.current?.(true);', readyTrueIdx + 1),
+      -1,
+      'onReadyChangeRef.current?.(true) must not be called prematurely inside img.onload before drawing'
+    );
+    assert.ok(
+      relightSrc.includes('rafFallbackId = window.setTimeout'),
+      'StudioCharacterRelightCanvas should include an iOS Safari rAF fallback timer'
+    );
+    assert.ok(
+      prioritySrc.includes('fallbackTimer = window.setTimeout(runOnce, 120)'),
+      'scheduleAfterFirstPaint must include a 120ms timer safety net for throttled WebKit iframes'
+    );
+    assert.ok(
+      flatLaySrc.includes("incomingEl.style.opacity = isRelightCanvasActive ? '0' : '1'"),
+      'EditorialFlatLayBoard must keep raw img hidden when WebGL relight canvas is active'
+    );
+    assert.match(
+      viewerCss,
+      /\.editorial-ai-vton-img\.is-relight-canvas-backed\s*\{[^}]*transition:\s*none\s*!important/
+    );
+  });
+
+  it('wires embed visibility handshake and Apple Safari meta tags', () => {
+    const embedSrc = readRepoFile('src/site/liveAppEmbed.tsx');
+    const overlaySrc = readRepoFile('src/site/LiveAppStageOverlay.tsx');
+    const siteHtml = readRepoFile('site/index.html');
+
+    assert.ok(embedSrc.includes('ainvtry:embed-visibility'));
+    assert.ok(embedSrc.includes('ainvtry-live-app-ready'));
+    assert.ok(overlaySrc.includes('ainvtry-live-app-ready'));
+    assert.ok(overlaySrc.includes('visible: nextVisible'));
+    assert.ok(siteHtml.includes('apple-mobile-web-app-capable'));
+    assert.ok(siteHtml.includes('apple-touch-icon'));
+  });
+});

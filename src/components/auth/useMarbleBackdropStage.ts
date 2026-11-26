@@ -690,14 +690,33 @@ export function useMarbleBackdropStage(
         ? (window.DeviceOrientationEvent as unknown as DeviceOrientationConstructorWithPermission)
         : null;
     const requiresIosPermission = typeof devOrientCtor?.requestPermission === 'function';
+    const isTopLevelWindow = (() => {
+      try {
+        return window.self === window.top;
+      } catch {
+        return false;
+      }
+    })();
 
-    const requestIosGyro = () => {
+    const GYRO_IGNORE_SELECTOR =
+      'button, a, input, select, textarea, label, [role="button"], [role="tab"], [role="dialog"], [aria-modal="true"], [data-hud-surface="true"], [data-no-marble="true"]';
+
+    const requestIosGyro = (event: MouseEvent) => {
       if (gyroPermissionRequested || !requiresIosPermission || !devOrientCtor?.requestPermission) {
         return;
       }
+      if (optionsRef.current.disableHeroMarbleInput) {
+        return;
+      }
+      if (optionsRef.current.isEventExcluded?.(event.target)) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target && typeof target.closest === 'function' && target.closest(GYRO_IGNORE_SELECTOR)) {
+        return;
+      }
       gyroPermissionRequested = true;
-      window.removeEventListener('click', requestIosGyro, true);
-      window.removeEventListener('touchend', requestIosGyro, true);
+      window.removeEventListener('click', requestIosGyro, false);
       try {
         const resultPromise = devOrientCtor.requestPermission();
         if (resultPromise && typeof resultPromise.then === 'function') {
@@ -716,8 +735,9 @@ export function useMarbleBackdropStage(
 
     if (!reducedMotion && devOrientCtor) {
       if (requiresIosPermission) {
-        window.addEventListener('click', requestIosGyro, true);
-        window.addEventListener('touchend', requestIosGyro, true);
+        if (isTopLevelWindow) {
+          window.addEventListener('click', requestIosGyro, false);
+        }
       } else {
         attachGyro();
       }
@@ -800,8 +820,7 @@ export function useMarbleBackdropStage(
         window.removeEventListener('touchmove', onTouchMove);
         window.removeEventListener('touchend', onTouchEnd);
         window.removeEventListener('touchcancel', onTouchEnd);
-        window.removeEventListener('click', requestIosGyro, true);
-        window.removeEventListener('touchend', requestIosGyro, true);
+        window.removeEventListener('click', requestIosGyro, false);
         if (gyroAttached) {
           window.removeEventListener('deviceorientation', onDeviceOrientation);
         }

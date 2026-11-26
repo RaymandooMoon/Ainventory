@@ -2061,6 +2061,7 @@
 .editorial-ai-vton-img.is-relight-canvas-backed {
   opacity: 0 !important;
   filter: none !important;
+  transition: none !important;
 }
 
 .editorial-ai-vton-img-ghost {

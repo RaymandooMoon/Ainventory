@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import '../index.css';
 import App from '../App.jsx';
 import { setStoredLang } from '../utils/i18n.ts';
+import { applyIosSafariDocumentFlag } from '../utils/iosSafariCompat.ts';
 import { applyThemePreference } from '../utils/nativeBridge.ts';
 import type { SiteLang, SiteTheme } from './siteContent.ts';
 
@@ -14,6 +15,7 @@ export interface LiveAppSyncFromParentPayload {
   readonly lang?: SiteLang;
   readonly theme?: SiteTheme;
   readonly mood?: 'luxury' | 'aurora';
+  readonly visible?: boolean;
 }
 
 export interface LiveAppScreenNotifyPayload {
@@ -21,9 +23,16 @@ export interface LiveAppScreenNotifyPayload {
   readonly screen: LiveAppScreenId;
 }
 
+export interface LiveAppReadyNotifyPayload {
+  readonly type: 'ainvtry-live-app-ready';
+}
+
 // Mark embedded runtime BEFORE App mounts so api.ts keeps site_demo session tokens in memory only
 if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__AINVTRY_LIVE_EMBED__ = true;
+  applyIosSafariDocumentFlag();
+  const winRecord = window as unknown as Record<string, unknown>;
+  winRecord.__AINVTRY_LIVE_EMBED__ = true;
+  winRecord.__AINVTRY_EMBED_VISIBLE__ = true;
 
   const params = new URLSearchParams(window.location.search);
   const initialLang = params.get('lang');
@@ -45,6 +54,14 @@ if (typeof window !== 'undefined') {
     if (!isTrustedParentOrigin(event.origin)) return;
     const data = event.data as Partial<LiveAppSyncFromParentPayload> | null;
     if (!data || data.type !== 'ainvtry-live-app-sync') return;
+    if (typeof data.visible === 'boolean') {
+      winRecord.__AINVTRY_EMBED_VISIBLE__ = data.visible;
+      window.dispatchEvent(
+        new CustomEvent('ainvtry:embed-visibility', {
+          detail: { visible: data.visible },
+        })
+      );
+    }
     window.dispatchEvent(
       new CustomEvent('ainvtry:embed-sync', {
         detail: {
@@ -52,6 +69,7 @@ if (typeof window !== 'undefined') {
           lang: data.lang,
           theme: data.theme,
           mood: data.mood,
+          visible: data.visible,
         },
       })
     );
@@ -65,4 +83,12 @@ if (rootEl) {
       <App />
     </StrictMode>
   );
+  if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+    const readyPayload: LiveAppReadyNotifyPayload = { type: 'ainvtry-live-app-ready' };
+    try {
+      window.parent.postMessage(readyPayload, window.location.origin);
+    } catch {
+      // Ignore cross-subdomain mismatch; onLoad still fires cleanly
+    }
+  }
 }

@@ -31,6 +31,7 @@ import {
   setSoftwareGlGlassFallback,
   type StageMarbleHandle,
 } from '../three/stages/stageMaterials.ts';
+import { isIosSafariRuntime } from '../utils/iosSafariCompat.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import type { SiteTheme } from './siteContent.ts';
 import { getLoadedStageFactory, preloadStageModule } from './stageModuleLoader.ts';
@@ -388,7 +389,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       if (rigRef.current) return rigRef.current;
 
       THREE.Cache.enabled = true;
-      setSoftwareGlGlassFallback(isSoftwareGl);
+      setSoftwareGlGlassFallback(isSoftwareGl || isIosSafariRuntime());
 
       const safeAspect = width / Math.max(1, height);
       const scene = new THREE.Scene();
@@ -494,7 +495,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
   const handleOverlayResize = useCallback(
     (width: number, height: number, renderer: THREE.WebGLRenderer, isSoftwareGl = false) => {
-      if (isSoftwareGl) {
+      if (isSoftwareGl || isIosSafariRuntime()) {
         setSoftwareGlGlassFallback(true);
       }
       // Defer creating StageDirectorRig + PMREM studio envMap until the user actually enters a 3D stage
@@ -517,7 +518,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
   const handleOverlayRender = useCallback(
     (ctx: LoginThreeOverlayRenderContext): boolean => {
-      if (ctx.isSoftwareGl) {
+      if (ctx.isSoftwareGl || isIosSafariRuntime()) {
         setSoftwareGlGlassFallback(true);
       }
       if (!rigRef.current && activeStageRef.current === 'hero') {
@@ -655,6 +656,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     getHitParams: getSiteHitParams,
     floorRailSelector: SITE_FLOOR_RAIL_SELECTOR,
     disableHeroMarbleInput: activeStage !== 'hero',
+    deferBootUntilPaint: false,
     onOverlayRender: handleOverlayRender,
     onOverlayResize: handleOverlayResize,
     onOverlayDispose: handleOverlayDispose,
