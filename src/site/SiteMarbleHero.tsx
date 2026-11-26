@@ -293,6 +293,9 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
           rig.stageMarble.group.visible = false;
           rig.stageMarble.group.scale.setScalar(1);
           ctrl?.setExternalMarbleHidden?.(false);
+          if (isIosSafariRuntime()) {
+            rig.director.disposeInactiveStages('hero');
+          }
         } else {
           ctrl?.setExternalMarbleHidden?.(true);
         }
@@ -370,6 +373,10 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       rig.stageMarble.group.visible = true;
       // Transition director state BEFORE toggling external marble so reduced-motion renders see updated stage
       rig.director.transitionTo(nextStage, wallNowSec, launchWorldPos);
+      if (isIosSafariRuntime()) {
+        // Keep strictly one active 3D stage resident in iOS WebKit GPU/Canvas memory
+        rig.director.disposeInactiveStages(nextStage);
+      }
       ctrl?.setExternalMarbleHidden?.(true);
       if (!fromRenderPass) {
         ctrl?.requestRender?.();
@@ -579,6 +586,9 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
           rig.stageMarble.group.visible = false;
           rig.stageMarble.group.scale.setScalar(1);
           controllerRef.current?.setExternalMarbleHidden?.(false);
+          if (isIosSafariRuntime()) {
+            rig.director.disposeInactiveStages('hero');
+          }
           return false;
         }
       }
@@ -593,8 +603,13 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
       // Isolate ACESFilmic tone mapping strictly to the 3D stage overlay pass so
       // the HERO silk fluid and App Login screen shaders remain 100% untouched.
+      // Explicitly bind the screen framebuffer & clear depth right before draw so
+      // first-frame ensureRig initialization can never leave a stale FBO or depth state.
       const prevToneMapping = ctx.renderer.toneMapping;
       const prevExposure = ctx.renderer.toneMappingExposure;
+      ctx.renderer.setRenderTarget(null);
+      ctx.renderer.autoClear = false;
+      ctx.renderer.clearDepth();
       ctx.renderer.toneMapping = THREE.ACESFilmicToneMapping;
       ctx.renderer.toneMappingExposure = rig.currentExposure;
       try {
@@ -602,6 +617,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       } finally {
         ctx.renderer.toneMapping = prevToneMapping;
         ctx.renderer.toneMappingExposure = prevExposure;
+        ctx.renderer.autoClear = true;
       }
       return true;
     },
@@ -718,8 +734,9 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   }, [effectiveThreeStage, syncStageTransition]);
 
   // Proactively pre-warm & register hidden studioStage when entering Specs so Three.js 3D opens instantly
+  // Skip speculative background pre-instantiation on iOS WebKit to avoid Jetsam memory pressure (loads on demand).
   useEffect(() => {
-    if (activeStage !== 'specs') return undefined;
+    if (activeStage !== 'specs' || isIosSafariRuntime()) return undefined;
     let cancelled = false;
     void preloadStageModule('studio')
       .then((factory) => {
@@ -761,17 +778,30 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     controllerRef.current?.requestRender?.();
   }, [glassPercent]);
 
-  // Open 3D viewport direct pointer gestures (Zero HUD interference) + double-tap 0° reset
+  // Open 3D viewport direct touch & pointer gestures (Zero HUD interference) + double-tap 0° reset
   useEffect(() => {
     if (effectiveThreeStage === 'hero' || typeof window === 'undefined') return undefined;
 
     let activePointerId: number | null = null;
+    let activeTouchId: number | null = null;
+    let lastNativeTouchAt = 0;
     let lastX = 0;
     let lastY = 0;
     let totalMoved = 0;
     let lastTapTime = 0;
     let lastTapX = 0;
     let lastTapY = 0;
+
+    const findTouchById = (list: TouchList, id: number): Touch | null => {
+      for (let i = 0; i < list.length; i += 1) {
+        if (list[i].identifier === id) return list[i];
+      }
+      return null;
+    };
+
+    const isSuppressedTouchPointer = (e: PointerEvent): boolean =>
+      e.pointerType === 'touch' &&
+      (activeTouchId !== null || performance.now() - lastNativeTouchAt < 800);
 
     const toNdc = (clientX: number, clientY: number): { ndcX: number; ndcY: number; rect: DOMRect } | null => {
       const el = canvasRef.current ?? stageRef.current;
@@ -785,7 +815,51 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       };
     };
 
+    const forwardDragStep = (clientX: number, clientY: number) => {
+      const rig = rigRef.current;
+      if (!rig) return;
+      const coords = toNdc(clientX, clientY);
+      if (!coords) return;
+
+      const dxPx = clientX - lastX;
+      const dyPx = clientY - lastY;
+      lastX = clientX;
+      lastY = clientY;
+      totalMoved += Math.hypot(dxPx, dyPx);
+
+      const stage = rig.director.getActiveStage();
+      const usesNormalizedDrag = stage === 'studio' || stage === 'about';
+      const dx = usesNormalizedDrag ? dxPx / Math.max(240, coords.rect.width) : dxPx;
+      const dy = usesNormalizedDrag ? dyPx / Math.max(240, coords.rect.height) : dyPx;
+
+      rig.director.handleLeftPointerDrag(dx, dy);
+      rig.director.handleLeftPointerMove(coords.ndcX, coords.ndcY);
+      controllerRef.current?.requestRender?.();
+    };
+
+    const forwardTapOrDoubleTap = (clientX: number, clientY: number) => {
+      const rig = rigRef.current;
+      const coords = toNdc(clientX, clientY);
+      if (!rig || !coords) return;
+
+      const now = performance.now();
+      const isDoubleTap =
+        now - lastTapTime < 310 && Math.hypot(clientX - lastTapX, clientY - lastTapY) < 28;
+      if (isDoubleTap) {
+        lastTapTime = 0;
+        rig.director.handleLeftPointerDoubleTap(coords.ndcX, coords.ndcY);
+      } else {
+        lastTapTime = now;
+        lastTapX = clientX;
+        lastTapY = clientY;
+        rig.director.handleLeftPointerTap(coords.ndcX, coords.ndcY);
+      }
+      triggerHaptic('selection');
+      controllerRef.current?.requestRender?.();
+    };
+
     const onPointerDown = (e: PointerEvent) => {
+      if (isSuppressedTouchPointer(e)) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       if (isStagePointerExcluded(e.target)) return;
       activePointerId = e.pointerId;
@@ -796,77 +870,105 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (isSuppressedTouchPointer(e)) return;
       const rig = rigRef.current;
       if (!rig) return;
 
-      const coords = toNdc(e.clientX, e.clientY);
-      if (!coords) return;
-
       if (activePointerId === e.pointerId) {
-        const dxPx = e.clientX - lastX;
-        const dyPx = e.clientY - lastY;
-        lastX = e.clientX;
-        lastY = e.clientY;
-        totalMoved += Math.hypot(dxPx, dyPx);
-
-        const stage = rig.director.getActiveStage();
-        const usesNormalizedDrag = stage === 'studio' || stage === 'about';
-        const dx = usesNormalizedDrag ? dxPx / Math.max(240, coords.rect.width) : dxPx;
-        const dy = usesNormalizedDrag ? dyPx / Math.max(240, coords.rect.height) : dyPx;
-
-        rig.director.handleLeftPointerDrag(dx, dy);
-        rig.director.handleLeftPointerMove(coords.ndcX, coords.ndcY);
-        controllerRef.current?.requestRender?.();
+        forwardDragStep(e.clientX, e.clientY);
         return;
       }
 
       if (isStagePointerExcluded(e.target)) return;
+      const coords = toNdc(e.clientX, e.clientY);
+      if (!coords) return;
       rig.director.handleLeftPointerMove(coords.ndcX, coords.ndcY);
     };
 
     const onPointerUp = (e: PointerEvent) => {
+      if (isSuppressedTouchPointer(e)) return;
       if (activePointerId !== e.pointerId) return;
       const wasTap = totalMoved < 8;
       activePointerId = null;
 
       if (wasTap && !isStagePointerExcluded(e.target)) {
-        const rig = rigRef.current;
-        const coords = toNdc(e.clientX, e.clientY);
-        if (rig && coords) {
-          const now = performance.now();
-          const isDoubleTap =
-            now - lastTapTime < 310 && Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY) < 28;
-          if (isDoubleTap) {
-            lastTapTime = 0;
-            rig.director.handleLeftPointerDoubleTap(coords.ndcX, coords.ndcY);
-          } else {
-            lastTapTime = now;
-            lastTapX = e.clientX;
-            lastTapY = e.clientY;
-            rig.director.handleLeftPointerTap(coords.ndcX, coords.ndcY);
-          }
-          triggerHaptic('selection');
-          controllerRef.current?.requestRender?.();
-        }
+        forwardTapOrDoubleTap(e.clientX, e.clientY);
       }
     };
 
     const onPointerCancel = (e: PointerEvent) => {
+      if (isSuppressedTouchPointer(e)) return;
       if (activePointerId === e.pointerId) {
         activePointerId = null;
       }
     };
 
+    // First-class native TouchEvent listeners directly on stageEl (sibling of .site-shell / HUD)
+    // so iOS Safari & iOS Chrome always rotate 3D models cleanly without pointercancel drops
+    // and without interfering with native vertical scrolling inside .site-hud-scroll or modals.
+    const onTouchStart = (e: TouchEvent) => {
+      lastNativeTouchAt = performance.now();
+      if (e.touches.length !== 1) {
+        activeTouchId = null;
+        return;
+      }
+      if (isStagePointerExcluded(e.target)) return;
+      const t = e.touches[0];
+      activePointerId = null;
+      activeTouchId = t.identifier;
+      lastX = t.clientX;
+      lastY = t.clientY;
+      totalMoved = 0;
+      controllerRef.current?.requestRender?.();
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      lastNativeTouchAt = performance.now();
+      if (activeTouchId === null) return;
+      const t = findTouchById(e.touches, activeTouchId);
+      if (!t) return;
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+      forwardDragStep(t.clientX, t.clientY);
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      lastNativeTouchAt = performance.now();
+      if (activeTouchId === null) return;
+      if (findTouchById(e.touches, activeTouchId)) return;
+      const ended = findTouchById(e.changedTouches, activeTouchId);
+      const wasTap = e.type === 'touchend' && totalMoved < 10;
+      activeTouchId = null;
+
+      if (wasTap && ended && !isStagePointerExcluded(e.target)) {
+        forwardTapOrDoubleTap(ended.clientX, ended.clientY);
+      }
+    };
+
+    const stageEl = stageRef.current;
     window.addEventListener('pointerdown', onPointerDown, { passive: true });
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerup', onPointerUp, { passive: true });
     window.addEventListener('pointercancel', onPointerCancel, { passive: true });
+    if (stageEl) {
+      stageEl.addEventListener('touchstart', onTouchStart, { passive: true });
+      stageEl.addEventListener('touchmove', onTouchMove, { passive: false });
+      stageEl.addEventListener('touchend', onTouchEnd, { passive: true });
+      stageEl.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    }
 
     return () => {
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerCancel);
+      if (stageEl) {
+        stageEl.removeEventListener('touchstart', onTouchStart);
+        stageEl.removeEventListener('touchmove', onTouchMove);
+        stageEl.removeEventListener('touchend', onTouchEnd);
+        stageEl.removeEventListener('touchcancel', onTouchEnd);
+      }
     };
   }, [effectiveThreeStage, canvasRef, stageRef]);
 

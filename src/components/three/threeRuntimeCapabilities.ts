@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createLightweightStudioCubeEnvMap } from '../../three/stages/stageMaterials.ts';
 
 export type StageTierCode = 'S+' | 'S' | 'A+' | 'A' | 'B+' | 'B' | 'C';
 
@@ -70,40 +71,16 @@ export function detectSoftwareWebGl(): boolean {
 
 /**
  * Generates a zero-dependency studio reflection environment on every device so metallic
- * and glass surfaces never reflect black vacuum. On CPU/software WebGL (`isSoftwareGl`),
- * builds a fast equirectangular studio softbox map (<0.5ms) instead of multi-pass PMREM convolution.
+ * and glass surfaces never reflect black vacuum. On CPU/software WebGL or iOS Safari
+ * (`isSoftwareGl`), builds a pre-filtered studio cubemap (`isPMREMTexture = true`, <0.3ms)
+ * so Three.js 0.187 never triggers synchronous 256-sample GGX PMREM convolution.
  */
 export function createStudioEnvironmentTexture(
   renderer: THREE.WebGLRenderer,
   isSoftwareGl = false
 ): THREE.Texture {
   if (isSoftwareGl) {
-    const w = 128;
-    const h = 64;
-    const envCanvas = document.createElement('canvas');
-    envCanvas.width = w;
-    envCanvas.height = h;
-    const ctx = envCanvas.getContext('2d');
-    if (ctx) {
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, '#eef4ff');
-      grad.addColorStop(0.42, '#f8f2e8');
-      grad.addColorStop(0.52, '#6d6962');
-      grad.addColorStop(1, '#1c1b19');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      // Warm & cool studio softbox highlights for crisp specular reflections
-      ctx.fillStyle = 'rgba(255, 250, 238, 0.92)';
-      ctx.fillRect(18, 8, 30, 14);
-      ctx.fillStyle = 'rgba(218, 234, 255, 0.88)';
-      ctx.fillRect(78, 10, 28, 13);
-    }
-    const tex = new THREE.CanvasTexture(envCanvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.mapping = THREE.EquirectangularReflectionMapping;
-    tex.needsUpdate = true;
-    return tex;
+    return createLightweightStudioCubeEnvMap();
   }
 
   const pmremGenerator = new THREE.PMREMGenerator(renderer);

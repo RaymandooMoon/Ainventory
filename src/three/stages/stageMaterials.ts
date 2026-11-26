@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { isIosSafariRuntime } from '../../utils/iosSafariCompat.ts';
 import type { MoodMode, ThemeMode } from '../ainvtryStageDirector.ts';
 
 /* ==========================================================================
@@ -42,19 +43,184 @@ const ENV_RENDER_TARGETS = new WeakMap<THREE.Texture, THREE.WebGLRenderTarget>()
  * 2. Studio PMREM RoomEnvironment (Zero External Network Fetches)
  * ========================================================================== */
 
+interface PMREMLikeCubeMip {
+  readonly image: THREE.DataTexture[];
+  readonly width: number;
+  readonly height: number;
+}
+
+const LIGHTWEIGHT_ENV_KEY_DIR = new THREE.Vector3(-5.2, 4.4, 4.6).normalize();
+const LIGHTWEIGHT_ENV_RIM_DIR = new THREE.Vector3(5.8, 2.2, -3.8).normalize();
+const LIGHTWEIGHT_ENV_TOP_DIR = new THREE.Vector3(0, 7.2, 0.8).normalize();
+
+function buildStudioCubeFaceData(
+  faceIndex: number,
+  size: number,
+  sharpness: number
+): THREE.DataTexture {
+  const data = new Uint8Array(size * size * 4);
+  const kx = LIGHTWEIGHT_ENV_KEY_DIR.x;
+  const ky = LIGHTWEIGHT_ENV_KEY_DIR.y;
+  const kz = LIGHTWEIGHT_ENV_KEY_DIR.z;
+  const rx = LIGHTWEIGHT_ENV_RIM_DIR.x;
+  const ry = LIGHTWEIGHT_ENV_RIM_DIR.y;
+  const rz = LIGHTWEIGHT_ENV_RIM_DIR.z;
+  const tx = LIGHTWEIGHT_ENV_TOP_DIR.x;
+  const ty = LIGHTWEIGHT_ENV_TOP_DIR.y;
+  const tz = LIGHTWEIGHT_ENV_TOP_DIR.z;
+
+  const topExp = Math.max(1.2, sharpness * 0.45);
+  let off = 0;
+
+  for (let y = 0; y < size; y += 1) {
+    const v = ((y + 0.5) / size) * 2 - 1;
+    for (let x = 0; x < size; x += 1) {
+      const u = ((x + 0.5) / size) * 2 - 1;
+      let dx = 0;
+      let dy = 0;
+      let dz = 0;
+      if (faceIndex === 0) {
+        dx = 1;
+        dy = -v;
+        dz = -u;
+      } else if (faceIndex === 1) {
+        dx = -1;
+        dy = -v;
+        dz = u;
+      } else if (faceIndex === 2) {
+        dx = u;
+        dy = 1;
+        dz = v;
+      } else if (faceIndex === 3) {
+        dx = u;
+        dy = -1;
+        dz = -v;
+      } else if (faceIndex === 4) {
+        dx = u;
+        dy = -v;
+        dz = 1;
+      } else {
+        dx = -u;
+        dy = -v;
+        dz = -1;
+      }
+
+      const invLen = 1 / Math.hypot(dx, dy, dz);
+      dx *= invLen;
+      dy *= invLen;
+      dz *= invLen;
+
+      // Smooth architectural studio room ambient gradient (dark obsidian floor -> warm ivory ceiling)
+      const upT = Math.max(0, Math.min(1, dy * 0.5 + 0.5));
+      let r = 0.08 + upT * 0.24;
+      let g = 0.08 + upT * 0.23;
+      let b = 0.1 + upT * 0.24;
+
+      // Softbox 1: Warm champagne key light
+      const dKey = Math.max(0, dx * kx + dy * ky + dz * kz);
+      const keyLobe = Math.pow(dKey, sharpness);
+      r += keyLobe * 0.98;
+      g += keyLobe * 0.89;
+      b += keyLobe * 0.74;
+
+      // Softbox 2: Cool platinum rim strip
+      const dRim = Math.max(0, dx * rx + dy * ry + dz * rz);
+      const rimLobe = Math.pow(dRim, sharpness * 0.9);
+      r += rimLobe * 0.68;
+      g += rimLobe * 0.76;
+      b += rimLobe * 0.92;
+
+      // Softbox 3: Overhead gallery diffuser
+      const dTop = Math.max(0, dx * tx + dy * ty + dz * tz);
+      const topLobe = Math.pow(dTop, topExp);
+      r += topLobe * 0.48;
+      g += topLobe * 0.45;
+      b += topLobe * 0.42;
+
+      // Soft filmlike highlight roll-off -> sRGB byte encoding
+      const sR = Math.pow(r / (1 + r * 0.42), 1 / 2.2);
+      const sG = Math.pow(g / (1 + g * 0.42), 1 / 2.2);
+      const sB = Math.pow(b / (1 + b * 0.42), 1 / 2.2);
+
+      data[off] = Math.min(255, Math.max(0, Math.round(sR * 255)));
+      data[off + 1] = Math.min(255, Math.max(0, Math.round(sG * 255)));
+      data[off + 2] = Math.min(255, Math.max(0, Math.round(sB * 255)));
+      data[off + 3] = 255;
+      off += 4;
+    }
+  }
+
+  const faceTex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  faceTex.colorSpace = THREE.SRGBColorSpace;
+  faceTex.needsUpdate = true;
+  return faceTex;
+}
+
+/**
+ * Generates an instant (<0.3ms, ~32 KB VRAM) pre-filtered studio softbox
+ * `CubeTexture` marked as `isPMREMTexture = true` with 4 roughness-matched
+ * mipmap levels (32 -> 16 -> 8 -> 4 -> 2).
+ *
+ * Bypasses Three.js 0.187's synchronous 256-sample GGX `PMREMGenerator`
+ * HalfFloat cube-mip convolution completely so iOS WebKit ANGLE Metal and
+ * software WebGL never hit multi-second GPU stalls or watchdog context resets.
+ */
+export function createLightweightStudioCubeEnvMap(): THREE.CubeTexture {
+  const baseFaces: THREE.DataTexture[] = [];
+  for (let face = 0; face < 6; face += 1) {
+    baseFaces.push(buildStudioCubeFaceData(face, 32, 18));
+  }
+
+  const cubeTex = new THREE.CubeTexture(baseFaces);
+  cubeTex.name = 'PMREM';
+  cubeTex.colorSpace = THREE.SRGBColorSpace;
+  cubeTex.minFilter = THREE.LinearMipmapLinearFilter;
+  cubeTex.magFilter = THREE.LinearFilter;
+  cubeTex.generateMipmaps = false;
+
+  const mipSpecs: ReadonlyArray<readonly [number, number]> = [
+    [16, 8.5],
+    [8, 4.0],
+    [4, 2.0],
+    [2, 1.1],
+  ];
+  const mipmaps: PMREMLikeCubeMip[] = [];
+  for (const [mipSize, sharpness] of mipSpecs) {
+    const mipFaces: THREE.DataTexture[] = [];
+    for (let face = 0; face < 6; face += 1) {
+      mipFaces.push(buildStudioCubeFaceData(face, mipSize, sharpness));
+    }
+    mipmaps.push({
+      image: mipFaces,
+      width: mipSize,
+      height: mipSize,
+    });
+  }
+
+  (cubeTex as unknown as { mipmaps: PMREMLikeCubeMip[]; isPMREMTexture: boolean }).mipmaps =
+    mipmaps;
+  (cubeTex as unknown as { isPMREMTexture: boolean }).isPMREMTexture = true;
+  cubeTex.needsUpdate = true;
+  return cubeTex;
+}
+
 /**
  * Generates a high-dynamic-range procedural studio PMREM environment texture
  * combining Three.js `RoomEnvironment` with tailored fashion-runway softboxes
  * (warm champagne key, cool platinum rim strip, overhead gallery diffuser) so
  * obsidian marble, champagne gold rings, brushed glass tiers, and clearcoat
  * umbrella panels exhibit crisp reflections with zero external HDRI fetches.
+ *
+ * On iOS WebKit and software WebGL (`softwareGlGlassFallback`), uses the
+ * zero-PMREM procedural studio cubemap to eliminate multi-second GGX stalls.
  */
 export function createStudioEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture {
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envScene = softwareGlGlassFallback ? new THREE.Scene() : new RoomEnvironment();
-  if (softwareGlGlassFallback) {
-    envScene.background = new THREE.Color(0x16151a);
+  if (softwareGlGlassFallback || isIosSafariRuntime()) {
+    return createLightweightStudioCubeEnvMap();
   }
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new RoomEnvironment();
 
   const softboxGeo = new THREE.PlaneGeometry(1, 1);
   const keyMat = new THREE.MeshBasicMaterial({
@@ -87,7 +253,7 @@ export function createStudioEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture
 
   envScene.add(keyBox, rimStrip, overheadPanel);
 
-  const renderTarget = pmrem.fromScene(envScene, softwareGlGlassFallback ? 0 : 0.035);
+  const renderTarget = pmrem.fromScene(envScene, 0.035);
   const envTexture = renderTarget.texture;
   ENV_RENDER_TARGETS.set(envTexture, renderTarget);
 
@@ -95,9 +261,7 @@ export function createStudioEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture
   keyMat.dispose();
   rimMat.dispose();
   overheadMat.dispose();
-  if (envScene instanceof RoomEnvironment) {
-    envScene.dispose();
-  }
+  envScene.dispose();
   pmrem.dispose();
 
   return envTexture;
@@ -114,6 +278,31 @@ export function disposeStudioEnvMap(envMap: THREE.Texture | null | undefined): v
     rt.dispose();
     ENV_RENDER_TARGETS.delete(envMap);
     return;
+  }
+  const maybeCube = envMap as THREE.Texture & {
+    image?: unknown;
+    mipmaps?: Array<{ image?: unknown; dispose?: () => void }>;
+  };
+  if (Array.isArray(maybeCube.image)) {
+    for (const face of maybeCube.image) {
+      if (face && typeof (face as { dispose?: () => void }).dispose === 'function') {
+        (face as { dispose: () => void }).dispose();
+      }
+    }
+  }
+  if (Array.isArray(maybeCube.mipmaps)) {
+    for (const mip of maybeCube.mipmaps) {
+      if (mip && Array.isArray(mip.image)) {
+        for (const face of mip.image) {
+          if (face && typeof (face as { dispose?: () => void }).dispose === 'function') {
+            (face as { dispose: () => void }).dispose();
+          }
+        }
+      }
+      if (mip && typeof mip.dispose === 'function') {
+        mip.dispose();
+      }
+    }
   }
   envMap.dispose();
 }
@@ -535,7 +724,7 @@ export function createFloatingLabelSprite(
   const hasSubtext = Boolean(opts.subtext && opts.subtext.trim().length > 0);
   const logicalWidth = opts.width ?? (hasSubtext ? 260 : 210);
   const logicalHeight = opts.height ?? (hasSubtext ? 74 : 52);
-  const scaleFactor = 2; // 2× Retina backing store
+  const scaleFactor = isIosSafariRuntime() ? 1 : 2; // 1× on iOS to stay well inside WebKit Canvas IOSurface cap
 
   const pixelWidth = logicalWidth * scaleFactor;
   const pixelHeight = logicalHeight * scaleFactor;
@@ -1000,7 +1189,7 @@ export function createTierTechRibbonSprite(
 ): TechRibbonHandle {
   const logicalWidth = 440;
   const logicalHeight = 128;
-  const scaleFactor = 2;
+  const scaleFactor = isIosSafariRuntime() ? 1 : 2;
   const pixelWidth = logicalWidth * scaleFactor;
   const pixelHeight = logicalHeight * scaleFactor;
   const aspect = logicalWidth / logicalHeight;
@@ -1160,7 +1349,7 @@ export function createTierTechDrawer(
   group.name = `tech-drawer-${title}`;
   group.visible = false;
 
-  const scaleFactor = 2;
+  const scaleFactor = isIosSafariRuntime() ? 1 : 2;
   const fontStack =
     '"Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 
@@ -1214,7 +1403,7 @@ export function createTierTechDrawer(
   headerSprite.renderOrder = 28;
   group.add(headerSprite);
 
-  // ── 3) Individual 2× Retina Vector Tech Tile Sprites (3 sliding wings) ──
+  // ── 3) Individual Vector Tech Tile Sprites (3 sliding wings) ──
   const tileCount = Math.max(mvpItems.length, prodItems.length, 3);
   const tileLogicalW = 152;
   const tileLogicalH = 136;
@@ -1266,18 +1455,23 @@ export function createTierTechDrawer(
   }
   const bladeSprites: readonly THREE.Sprite[] = tiles.map((blade) => blade.sprite);
 
-  let lastMode: ArchStackMode | null = null;
-  let lastTheme: ThemeMode | null = null;
+  let desiredMode: ArchStackMode = 'mvp';
+  let desiredTheme: ThemeMode = 'dark';
+  let paintedMode: ArchStackMode | null = null;
+  let paintedTheme: ThemeMode | null = null;
   let lastFocusedIdx: number | null = null;
 
-  const setModeAndTheme = (mode: ArchStackMode, theme: ThemeMode): void => {
-    if (lastMode === mode && lastTheme === theme) return;
-    lastMode = mode;
-    lastTheme = theme;
+  const paintHeaderAndBlades = (
+    mode: ArchStackMode,
+    theme: ThemeMode,
+    focusedIdx: number | null
+  ): void => {
+    paintedMode = mode;
+    paintedTheme = theme;
+    lastFocusedIdx = focusedIdx;
 
     const isDark = theme === 'dark';
     const isProd = mode === 'prod';
-    const activeItems = isProd ? prodItems : mvpItems;
 
     // Update connector rail tint (champagne gold in MVP, luminous ice-gold/cyan in Prod HA)
     railMat.color.setHex(
@@ -1357,7 +1551,17 @@ export function createTierTechDrawer(
       headerTexture.needsUpdate = true;
     }
 
-    drawBlades(mode, theme, lastFocusedIdx);
+    drawBlades(mode, theme, focusedIdx);
+  };
+
+  const setModeAndTheme = (mode: ArchStackMode, theme: ThemeMode): void => {
+    desiredMode = mode;
+    desiredTheme = theme;
+    if (!group.visible) {
+      return;
+    }
+    if (paintedMode === mode && paintedTheme === theme) return;
+    paintHeaderAndBlades(mode, theme, lastFocusedIdx);
   };
 
   const drawBlades = (mode: ArchStackMode, theme: ThemeMode, focusedIdx: number | null): void => {
@@ -1495,8 +1699,6 @@ export function createTierTechDrawer(
     }
   };
 
-  setModeAndTheme('mvp', 'dark');
-
   const setUnfurl = (
     unfurl: number,
     opacity: number,
@@ -1513,9 +1715,11 @@ export function createTierTechDrawer(
       focusedBladeIndex !== null && focusedBladeIndex >= 0
         ? Math.min(focusedBladeIndex, tiles.length - 1)
         : null;
-    if (normalizedFocus !== lastFocusedIdx && lastMode !== null && lastTheme !== null) {
+    if (paintedMode !== desiredMode || paintedTheme !== desiredTheme) {
+      paintHeaderAndBlades(desiredMode, desiredTheme, normalizedFocus);
+    } else if (normalizedFocus !== lastFocusedIdx) {
       lastFocusedIdx = normalizedFocus;
-      drawBlades(lastMode, lastTheme, normalizedFocus);
+      drawBlades(desiredMode, desiredTheme, normalizedFocus);
     }
 
     const u = THREE.MathUtils.clamp(unfurl, 0, 1);

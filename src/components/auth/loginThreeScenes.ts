@@ -487,7 +487,7 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     coreH = 0.0;
     haloH = 0.0;
     grad = vec2(0.0);
-    if (uTrailActive < 0.001) return;
+    if (uTrailActive < 0.001 || uMarbleOpacity <= 0.01) return;
     if (
       suv.x < uTrailBounds.x ||
       suv.x > uTrailBounds.z ||
@@ -503,9 +503,10 @@ const SILK_CLOTH_FRAG = /* glsl */ `
 
     for (int i = 0; i < ${TRAIL_NODE_COUNT - 1}; i++) {
       vec4 a = uTrailPts[i];
+      if (a.w <= 0.001) break;
       vec4 b = uTrailPts[i + 1];
 
-      if (a.w <= 0.001 || b.w <= 0.001) continue;
+      if (b.w <= 0.001) continue;
       if (a.z >= 0.995 && b.z >= 0.995) continue;
 
       vec2 ba = (b.xy - a.xy) * aspectScale;
@@ -611,43 +612,55 @@ const SILK_CLOTH_FRAG = /* glsl */ `
       vec4 stU = decodeState(texture2D(uFluidTex, clamp(suv + vec2(0.0, uFluidTexel.y * 1.65), 0.0, 1.0)));
       waveH = stC.r;
       rippleGrad = vec2(stR.r - stL.r, stU.r - stD.r);
-    } else {
+    } else if (uAnalyticActive > 0.5) {
       evalAnalyticRipples(suv, aspectScale, waveH, rippleGrad);
     }
 
     // 2. High-resolution per-pixel deep gravitational funnel right underneath & radiating around the marble
-    //    (Complements the true 3D vertex crater with razor-smooth 3-scale concave slope, tension pleats & bowl AO)
-    vec2 mDelta = (suv - uMarbleUv) * aspectScale;
-    float mDist2 = dot(mDelta, mDelta);
-    float mDist = sqrt(mDist2 + 0.000001);
-    float mPress = uMarbleSink * uMarbleOpacity;
+    //    Skipped completely when hero marble is hidden (02 Architecture / 03 Specs / 04 About).
+    vec2 mDelta = vec2(0.0);
+    float mDist2 = 1.0;
+    float mDist = 1.0;
+    float mPress = 0.0;
+    float mCoreDip = 0.0;
+    float mMidDip = 0.0;
+    float mWideDip = 0.0;
+    vec2 mDimpleGrad = vec2(0.0);
+    vec2 gatherGrad = vec2(0.0);
 
-    float mCoreR = max(0.022, uMarbleRadius * 1.38);
-    float mMidR = max(0.046, uMarbleRadius * 2.85);
-    float mWideR = max(0.088, uMarbleRadius * 5.25);
-    float mInvCoreR2 = 1.0 / (mCoreR * mCoreR);
-    float mInvMidR2 = 1.0 / (mMidR * mMidR);
-    float mInvWideR2 = 1.0 / (mWideR * mWideR);
+    if (uMarbleOpacity > 0.01) {
+      mDelta = (suv - uMarbleUv) * aspectScale;
+      mDist2 = dot(mDelta, mDelta);
+      mDist = sqrt(mDist2 + 0.000001);
+      mPress = uMarbleSink * uMarbleOpacity;
 
-    float mCoreDip = exp(-mDist2 * mInvCoreR2) * mPress;
-    float mMidDip = exp(-mDist2 * mInvMidR2) * mPress;
-    float mWideDip = exp(-mDist2 * mInvWideR2) * mPress;
+      float mCoreR = max(0.022, uMarbleRadius * 1.38);
+      float mMidR = max(0.046, uMarbleRadius * 2.85);
+      float mWideR = max(0.088, uMarbleRadius * 5.25);
+      float mInvCoreR2 = 1.0 / (mCoreR * mCoreR);
+      float mInvMidR2 = 1.0 / (mMidR * mMidR);
+      float mInvWideR2 = 1.0 / (mWideR * mWideR);
 
-    // 3-scale concave downward funnel gradient (+dh/dxy points outward -> subtracting from N tilts N sharply into deep bowl!)
-    vec2 mDimpleGrad =
-      (2.0 * mDelta * mInvCoreR2 * mCoreDip) * 0.024 +
-      (2.0 * mDelta * mInvMidR2 * mMidDip) * 0.036 +
-      (2.0 * mDelta * mInvWideR2 * mWideDip) * 0.044;
+      mCoreDip = exp(-mDist2 * mInvCoreR2) * mPress;
+      mMidDip = exp(-mDist2 * mInvMidR2) * mPress;
+      mWideDip = exp(-mDist2 * mInvWideR2) * mPress;
 
-    // Taut radial silk gather pleats pulling into the deeply sunken marble collar
-    float mAng = atan(mDelta.y, mDelta.x + 0.00001);
-    float gatherRing =
-      smoothstep(0.0, uMarbleRadius * 0.72, mDist) *
-      exp(-pow((mDist - uMarbleRadius * 2.35) / max(0.030, uMarbleRadius * 1.85), 2.0));
-    float gatherWave =
-      sin(mAng * 8.0 + sin(mAng * 3.0) * 0.65) * 0.62 + cos(mAng * 13.0 - 0.5) * 0.38;
-    vec2 mTang = vec2(-mDelta.y, mDelta.x) / mDist;
-    vec2 gatherGrad = mTang * (gatherWave * gatherRing * mPress * 0.24);
+      // 3-scale concave downward funnel gradient (+dh/dxy points outward -> subtracting from N tilts N sharply into deep bowl!)
+      mDimpleGrad =
+        (2.0 * mDelta * mInvCoreR2 * mCoreDip) * 0.024 +
+        (2.0 * mDelta * mInvMidR2 * mMidDip) * 0.036 +
+        (2.0 * mDelta * mInvWideR2 * mWideDip) * 0.044;
+
+      // Taut radial silk gather pleats pulling into the deeply sunken marble collar
+      float mAng = atan(mDelta.y, mDelta.x + 0.00001);
+      float gatherRing =
+        smoothstep(0.0, uMarbleRadius * 0.72, mDist) *
+        exp(-pow((mDist - uMarbleRadius * 2.35) / max(0.030, uMarbleRadius * 1.85), 2.0));
+      float gatherWave =
+        sin(mAng * 8.0 + sin(mAng * 3.0) * 0.65) * 0.62 + cos(mAng * 13.0 - 0.5) * 0.38;
+      vec2 mTang = vec2(-mDelta.y, mDelta.x) / mDist;
+      gatherGrad = mTang * (gatherWave * gatherRing * mPress * 0.24);
+    }
 
     // 3. Smooth C-infinity depressed cloth furrow trailing behind the rolling marble
     float trailC;
@@ -702,18 +715,22 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     float sheen2 = charlieSheen(0.42, ndh2) * (0.10 + 0.30 * ndl2) * pow(1.0 - ndv, 1.65);
 
     // Sculptural concave bowl dipole: dark shadowed upper-left inner wall vs luminous lower-right inner bowl catchlight
-    vec2 lightDir2D = normalize(L1.xy);
-    vec2 mDir = mDelta / mDist;
-    float rimFacingLight = clamp(dot(mDir, -lightDir2D), 0.0, 1.0);
-    float wallAwayFromLight = clamp(dot(mDir, lightDir2D), 0.0, 1.0);
-    float pitRimRing =
-      exp(-pow((mDist - uMarbleRadius * 1.92) / max(0.026, uMarbleRadius * 1.38), 2.0)) * mPress;
-    float pitRimCatch =
-      pitRimRing * pow(max(0.0001, rimFacingLight), 1.25) * (0.58 + 0.42 * wrapDiff1);
-    float pitShadowWall =
-      exp(-pow((mDist - uMarbleRadius * 1.68) / max(0.028, uMarbleRadius * 1.48), 2.0)) *
-      pow(max(0.0001, wallAwayFromLight), 1.2) *
-      mPress;
+    float pitRimCatch = 0.0;
+    float pitShadowWall = 0.0;
+    if (uMarbleOpacity > 0.01) {
+      vec2 lightDir2D = normalize(L1.xy);
+      vec2 mDir = mDelta / mDist;
+      float rimFacingLight = clamp(dot(mDir, -lightDir2D), 0.0, 1.0);
+      float wallAwayFromLight = clamp(dot(mDir, lightDir2D), 0.0, 1.0);
+      float pitRimRing =
+        exp(-pow((mDist - uMarbleRadius * 1.92) / max(0.026, uMarbleRadius * 1.38), 2.0)) * mPress;
+      pitRimCatch =
+        pitRimRing * pow(max(0.0001, rimFacingLight), 1.25) * (0.58 + 0.42 * wrapDiff1);
+      pitShadowWall =
+        exp(-pow((mDist - uMarbleRadius * 1.68) / max(0.028, uMarbleRadius * 1.48), 2.0)) *
+        pow(max(0.0001, wallAwayFromLight), 1.2) *
+        mPress;
+    }
 
     float crest = clamp(vFoldCrest + fboHeight * 0.50, 0.0, 1.0);
     float clothAO = smoothstep(0.05, 0.86, crest);
@@ -731,69 +748,96 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     float dye2 = 0.5 + 0.5 * cos(dyeUv.x * 1.4 - dyeUv.y * 1.7 - vFoldHeight * 0.8 - tDye * 1.15);
     float dye3 = 0.5 + 0.5 * sin((dyeUv.x - dyeUv.y) * 1.5 + vFoldHeight * 1.1 + tDye * 0.85);
 
-    // TRUE OLED DARK ENVELOPE (deep gravity pit darkens into plush velvet shadow while lit concave lip catches satin sheen)
-    float oledFold = pow(
-      smoothstep(0.22, 0.94, crest * 0.68 + wrapDiff1 * 0.38 + rippleLuminance * 0.24 + pitRimCatch * 0.38),
-      1.85
-    );
-    float edgeDist = length((suv - 0.5) * vec2(1.06, 1.0));
-    float oledEdgeFade = 1.0 - smoothstep(0.52, 1.02, edgeDist) * 0.58;
-    float oledMask = oledFold * oledEdgeFade;
+    // Evaluate ONLY active variant(s) and theme(s) so stationary frames skip 75% of dead palette ALU
+    bool isTransitioningVariant = uVariantSweep < 1.99;
+    bool needLuxury = isTransitioningVariant || uNextVariant < 0.5;
+    bool needAurora = isTransitioningVariant || uNextVariant >= 0.5;
+    bool needDark = uThemeDark > 0.005;
+    bool needLight = uThemeDark < 0.995;
 
-    // PALETTE A — LUXURY COUTURE SILK
-    vec3 luxDarkAlbedo = mix(vec3(0.075, 0.068, 0.155), vec3(0.22, 0.18, 0.34), smoothstep(0.25, 0.85, dye2) * 0.65);
-    luxDarkAlbedo = mix(luxDarkAlbedo, vec3(0.46, 0.37, 0.25), smoothstep(0.45, 0.92, dye3) * 0.55);
+    float oledMask = 0.0;
+    if (needDark) {
+      float oledFold = pow(
+        smoothstep(0.22, 0.94, crest * 0.68 + wrapDiff1 * 0.38 + rippleLuminance * 0.24 + pitRimCatch * 0.38),
+        1.85
+      );
+      float edgeDist = length((suv - 0.5) * vec2(1.06, 1.0));
+      float oledEdgeFade = 1.0 - smoothstep(0.52, 1.02, edgeDist) * 0.58;
+      oledMask = oledFold * oledEdgeFade;
+    }
 
-    vec3 luxDark = luxDarkAlbedo * (wrapDiff1 * 0.82 + wrapDiff2 * 0.28) * oledMask;
-    float luxLightMask = smoothstep(0.05, 0.75, oledMask + rippleLuminance * 0.58 + pitRimCatch * 0.62);
-    luxDark += vec3(0.88, 0.76, 0.58) * (satinAniso1 * 0.54 + sheen1 * 0.26 + pitRimCatch * 0.32) * luxLightMask;
-    luxDark += vec3(0.85, 0.88, 0.96) * (satinAniso2 * 0.34 + sheen2 * 0.22 + rippleLuminance * 0.30) * luxLightMask;
+    vec3 colLuxury = vec3(0.0);
+    if (needLuxury) {
+      vec3 luxDark = vec3(0.0);
+      if (needDark) {
+        vec3 luxDarkAlbedo = mix(vec3(0.075, 0.068, 0.155), vec3(0.22, 0.18, 0.34), smoothstep(0.25, 0.85, dye2) * 0.65);
+        luxDarkAlbedo = mix(luxDarkAlbedo, vec3(0.46, 0.37, 0.25), smoothstep(0.45, 0.92, dye3) * 0.55);
+        luxDark = luxDarkAlbedo * (wrapDiff1 * 0.82 + wrapDiff2 * 0.28) * oledMask;
+        float luxLightMask = smoothstep(0.05, 0.75, oledMask + rippleLuminance * 0.58 + pitRimCatch * 0.62);
+        luxDark += vec3(0.88, 0.76, 0.58) * (satinAniso1 * 0.54 + sheen1 * 0.26 + pitRimCatch * 0.32) * luxLightMask;
+        luxDark += vec3(0.85, 0.88, 0.96) * (satinAniso2 * 0.34 + sheen2 * 0.22 + rippleLuminance * 0.30) * luxLightMask;
+      }
 
-    vec3 luxLightValley = vec3(0.62, 0.585, 0.545);
-    vec3 luxLightSilk = vec3(0.92, 0.905, 0.885);
-    luxLightSilk = mix(luxLightSilk, vec3(0.835, 0.815, 0.905), smoothstep(0.30, 0.86, dye2) * 0.42);
-    luxLightSilk = mix(luxLightSilk, vec3(0.935, 0.865, 0.765), smoothstep(0.38, 0.90, dye3) * 0.40);
-    vec3 luxLight = mix(luxLightValley, luxLightSilk, clothAO * (0.40 + 0.60 * wrapDiff1));
-    luxLight -= vec3(0.135, 0.128, 0.118) * max(-fboHeight, 0.0) * 0.88;
-    luxLight += vec3(0.98, 0.95, 0.90) * (satinAniso1 * 0.36 + sheen1 * 0.17 + pitRimCatch * 0.18);
-    luxLight += vec3(0.96, 0.97, 1.0) * (satinAniso2 * 0.20 + rippleLuminance * 0.24);
+      vec3 luxLight = vec3(0.0);
+      if (needLight) {
+        vec3 luxLightValley = vec3(0.62, 0.585, 0.545);
+        vec3 luxLightSilk = vec3(0.92, 0.905, 0.885);
+        luxLightSilk = mix(luxLightSilk, vec3(0.835, 0.815, 0.905), smoothstep(0.30, 0.86, dye2) * 0.42);
+        luxLightSilk = mix(luxLightSilk, vec3(0.935, 0.865, 0.765), smoothstep(0.38, 0.90, dye3) * 0.40);
+        luxLight = mix(luxLightValley, luxLightSilk, clothAO * (0.40 + 0.60 * wrapDiff1));
+        luxLight -= vec3(0.135, 0.128, 0.118) * max(-fboHeight, 0.0) * 0.88;
+        luxLight += vec3(0.98, 0.95, 0.90) * (satinAniso1 * 0.36 + sheen1 * 0.17 + pitRimCatch * 0.18);
+        luxLight += vec3(0.96, 0.97, 1.0) * (satinAniso2 * 0.20 + rippleLuminance * 0.24);
+      }
 
-    vec3 colLuxury = mix(luxLight, luxDark, uThemeDark);
+      colLuxury = mix(luxLight, luxDark, uThemeDark);
+    }
 
-    // PALETTE B — AURORA PRISM SILK
-    vec3 aurBase = mix(vec3(0.06, 0.28, 0.78), vec3(0.42, 0.16, 0.78), smoothstep(0.18, 0.84, dye2));
-    aurBase = mix(aurBase, vec3(0.82, 0.26, 0.38), smoothstep(0.40, 0.90, dye3) * 0.78);
-    aurBase = mix(aurBase, vec3(0.88, 0.64, 0.26), smoothstep(0.50, 0.94, dye1 * 0.65 + crest * 0.35) * 0.62);
+    vec3 colAurora = vec3(0.0);
+    if (needAurora) {
+      vec3 aurDark = vec3(0.0);
+      if (needDark) {
+        vec3 aurBase = mix(vec3(0.06, 0.28, 0.78), vec3(0.42, 0.16, 0.78), smoothstep(0.18, 0.84, dye2));
+        aurBase = mix(aurBase, vec3(0.82, 0.26, 0.38), smoothstep(0.40, 0.90, dye3) * 0.78);
+        aurBase = mix(aurBase, vec3(0.88, 0.64, 0.26), smoothstep(0.50, 0.94, dye1 * 0.65 + crest * 0.35) * 0.62);
+        aurDark = aurBase * (wrapDiff1 * 0.85 + wrapDiff2 * 0.28) * oledMask;
+        float aurLightMask = smoothstep(0.04, 0.74, oledMask + rippleLuminance * 0.62 + pitRimCatch * 0.66);
+        vec3 aurSpecTint = mix(vec3(0.56, 0.82, 1.0), vec3(1.0, 0.80, 0.58), dye3);
+        aurDark += aurSpecTint * (satinAniso1 * 0.56 + sheen1 * 0.28 + pitRimCatch * 0.34) * aurLightMask;
+        aurDark += mix(vec3(0.84, 0.64, 1.0), vec3(1.0, 0.74, 0.44), dye1) * (satinAniso2 * 0.36 + sheen2 * 0.24 + rippleLuminance * 0.32) * aurLightMask;
+      }
 
-    vec3 aurDark = aurBase * (wrapDiff1 * 0.85 + wrapDiff2 * 0.28) * oledMask;
-    float aurLightMask = smoothstep(0.04, 0.74, oledMask + rippleLuminance * 0.62 + pitRimCatch * 0.66);
-    vec3 aurSpecTint = mix(vec3(0.56, 0.82, 1.0), vec3(1.0, 0.80, 0.58), dye3);
-    aurDark += aurSpecTint * (satinAniso1 * 0.56 + sheen1 * 0.28 + pitRimCatch * 0.34) * aurLightMask;
-    aurDark += mix(vec3(0.84, 0.64, 1.0), vec3(1.0, 0.74, 0.44), dye1) * (satinAniso2 * 0.36 + sheen2 * 0.24 + rippleLuminance * 0.32) * aurLightMask;
+      vec3 aurLight = vec3(0.0);
+      if (needLight) {
+        vec3 aurLightValley = vec3(0.63, 0.62, 0.75);
+        vec3 aurLightSilk = vec3(0.955, 0.95, 0.975);
+        aurLightSilk = mix(aurLightSilk, vec3(0.56, 0.77, 0.97), smoothstep(0.22, 0.85, dye1) * 0.52);
+        aurLightSilk = mix(aurLightSilk, vec3(0.75, 0.63, 0.96), smoothstep(0.26, 0.88, dye2) * 0.48);
+        aurLightSilk = mix(aurLightSilk, vec3(0.97, 0.68, 0.64), smoothstep(0.42, 0.90, dye3) * 0.46);
+        aurLightSilk = mix(aurLightSilk, vec3(0.98, 0.87, 0.62), smoothstep(0.48, 0.92, crest * 0.6 + dye2 * 0.4) * 0.45);
+        aurLight = mix(aurLightValley, aurLightSilk, clothAO * (0.40 + 0.60 * wrapDiff1));
+        aurLight -= vec3(0.125, 0.120, 0.155) * max(-fboHeight, 0.0) * 0.84;
+        aurLight += vec3(1.0, 0.98, 0.96) * (satinAniso1 * 0.38 + sheen1 * 0.18 + pitRimCatch * 0.19);
+        aurLight += vec3(0.95, 0.96, 1.0) * (satinAniso2 * 0.20 + rippleLuminance * 0.25);
+      }
 
-    vec3 aurLightValley = vec3(0.63, 0.62, 0.75);
-    vec3 aurLightSilk = vec3(0.955, 0.95, 0.975);
-    aurLightSilk = mix(aurLightSilk, vec3(0.56, 0.77, 0.97), smoothstep(0.22, 0.85, dye1) * 0.52);
-    aurLightSilk = mix(aurLightSilk, vec3(0.75, 0.63, 0.96), smoothstep(0.26, 0.88, dye2) * 0.48);
-    aurLightSilk = mix(aurLightSilk, vec3(0.97, 0.68, 0.64), smoothstep(0.42, 0.90, dye3) * 0.46);
-    aurLightSilk = mix(aurLightSilk, vec3(0.98, 0.87, 0.62), smoothstep(0.48, 0.92, crest * 0.6 + dye2 * 0.4) * 0.45);
-    vec3 aurLight = mix(aurLightValley, aurLightSilk, clothAO * (0.40 + 0.60 * wrapDiff1));
-    aurLight -= vec3(0.125, 0.120, 0.155) * max(-fboHeight, 0.0) * 0.84;
-    aurLight += vec3(1.0, 0.98, 0.96) * (satinAniso1 * 0.38 + sheen1 * 0.18 + pitRimCatch * 0.19);
-    aurLight += vec3(0.95, 0.96, 1.0) * (satinAniso2 * 0.20 + rippleLuminance * 0.25);
-
-    vec3 colAurora = mix(aurLight, aurDark, uThemeDark);
+      colAurora = mix(aurLight, aurDark, uThemeDark);
+    }
 
     // BUTTON-ORIGINATED RADIAL SILK TRANSITION WAVE (Luxury <-> Aurora)
-    float distFromBtn = length((suv - uVariantOrigin) * aspectScale);
-    float waveFront = 1.0 - smoothstep(uVariantSweep - 0.26, uVariantSweep + 0.04, distFromBtn);
-    float activeAurora = mix(uPrevVariant, uNextVariant, waveFront);
-    vec3 col = mix(colLuxury, colAurora, activeAurora);
+    float activeAurora = uNextVariant;
+    vec3 col = needAurora && !needLuxury ? colAurora : colLuxury;
+    if (isTransitioningVariant) {
+      float distFromBtn = length((suv - uVariantOrigin) * aspectScale);
+      float waveFront = 1.0 - smoothstep(uVariantSweep - 0.26, uVariantSweep + 0.04, distFromBtn);
+      activeAurora = mix(uPrevVariant, uNextVariant, waveFront);
+      col = mix(colLuxury, colAurora, activeAurora);
 
-    float waveActive = smoothstep(0.01, 0.08, uVariantSweep) * (1.0 - smoothstep(1.38, 2.0, uVariantSweep));
-    float ringBand = exp(-pow((distFromBtn - uVariantSweep) / 0.062, 2.0)) * waveActive;
-    vec3 ringTint = mix(vec3(0.97, 0.94, 0.90), vec3(0.90, 0.82, 0.68), uThemeDark);
-    col += ringTint * ringBand * mix(0.25, 0.34, uThemeDark) * (0.40 + 0.60 * clothAO);
+      float waveActive = smoothstep(0.01, 0.08, uVariantSweep) * (1.0 - smoothstep(1.38, 2.0, uVariantSweep));
+      float ringBand = exp(-pow((distFromBtn - uVariantSweep) / 0.062, 2.0)) * waveActive;
+      vec3 ringTint = mix(vec3(0.97, 0.94, 0.90), vec3(0.90, 0.82, 0.68), uThemeDark);
+      col += ringTint * ringBand * mix(0.25, 0.34, uThemeDark) * (0.40 + 0.60 * clothAO);
+    }
 
     // DEEP GRAVITY CRADLE SHADOW + CONCAVE WALL OCCLUSION + CONTACT POCKET AO + FOCUSED GLASS CAUSTIC POOL
     if (uMarbleOpacity > 0.01) {
@@ -1063,8 +1107,8 @@ export function createLoginThreeController(
   }
 
   const isSoftwareGl = isSoftwareWebGLRenderer(renderer);
-  const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 1.5 : 1.75;
-  const backdropScale = isIosSafari ? 0.72 : 1.0;
+  const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 1.25 : 1.75;
+  const backdropScale = isIosSafari ? 0.56 : 1.0;
   const initialDpr = Math.min(window.devicePixelRatio || 1, maxDpr);
   renderer.setPixelRatio(initialDpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1079,11 +1123,12 @@ export function createLoginThreeController(
   const initialW = Math.max(2, canvas.clientWidth || window.innerWidth || 1280);
   const initialH = Math.max(2, canvas.clientHeight || window.innerHeight || 720);
   const getSimDims = (w: number, h: number) => {
-    const scale = isSoftwareGl ? 0.28 : isIosSafari ? 0.30 : 0.44;
-    const maxDim = isSoftwareGl ? 256 : isIosSafari ? 256 : 460;
+    const scale = isSoftwareGl ? 0.28 : isIosSafari ? 0.24 : 0.44;
+    const minDim = isIosSafari ? 128 : 192;
+    const maxDim = isSoftwareGl ? 256 : isIosSafari ? 192 : 460;
     return {
-      sw: clamp(Math.round(w * scale), 192, maxDim),
-      sh: clamp(Math.round(h * scale), 192, maxDim),
+      sw: clamp(Math.round(w * scale), minDim, maxDim),
+      sh: clamp(Math.round(h * scale), minDim, maxDim),
     };
   };
 
@@ -1169,7 +1214,7 @@ export function createLoginThreeController(
   const clothCam = new THREE.PerspectiveCamera(42, initialW / initialH, 0.1, 40);
   clothCam.position.set(0, 0, 7.6);
 
-  const meshSegs = isSoftwareGl ? 52 : isIosSafari ? 56 : 120;
+  const meshSegs = isSoftwareGl ? 52 : isIosSafari ? 40 : 120;
   const clothGeo = new THREE.PlaneGeometry(20.0, 18.0, meshSegs, meshSegs);
   const initVarNum = options.initialVariant === 'aurora' ? 1 : 0;
 
@@ -1406,7 +1451,9 @@ export function createLoginThreeController(
   let elapsed = 0;
   let lastNow = performance.now();
   const pacer = createAdaptivePacerState({
-    allowHighRefresh: !isSoftwareGl,
+    // Cap iOS WebKit ProMotion (120Hz) at a locked 60fps ceiling so async Metal
+    // command encoding never floods the GPU queue or starves touch input.
+    allowHighRefresh: !isSoftwareGl && !isIosSafari,
     now: lastNow,
   });
 
@@ -1772,7 +1819,8 @@ export function createLoginThreeController(
       if (marbleV > maxTrailV) maxTrailV = marbleV;
     }
 
-    const trailActive = maxAliveStrength > 0.004;
+    const needsMarblePass = !isExternalMarbleHidden && marbleOpacity > 0.01;
+    const trailActive = needsMarblePass && maxAliveStrength > 0.004;
     clothMat.uniforms.uTrailActive.value = trailActive ? 1.0 : 0.0;
     if (trailActive) {
       // Halo radius max is 0.044 * 2.1 * sqrt(16) ≈ 0.37 aspect-scaled; pad generously so zero seam clipping occurs
@@ -1787,7 +1835,14 @@ export function createLoginThreeController(
     }
 
     // --- PASS 1: Step 2D Wave Equation FBO (Fixed 60Hz Accumulator so 120fps visuals preserve exact wave speed) ---
-    if (useHalfFloat) {
+    if (!needsMarblePass) {
+      clothMat.uniforms.uUseFluidFbo.value = 0.0;
+      clothMat.uniforms.uAnalyticActive.value = 0.0;
+      fboStepAccum = 0;
+      pendingBurstStrength = 0;
+      queuedMarbleWaveStrength = 0;
+    } else if (useHalfFloat) {
+      clothMat.uniforms.uUseFluidFbo.value = 1.0;
       if (marbleWaveStrength > 0.001) {
         queuedMarbleWaveU = marbleU;
         queuedMarbleWaveV = marbleV;
@@ -1838,6 +1893,7 @@ export function createLoginThreeController(
         queuedMarbleWaveStrength = 0;
       }
     } else {
+      clothMat.uniforms.uUseFluidFbo.value = 0.0;
       const waveAgeStep = dt / 2.1;
       let anyAnalyticAlive = false;
       for (let i = 0; i < ANALYTIC_WAVE_COUNT; i += 1) {
@@ -1873,19 +1929,21 @@ export function createLoginThreeController(
     clothMesh.updateMatrixWorld();
 
     // Project exact marble screen position onto the 3D silk cloth plane for pixel-locked 3D vertex depression
-    invClothMat.copy(clothMesh.matrixWorld).invert();
-    const marbleNdcX = marbleU * 2.0 - 1.0;
-    const marbleNdcY = marbleV * 2.0 - 1.0;
     let clothRadius = 0.36;
-    if (projectNdcToClothLocal(marbleNdcX, marbleNdcY, clothHitCenter)) {
-      lastClothHitX = clothHitCenter.x;
-      lastClothHitY = clothHitCenter.y;
-      if (projectNdcToClothLocal(marbleNdcX, marbleNdcY + marbleR * 2.0, clothHitRim)) {
-        clothRadius = clamp(clothHitCenter.distanceTo(clothHitRim), 0.18, 0.95);
+    if (needsMarblePass) {
+      invClothMat.copy(clothMesh.matrixWorld).invert();
+      const marbleNdcX = marbleU * 2.0 - 1.0;
+      const marbleNdcY = marbleV * 2.0 - 1.0;
+      if (projectNdcToClothLocal(marbleNdcX, marbleNdcY, clothHitCenter)) {
+        lastClothHitX = clothHitCenter.x;
+        lastClothHitY = clothHitCenter.y;
+        if (projectNdcToClothLocal(marbleNdcX, marbleNdcY + marbleR * 2.0, clothHitRim)) {
+          clothRadius = clamp(clothHitCenter.distanceTo(clothHitRim), 0.18, 0.95);
+        }
       }
     }
 
-    const effectiveSink = marbleSink * marbleOpacity;
+    const effectiveSink = needsMarblePass ? marbleSink * marbleOpacity : 0;
     clothMat.uniforms.uFluidTex.value = simRead.texture;
     clothMat.uniforms.uTime.value = elapsed;
     clothMat.uniforms.uThemeDark.value = currentThemeDark;
@@ -1894,13 +1952,12 @@ export function createLoginThreeController(
     clothMat.uniforms.uVariantSweep.value = variantSweep;
     (clothMat.uniforms.uPointer.value as THREE.Vector2).set(smoothPtrX, smoothPtrY);
     (clothMat.uniforms.uMarbleUv.value as THREE.Vector2).set(marbleU, marbleV);
-    clothMat.uniforms.uMarbleOpacity.value = marbleOpacity;
+    clothMat.uniforms.uMarbleOpacity.value = needsMarblePass ? marbleOpacity : 0;
     (clothMat.uniforms.uMarbleClothPos.value as THREE.Vector2).set(lastClothHitX, lastClothHitY);
     clothMat.uniforms.uMarbleClothRadius.value = clothRadius;
     clothMat.uniforms.uMarbleSink.value = effectiveSink;
     (clothMat.uniforms.uMarbleVel.value as THREE.Vector2).set(marbleVx, marbleVy);
 
-    const needsMarblePass = !isExternalMarbleHidden && marbleOpacity > 0.01;
     if (needsMarblePass) {
       // Hero / Login: render silk into offscreen backdropRT so glass marble refracts it cleanly
       renderer.setRenderTarget(backdropRT);

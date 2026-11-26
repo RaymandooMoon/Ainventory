@@ -775,6 +775,28 @@ export class AinvtryStageDirector {
     }
   }
 
+  /**
+   * Disposes and removes all registered 3D stage modules except `keepStage`
+   * (defaults to `this.activeStage`). Used on iOS WebKit to keep GPU/Canvas
+   * memory strictly bounded to a single active 3D stage and prevent Jetsam kills.
+   */
+  public disposeInactiveStages(keepStage: StageId = this.activeStage): void {
+    const toRemove: ActiveStageId[] = [];
+    this.stages.forEach((stage, id) => {
+      if (id !== keepStage) {
+        toRemove.push(id);
+      }
+    });
+    for (const id of toRemove) {
+      const stage = this.stages.get(id);
+      if (!stage) continue;
+      stage.group.visible = false;
+      this.ctx.scene.remove(stage.group);
+      stage.dispose();
+      this.stages.delete(id);
+    }
+  }
+
   public dispose(): void {
     this.stages.forEach((stage) => {
       stage.dispose();
