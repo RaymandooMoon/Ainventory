@@ -366,11 +366,11 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
               saggingFit && slotKey === 'bottom'
                 ? isEn
                   ? 'BOTTOM · SAGGING'
-                  : 'BOTTOM · 새깅 핏'
+                  : '하의 · 새깅 핏'
                 : saggingFit && slotKey === 'underwear'
                   ? isEn
                     ? 'UNDERWEAR · BAND'
-                    : 'UNDERWEAR · 밴드 노출'
+                    : '언더웨어 · 밴드 노출'
                   : baseSlotBadge;
             const allowStorePhoto = Boolean(
               garment.image_url &&

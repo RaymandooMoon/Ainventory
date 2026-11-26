@@ -472,7 +472,7 @@ export default function CalendarLookbookGrid({
                   ) : (
                     <div className="cal-ed-week-empty-frame">
                       <Plus size={18} strokeWidth={1.8} />
-                      <span>{tx(lang, 'OOTD 배정', 'Assign OOTD')}</span>
+                      <span>{tx(lang, 'OOTD 기록', 'Assign OOTD')}</span>
                     </div>
                   )}
                 </div>

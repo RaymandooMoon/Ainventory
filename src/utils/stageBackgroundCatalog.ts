@@ -273,7 +273,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     tier: 'S',
     nameKo: '파리 오트 쿠튀르 살롱',
     nameEn: 'Grand Paris Atelier',
-    subtitleKo: '유리 천창 아케이드 & 헤링본 마블 런웨이',
+    subtitleKo: '유리 천창 아케이드 & 헤링본 원목 런웨이',
     subtitleEn: 'Skylight Limestone Arcade & Parquet Runway',
     imageUrl: '/assets/backgrounds/s_grand_paris_atelier.jpg',
     floorToneLight: 'rgba(214, 198, 174, 0.28)',
@@ -581,7 +581,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
         { id: 'seongsu_m2', kind: 'spot', xPct: 43.1, yPct: 28.1, radiusPct: 5.2, intensity: 0.82, washSpanPct: 18, tiltDeg: 0 },
         { id: 'seongsu_m3', kind: 'spot', xPct: 59.9, yPct: 28.1, radiusPct: 4.8, intensity: 0.76, washSpanPct: 16, tiltDeg: -4 },
       ],
-      rigNoteKo: '낮 통유리 커튼월 주광 · 일몰 후 2900K 오팔 글로브 펜던트 & 월 스콘스 점등',
+      rigNoteKo: '낮 통유리 커튼월 주광 · 일몰 후 2900K 오팔 글로브 펜던트 & 벽등 점등',
       rigNoteEn: 'Daytime curtain-wall sunlight · Post-sunset 2900K opal globe pendants & wall sconce',
     },
   },
@@ -627,7 +627,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
         { id: 'loft_sc_br', kind: 'sconce', shadeOptics: 'linen-sconce', xPct: 75.78, yPct: 42.65, radiusPct: 4.8, intensity: 1.04, washSpanPct: 12.5, shadeWidthPct: 2.4, shadeHeightPct: 2.45 },
         { id: 'loft_sc_fr', kind: 'sconce', shadeOptics: 'linen-sconce', xPct: 89.62, yPct: 38.0, radiusPct: 6.0, intensity: 1.0, washSpanPct: 15, shadeWidthPct: 3.55, shadeHeightPct: 3.25 },
       ],
-      rigNoteKo: '낮 아치 격자창 고보 햇빛 · 일몰 후 2700K 월 스콘스 점등',
+      rigNoteKo: '낮 아치 격자창 햇빛 · 일몰 후 2700K 벽등 점등',
       rigNoteEn: 'Daytime arched window grid sun · Post-sunset 2700K wall sconce',
     },
   },
@@ -686,7 +686,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
         { id: 'plaster_floor_lantern', kind: 'sconce', shadeOptics: 'linen-sconce', xPct: 75.2, yPct: 48.2, radiusPct: 8.0, intensity: 1.02, washSpanPct: 18, shadeWidthPct: 5.0, shadeHeightPct: 5.8 },
         { id: 'plaster_cove_main', kind: 'cove-strip', xPct: 23.6, yPct: 27.1, x2Pct: 86.4, y2Pct: 27.1, radiusPct: 7.5, intensity: 0.96, washSpanPct: 16 },
       ],
-      rigNoteKo: '낮 쉬어 커튼 채광 · 일몰 후 2700K 한지 돔 펜던트 · 스탠드 랜턴 · 코브등 점등',
+      rigNoteKo: '낮 시어 커튼 채광 · 일몰 후 2700K 한지 돔 펜던트 · 스탠드 랜턴 · 간접등 점등',
       rigNoteEn: 'Daytime sheer-curtain sun · Post-sunset 2700K dome pendant, floor lantern & cove',
     },
   },
@@ -724,7 +724,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
         { id: 'gallery_rail_l', kind: 'cove-strip', xPct: 25.3, yPct: 0.5, x2Pct: 44.4, y2Pct: 38.2, radiusPct: 5.5, intensity: 0.92, washSpanPct: 14 },
         { id: 'gallery_rail_r', kind: 'cove-strip', xPct: 74.1, yPct: 0.5, x2Pct: 55.9, y2Pct: 38.2, radiusPct: 5.5, intensity: 0.92, washSpanPct: 14 },
       ],
-      rigNoteKo: '낮 하이 클리어스토리 채광 · 일몰 후 3200K 픽처 라이트 바 & 콘크리트 월워셔 점등',
+      rigNoteKo: '낮 상부 고측창 채광 · 일몰 후 3200K 픽처 라이트 바 & 벽면 간접조명 점등',
       rigNoteEn: 'Daytime clerestory slash · Post-sunset 3200K picture light bars & wall washers',
     },
   },
@@ -763,7 +763,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
         { id: 'oak_niche_l', kind: 'cove-strip', xPct: 35.6, yPct: 38.5, x2Pct: 35.6, y2Pct: 63.5, radiusPct: 4.8, intensity: 0.88, washSpanPct: 10 },
         { id: 'oak_niche_r', kind: 'cove-strip', xPct: 64.2, yPct: 38.5, x2Pct: 64.2, y2Pct: 63.5, radiusPct: 4.8, intensity: 0.88, washSpanPct: 10 },
       ],
-      rigNoteKo: '무창 프라이빗 드레싱 룸 · 브러시드 브라스 글라스 스콘스 & 루버 간접 코브등',
+      rigNoteKo: '창문 없는 프라이빗 드레싱 룸 · 브러시드 브라스 벽등 & 루버 간접조명',
       rigNoteEn: 'Windowless dressing room · Brushed-brass glass sconces & indirect louver cove',
     },
   },
@@ -1176,6 +1176,7 @@ export function saveStoredEconomyState(state: StageEconomyState): StageEconomySt
 }
 
 export const DEMO_CYBERPUNK_STAGE_BACKGROUND_ID = 's_cyber_megacity_plaza';
+export const DEMO_CYBERPUNK_LIGHTING_INTENSITY = 50;
 
 export const DEMO_CYBERPUNK_UNLOCKED_IDS = [
   's_cyber_megacity_plaza',
@@ -1196,6 +1197,7 @@ export function createDemoCyberpunkEconomyState(
     unlockedIds: mergedUnlocked,
     equippedBackgroundId: DEMO_CYBERPUNK_STAGE_BACKGROUND_ID,
     lightingPreset: 'auto',
+    lightingIntensity: DEMO_CYBERPUNK_LIGHTING_INTENSITY,
   });
 }
 

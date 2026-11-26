@@ -183,7 +183,7 @@ export const LIGHTING_CALIBRATION_MODES: ReadonlyArray<{
     key: 'indoor_warm_fix',
     labelKo: '실내 노란 조명 보정',
     labelEn: 'Warm Indoor Lamp Fix',
-    shortKo: '노란조명 보정',
+    shortKo: '노란 조명 보정',
     shortEn: 'Warm Lamp Fix',
     gains: { r: 0.93, g: 0.99, b: 1.09, autoGreyWorld: false },
   },

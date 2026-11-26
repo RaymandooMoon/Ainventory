@@ -418,7 +418,7 @@ export function PrimaryBodyAtelierSliders({
         variant="editorial"
         sliderKey="heightCm"
         label={tx(lang, '신장 (cm)', 'Height (cm)')}
-        ariaLabel={tx(lang, '신장 cm', 'Height cm')}
+        ariaLabel={tx(lang, '신장 (cm)', 'Height cm')}
         min={140}
         max={200}
         step={1}
@@ -442,7 +442,7 @@ export function PrimaryBodyAtelierSliders({
       <BufferedAtelierSlider
         variant="editorial"
         sliderKey="bodyVolumePct"
-        label={tx(lang, '체형 슬라이더', 'Body Volume')}
+        label={tx(lang, '체형 볼륨', 'Body Volume')}
         ariaLabel={tx(lang, '체형 볼륨 %', 'Body Volume %')}
         min={0}
         max={100}
@@ -1099,7 +1099,7 @@ export function InclusiveBodyMorphControls({
       <div className="avatar-studio-card">
         <div className="avatar-studio-card-head">
           <span className="avatar-studio-card-title">
-            {tx(lang, '베이스 골격 프레임', 'Inclusive Base Frame')}
+            {tx(lang, '기본 체형 프레임', 'Inclusive Base Frame')}
           </span>
         </div>
         <div
@@ -1192,13 +1192,13 @@ export function InclusiveBodyMorphControls({
       <div className="avatar-studio-card">
         <div className="avatar-studio-card-head">
           <span className="avatar-studio-card-title">
-            {tx(lang, '체형 아키타입 프리셋', 'Body Archetype Presets')}
+            {tx(lang, '체형 유형 프리셋', 'Body Archetype Presets')}
           </span>
         </div>
         <div
           className="avatar-archetype-grid"
           role="group"
-          aria-label={tx(lang, '체형 아키타입 선택', 'Body Archetype Selection')}
+          aria-label={tx(lang, '체형 유형 선택', 'Body Archetype Selection')}
         >
           {AVATAR_ARCHETYPE_OPTIONS.map((opt) => {
             const active = draftSpec.archetypePreset === opt.key;
@@ -1329,14 +1329,14 @@ export function InclusiveBodyMorphControls({
             <span className="avatar-bmi-couple-title">
               {tx(
                 lang,
-                '체중·BMI 연동 얼굴·손·발 자동 모핑',
+                '체중·BMI 연동 얼굴·손·발 자동 보정',
                 'BMI-Coupled Face, Neck, Hands & Feet Morph'
               )}
             </span>
             <span className="avatar-studio-hint">
               {tx(
                 lang,
-                '체중 변화에 맞춰 볼·턱선·목·손목·발목 연부조직을 자연스럽게 연동합니다',
+                '체중 변화에 맞춰 볼·턱선·목·손목·발목의 볼륨을 자연스럽게 반영합니다',
                 'Naturally couples cheek, jawline, neck, wrist, hand, ankle, and instep volume with BMI'
               )}
             </span>
@@ -1347,7 +1347,7 @@ export function InclusiveBodyMorphControls({
             aria-checked={soft.autoCoupleWithBmi}
             aria-label={tx(
               lang,
-              '체중·BMI 연동 얼굴·손·발 자동 모핑',
+              '체중·BMI 연동 얼굴·손·발 자동 보정',
               'BMI-Coupled Face, Neck, Hands & Feet Morph'
             )}
             data-bmi-couple-toggle="true"

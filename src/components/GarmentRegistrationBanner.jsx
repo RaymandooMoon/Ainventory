@@ -57,23 +57,23 @@ export function CompactPreviewBar({
       return tx(lang, '공식 상품 이미지 적용됨', 'Official product photo applied');
     }
     if (isStudioBusy || currentStatus === 'processing_studio') {
-      return tx(lang, 'AI 스튜디오 누끼 정제 중...', 'Refining with AI Studio...');
+      return tx(lang, 'AI 스튜디오 배경 제거 보정 중...', 'Refining with AI Studio...');
     }
     if (isLocalWorking) {
       return isFront
-        ? tx(lang, '앞면 누끼 백그라운드 처리 중...', 'Cutting out front in background...')
-        : tx(lang, '뒷면 누끼 백그라운드 처리 중...', 'Cutting out back in background...');
+        ? tx(lang, '앞면 배경 제거 처리 중...', 'Cutting out front in background...')
+        : tx(lang, '뒷면 배경 제거 처리 중...', 'Cutting out back in background...');
     }
     if (currentStatus === 'ready_studio') {
-      return tx(lang, 'AI 스튜디오 누끼 완료', 'AI Studio cutout ready');
+      return tx(lang, 'AI 스튜디오 배경 제거 완료', 'AI Studio cutout ready');
     }
     if (currentNeedsStudio) {
       return tx(lang, '배경 복잡 · AI 스튜디오 보정 권장', 'Complex background · AI Studio recommended');
     }
     if (currentCutout) {
       return cutoutStatusBack === 'processing_local' && isFront
-        ? tx(lang, '앞면 누끼 완료 · 뒷면 정리 중...', 'Front ready · cutting back...')
-        : tx(lang, '누끼 완료', 'Cutout ready');
+        ? tx(lang, '앞면 배경 제거 완료 · 뒷면 정리 중...', 'Front ready · cutting back...')
+        : tx(lang, '배경 제거 완료', 'Cutout ready');
     }
     return tx(lang, '원본 미리보기', 'Original preview');
   })();
@@ -158,10 +158,10 @@ export function CompactPreviewBar({
               type="button"
               className={`hig-reg-mini-btn ${showOriginal ? 'active' : ''}`}
               onClick={onToggleOriginal}
-              title={tx(lang, '원본과 누끼 비교', 'Compare original and cutout')}
+              title={tx(lang, '원본과 배경 제거 비교', 'Compare original and cutout')}
             >
               <Eye size={13} />
-              <span>{showOriginal ? tx(lang, '누끼 보기', 'Cutout') : tx(lang, '원본 비교', 'Original')}</span>
+              <span>{showOriginal ? tx(lang, '배경 제거 보기', 'Cutout') : tx(lang, '원본 비교', 'Original')}</span>
             </button>
           )}
 
@@ -289,7 +289,7 @@ export function OfficialProductProposalCard({
             <p className="hig-web-match-note">
               {tx(
                 lang,
-                '공식몰 정책으로 이미지는 직접 가져올 수 없어요. 정보만 적용하거나 내 사진에 AI 스튜디오 보정을 써보세요.',
+                '공식몰 정책으로 이미지는 직접 가져올 수 없어요. 정보만 적용하거나 내 사진에 AI 스튜디오 보정을 써 보세요.',
                 'Official store blocks direct image fetch. Apply specs or use AI Studio Cutout on your photo.'
               )}
             </p>
@@ -342,7 +342,7 @@ export function OfficialProductProposalCard({
             onClick={onOpenSyncModal}
           >
             <Sparkles size={13} />
-            <span>{tx(lang, '정보 동기화 모달', 'Review & Sync')}</span>
+            <span>{tx(lang, '정보 확인 및 동기화', 'Review & Sync')}</span>
           </button>
         )}
 

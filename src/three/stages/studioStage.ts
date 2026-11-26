@@ -49,7 +49,14 @@ import {
   createChampagneGoldMaterial,
   createSmokedGlassMaterial,
   disposeObject3D,
+  isSoftwareGlGlassFallback,
 } from './stageMaterials.ts';
+import {
+  applyMegascansPbrToMaterial,
+  createMegascansSession,
+  ensureGeometryUv1ForAo,
+  type MegascansLoadedSlot,
+} from '../megascans/megascansMaterialLoader.ts';
 import { SpringBoneSolver } from './springBoneSolver.ts';
 
 /* ==========================================================================
@@ -1975,6 +1982,89 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   };
 
   /* ------------------------------------------------------------------------
+   * Silent Drop-In Quixel Megascans PBR Upgrades (showroom-pedestal + atelier-fabric)
+   * ------------------------------------------------------------------------ */
+
+  const megascansSession = createMegascansSession({
+    isSoftwareGl: isSoftwareGlGlassFallback(),
+  });
+  let loadedAtelierFabric: MegascansLoadedSlot | null = null;
+
+  const ensureTreeUv1 = (rootObj: THREE.Object3D | null): void => {
+    if (!rootObj) return;
+    rootObj.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh && mesh.geometry) {
+        ensureGeometryUv1ForAo(mesh.geometry);
+      }
+    });
+  };
+
+  const applyAtelierFabricUpgrade = (loaded: MegascansLoadedSlot): void => {
+    if (disposed) return;
+    const baseOpts = {
+      slotId: 'atelier-fabric' as const,
+      repeat: loaded.entry.repeat,
+      normalStrength: loaded.entry.normalStrength,
+      normalConvention: loaded.entry.normalConvention,
+      preserveOriginalAlbedo: true,
+      aoMapIntensity: loaded.entry.aoMapIntensity,
+      keepScalarRoughness: true,
+      keepScalarMetalness: true,
+    };
+
+    ensureTreeUv1(dressForm.group);
+    applyMegascansPbrToMaterial(dressForm.torsoMat, loaded.textures, baseOpts);
+
+    const glbFabricOpts = {
+      ...baseOpts,
+      preserveExistingNormalMap: true,
+    };
+
+    if (coutureCoat.isLoaded) {
+      ensureTreeUv1(coutureCoat.loadedModel);
+      for (const mat of coutureCoat.fabricMaterials) {
+        applyMegascansPbrToMaterial(mat, loaded.textures, glbFabricOpts);
+      }
+    }
+
+    if (avatar.isLoaded) {
+      ensureTreeUv1(avatar.loadedModel);
+      for (const mat of avatar.calibratedMaterials) {
+        if ((mat.name || '').toLowerCase().includes('f020_body')) {
+          applyMegascansPbrToMaterial(mat, loaded.textures, glbFabricOpts);
+        }
+      }
+    }
+  };
+
+  if (canFetchInBrowser && !isSoftwareGlGlassFallback()) {
+    void megascansSession.loadSlot('showroom-pedestal').then((loaded) => {
+      if (disposed || !loaded) return;
+      ensureTreeUv1(pedestal.group);
+      ensureTreeUv1(dressForm.group);
+      const pedestalOpts = {
+        slotId: 'showroom-pedestal' as const,
+        repeat: loaded.entry.repeat,
+        normalStrength: loaded.entry.normalStrength,
+        normalConvention: loaded.entry.normalConvention,
+        preserveOriginalAlbedo: loaded.entry.preserveOriginalAlbedo,
+        aoMapIntensity: loaded.entry.aoMapIntensity,
+        keepScalarRoughness: true,
+        keepScalarMetalness: true,
+      };
+      applyMegascansPbrToMaterial(pedestal.baseCoreMat, loaded.textures, pedestalOpts);
+      applyMegascansPbrToMaterial(dressForm.plinthInlayMat, loaded.textures, pedestalOpts);
+    });
+
+    void megascansSession.loadSlot('atelier-fabric').then((loaded) => {
+      if (disposed || !loaded) return;
+      loadedAtelierFabric = loaded;
+      applyAtelierFabricUpgrade(loaded);
+    });
+  }
+
+  /* ------------------------------------------------------------------------
    * Model Loading & Zero-Blank-Frame Visibility Resolution
    * ------------------------------------------------------------------------ */
 
@@ -1999,6 +2089,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
             return;
           }
           prepareCoutureCoatModel(gltf, coutureCoat, currentReducedMotion);
+          if (loadedAtelierFabric) {
+            applyAtelierFabricUpgrade(loadedAtelierFabric);
+          }
           syncCoutureCoatMaterials();
           syncActiveModelVisibility();
           options?.onModelLoaded?.();
@@ -2033,6 +2126,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
             return;
           }
           prepareFashionAvatarModel(gltf, avatar, currentPose, currentReducedMotion);
+          if (loadedAtelierFabric) {
+            applyAtelierFabricUpgrade(loadedAtelierFabric);
+          }
           syncAvatarMaterials();
           syncActiveModelVisibility();
           options?.onModelLoaded?.();
@@ -3011,7 +3107,10 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     dispose(): void {
       disposed = true;
       latestEmitUiSync = null;
+      loadedAtelierFabric = null;
       loadAbortController?.abort();
+      megascansSession.dispose();
+      woolBumpTex.dispose();
 
       if (avatar.mixer) {
         avatar.mixer.stopAllAction();

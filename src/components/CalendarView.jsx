@@ -137,7 +137,7 @@ export default function CalendarView({
       showToast?.(
         tx(
           lang,
-          `30일 연속 출석 달성! +${res.totalAwardedI} i (기본 ${res.dailyRewardI} + 한달 보너스 ${res.streak30BonusI})`,
+          `30일 연속 출석 달성! +${res.totalAwardedI} i (기본 ${res.dailyRewardI} + 한 달 보너스 ${res.streak30BonusI})`,
           `30-Day Streak! +${res.totalAwardedI} i awarded`
         )
       );

@@ -2581,7 +2581,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
           notificationPopup: {
             code: 'QC_FRONT_ONLY_FALLBACK',
             durationMs: 3000,
-            messageKo: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+            messageKo: '일시적인 통신 오류로 정면 모습만 표시됩니다.',
             messageEn: 'Due to a temporary connection issue, only the front view is shown.',
           },
           compositeImageUrl: buildFrontOnlyDegradedPortrait(),
@@ -2635,7 +2635,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       )
       .toEqual({
         sawToast: true,
-        toastText: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+        toastText: '일시적인 통신 오류로 정면 모습만 표시됩니다.',
       });
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
     await expect(studioCanvas.locator('[data-angle-scroll-dock="true"]')).toHaveAttribute(

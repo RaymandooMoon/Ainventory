@@ -103,7 +103,7 @@ export default function GoogleSignInFallbackModal({
           <button
             type="button"
             className="atelier-modal-close-btn"
-            aria-label={isEn ? 'Close modal' : '모달 닫기'}
+            aria-label={isEn ? 'Close modal' : '창 닫기'}
             onClick={onClose}
           >
             <X size={18} />
@@ -113,7 +113,7 @@ export default function GoogleSignInFallbackModal({
         <p id="google-fallback-desc" className="atelier-modal-desc">
           {isEn
             ? 'Google Sign-In is not connected to this static demo build. You can immediately experience all 3D VTON, capsule wardrobe, and AI styling features using the Sample Closet or continue with your email account.'
-            : '현재 정적 데모 배포본(GitHub Pages)에는 Google OAuth 클라이언트 ID가 아직 연결되지 않았습니다. 샘플 옷장 체험을 통해 3D 가상 피팅과 캡슐 워드로브의 모든 기능을 즉시 둘러보시거나, 이메일 계정으로 로그인해 주세요.'}
+            : '현재 데모 버전에서는 Google 로그인이 아직 지원되지 않습니다. 샘플 옷장 체험으로 3D 가상 피팅과 캡슐 옷장의 모든 기능을 바로 둘러보시거나, 이메일 계정으로 로그인해 주세요.'}
         </p>
 
         <div className="atelier-modal-actions">

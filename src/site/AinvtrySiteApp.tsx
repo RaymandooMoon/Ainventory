@@ -624,7 +624,7 @@ export default function AinvtrySiteApp() {
                 data-marble-target="true"
                 data-marble-action="click"
                 onClick={handleToggleTheme}
-                aria-label={lang === 'en' ? 'Toggle theme' : '라이트 다크 모드 전환'}
+                aria-label={lang === 'en' ? 'Toggle theme' : '라이트/다크 모드 전환'}
               >
                 {theme === 'dark' ? (
                   <Sun size={13} aria-hidden="true" />

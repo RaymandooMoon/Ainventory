@@ -72,6 +72,7 @@ import {
   createAntiGravityState,
   syncAntiGravityExternalPause,
 } from './services/antiGravityMotion.ts';
+import { canAccessAdminMegascansLab } from './three/megascans/megascansCatalog.ts';
 
 const LoginView = lazy(() => import('./components/LoginView.jsx'));
 const WardrobeView = lazy(() => import('./components/WardrobeView.jsx'));
@@ -82,6 +83,7 @@ const StatsView = lazy(() => import('./components/StatsView.jsx'));
 const SkinToneAnalysisModal = lazy(() => import('./components/SkinToneAnalysisModal.jsx'));
 const AccountSettingsSheet = lazy(() => import('./components/AccountSettingsSheet.jsx'));
 const AdminManagementView = lazy(() => import('./components/AdminManagementView.jsx'));
+const AdminMegascansLabModal = lazy(() => import('./components/three/AdminMegascansLabModal.tsx'));
 
 const DEFAULT_LOCAL_USER = {
   id: 0,
@@ -170,6 +172,7 @@ export default function App() {
   const [profileModalTab, setProfileModalTab] = useState('skin');
 
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
+  const [megascansLabOpen, setMegascansLabOpen] = useState(false);
   const [sampleImportOpen, setSampleImportOpen] = useState(false);
   const [permissionDeniedDetail, setPermissionDeniedDetail] = useState(null);
 
@@ -453,7 +456,7 @@ export default function App() {
           const activeLang = langRef.current;
           showToast(
             localizeApiMessage(err?.message, activeLang) ||
-              tx(activeLang, '인벤토리를 불러오지 못했습니다.', 'Failed to load wardrobe.')
+              tx(activeLang, '옷장을 불러오지 못했습니다.', 'Failed to load wardrobe.')
           );
         }
       })
@@ -626,7 +629,7 @@ export default function App() {
       showToast(
         isSiteDemoUser(user)
           ? tx(lang, '체형 미리보기 적용됨 (데모 전용)', 'Body profile preview applied (Demo)')
-          : tx(lang, '체형 반영됨', 'Body profile applied')
+          : tx(lang, '체형 적용됨', 'Body profile applied')
       );
     },
     [user, bodySpec, skinProfile, lang, showToast]
@@ -1003,6 +1006,7 @@ export default function App() {
     selectedItemId !== null ||
       profileModalOpen ||
       accountSheetOpen ||
+      megascansLabOpen ||
       sampleImportOpen ||
       permissionDeniedDetail !== null
   );
@@ -1086,6 +1090,7 @@ export default function App() {
   const handleLogout = useCallback(async () => {
     clearPortalTimers();
     setLoginPortal(null);
+    setMegascansLabOpen(false);
     try {
       if (!user?.isSampleDemo) {
         await apiFetch('/auth/logout', { method: 'POST' });
@@ -1105,6 +1110,7 @@ export default function App() {
   const handleAccountDeleted = useCallback(() => {
     garmentsMutationSeqRef.current += 1;
     setAccountSheetOpen(false);
+    setMegascansLabOpen(false);
     setStoredToken(null);
     setSampleDemoMode(false);
     setUser(null);
@@ -1184,6 +1190,18 @@ export default function App() {
     setAccountSheetOpen(false);
     navigateTab('admin');
   }, [navigateTab]);
+
+  const canOpenMegascansLab = canAccessAdminMegascansLab(user);
+
+  const handleOpenMegascansLab = useCallback(() => {
+    if (!canAccessAdminMegascansLab(user)) return;
+    setAccountSheetOpen(false);
+    setMegascansLabOpen(true);
+  }, [user]);
+
+  const handleCloseMegascansLab = useCallback(() => {
+    setMegascansLabOpen(false);
+  }, []);
 
   const handleSelfPermissionsChanged = useCallback((nextPermissions) => {
     if (!Array.isArray(nextPermissions)) return;
@@ -1435,8 +1453,21 @@ export default function App() {
             onOpenProfile={handleOpenProfileModal}
             onOpenSampleImport={handleOpenSampleImport}
             onOpenAdminPage={handleOpenAdminPage}
+            onOpenMegascansLab={canOpenMegascansLab ? handleOpenMegascansLab : undefined}
             onLogout={handleLogout}
             onAccountDeleted={handleAccountDeleted}
+          />
+        </Suspense>
+      )}
+
+      {megascansLabOpen && canOpenMegascansLab && (
+        <Suspense fallback={null}>
+          <AdminMegascansLabModal
+            open={megascansLabOpen}
+            onClose={handleCloseMegascansLab}
+            user={user}
+            theme={resolvedTheme}
+            lang={lang}
           />
         </Suspense>
       )}

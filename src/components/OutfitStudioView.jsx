@@ -76,6 +76,8 @@ import {
   shouldShowTomorrowOutfitPrompt,
 } from '../utils/tomorrowPromptPolicy.ts';
 import {
+  DEFAULT_LIGHTING_INTENSITY,
+  DEMO_CYBERPUNK_LIGHTING_INTENSITY,
   ECONOMY_STATE_EVENT,
   createDemoCyberpunkEconomyState,
   equipStageBackground,
@@ -523,7 +525,7 @@ function resolveInspectorMaterialLabel(rawFabric, lang) {
   if (/poplin|포플린/.test(s)) return isEn ? 'Cotton Poplin' : '포플린 코튼';
   if (/oxford|옥스포드/.test(s)) return isEn ? 'Oxford Cotton' : '옥스포드 코튼';
   if (/denim|selvedge|데님|셀비지/.test(s)) return isEn ? 'Denim' : '데님';
-  if (/linen|리넨|린넨/.test(s)) return isEn ? 'Linen' : '리넨';
+  if (/linen|리넨|린넨/.test(s)) return isEn ? 'Linen' : '린넨';
   if (/merino|메리노/.test(s)) return isEn ? 'Merino Wool' : '메리노 울';
   if (/cashmere|캐시미어/.test(s)) return isEn ? 'Cashmere' : '캐시미어';
   if (/goose|down|구스|다운/.test(s)) return isEn ? 'Goose Down' : '구스다운';
@@ -566,7 +568,7 @@ function resolveGarmentInspectorSpecs(item, lang) {
   const rawColor = String(item?.color_name ?? '').trim();
   const colorLabel = rawColor
     ? sanitizeZeroHangulEn(localizeColorName(rawColor, lang), lang, 'Neutral')
-    : tx(lang, '모노톤', 'Neutral');
+    : tx(lang, '뉴트럴', 'Neutral');
   const materialLabel = resolveInspectorMaterialLabel(item?.fabric, lang);
   const seasonLabel = resolveInspectorSeasonLabel(item?.seasons, lang);
 
@@ -713,7 +715,9 @@ function buildInitialStudioSlots(garments, preEquippedGarment, preferDemoShowcas
     wearableList.find(
       (g) =>
         doesGarmentMatchSubSlot(g, slotKey) &&
-        pattern.test(`${g.name || ''} ${g.subcategory || ''} ${g.color || ''}`)
+        pattern.test(
+          `${g.name || ''} ${g.name_en || ''} ${g.subcategory || ''} ${g.color_name || ''} ${g.image_url || ''}`
+        )
     ) || null;
 
   if (preEquippedGarment && isWearableStudioGarment(preEquippedGarment)) {
@@ -732,7 +736,7 @@ function buildInitialStudioSlots(garments, preEquippedGarment, preferDemoShowcas
 
   if (preferDemoShowcaseLook && wearableList.length > 0) {
     const showcaseOuter =
-      findMatching('outer', /크롭.*레더.*모토|cyber-black-moto-jacket/i) ||
+      findMatching('outer', /cyber-black-moto-jacket|크롭.*레더.*모토/i) ||
       findMatching('outer', /(블랙|black).*(라이더|모토|레더.*자켓|moto|rider|leather)/i) ||
       findMatching('outer', /(블랙|black).*(보머|자켓|bomber|jacket)/i);
     const showcaseTop =
@@ -740,16 +744,19 @@ function buildInitialStudioSlots(garments, preEquippedGarment, preferDemoShowcas
       findMatching('top', /(차콜|블랙|black).*(모크넥|터틀넥|니트|turtleneck|knit|mock)/i) ||
       findFirst('top');
     const showcaseBottom =
-      findMatching('bottom', /(블랙|black).*(플리츠.*미니|미니.*스커트|플리츠.*스커트|pleated.*mini)/i) ||
+      findMatching('bottom', /cyber-black-belted-pleated-skirt|버클.*벨티드.*플리츠.*미니/i) ||
+      findMatching('bottom', /cyber-black-pleated-skirt|(블랙|black).*(플리츠.*미니|미니.*스커트|pleated.*mini)/i) ||
       findMatching('bottom', /(블랙|차콜|black).*(스커트|skirt)/i) ||
       findMatching('bottom', /(블랙|차콜|black).*(카고|팬츠|슬랙스|cargo|pants)/i) ||
       findFirst('bottom');
     const showcaseSocks =
-      findMatching('socks', /(블랙|black).*(시어.*싸이하이|싸이하이|스타킹|thigh.?high|stocking)/i) ||
+      findMatching('socks', /cyber-black-sheer-stockings|(블랙|black).*(시어.*싸이하이|싸이하이.*스타킹|thigh.?high)/i) ||
+      findMatching('socks', /cyber-black-overknee-stockings|(블랙|black).*(오버니|스타킹|over.?knee|stocking)/i) ||
       findMatching('socks', /(차콜|블랙|시어|나일론|black|sheer|charcoal)/i) ||
       findFirst('socks');
     const showcaseShoes =
-      findMatching('shoes', /(블랙|black).*(레이스업.*컴뱃|컴뱃.*부츠|combat.*boot)/i) ||
+      findMatching('shoes', /cyber-black-combat-boots|(블랙|black).*(레이스업.*컴뱃|컴뱃.*부츠|combat.*boot)/i) ||
+      findMatching('shoes', /cyber-black-platform-walker-boots|(블랙|black).*(플랫폼.*레이스업|워커.*부츠|walker.*boot)/i) ||
       findMatching('shoes', /(매트 블랙|블랙|black).*(청키|러그솔|첼시|부츠|boot)/i) ||
       findMatching('shoes', /부츠|boot/i) ||
       findFirst('shoes');
@@ -758,7 +765,7 @@ function buildInitialStudioSlots(garments, preEquippedGarment, preferDemoShowcas
       /(블랙|가죽|카프스킨|레더|black|leather).*벨트|belt/i
     );
     const showcaseNeck =
-      findMatching('jwl_neck', /(925.*실버|실버|silver).*(레이어드.*체인|초커|체인|choker|chain)/i) ||
+      findMatching('jwl_neck', /cyber-silver-chain-choker|(925.*실버|실버|silver).*(레이어드.*체인|초커|체인|choker|chain)/i) ||
       findMatching('jwl_neck', /초커|체인|목걸이|choker|chain|necklace/i);
     return {
       ...EMPTY_STUDIO_SLOTS,
@@ -793,7 +800,7 @@ const LOOK_STYLE_STORAGE_KEY = 'ainventory_look_style_config_v1';
 const LOOK_STYLE_PRESETS = [
   {
     key: 'business_casual',
-    ko: '직장생활을 위한 비즈니스 캐주얼',
+    ko: '비즈니스 캐주얼',
     en: 'Business Casual',
   },
   {
@@ -2300,6 +2307,7 @@ export default function OutfitStudioView({
     rawSlots,
     hasExplicitSlotState,
     garments,
+    isDemoShowcaseAccount,
     isRainyWeatherActive,
     isEquippedStageOutdoor,
     manualRainUmbrellaCleared,
@@ -2923,7 +2931,7 @@ export default function OutfitStudioView({
       },
       () => {
         setLocatingGps(false);
-        showToast?.(tx(lang, '위치 권한을 확인해주세요.', 'Please check location permissions.'));
+        showToast?.(tx(lang, '위치 권한을 확인해 주세요.', 'Please check location permissions.'));
       },
       { timeout: 6000 }
     );
@@ -2983,7 +2991,7 @@ export default function OutfitStudioView({
     showToast?.(
       isEquipped
         ? tx(lang, `${garment.name} 착용을 해제했어요.`, `Removed ${garment.name}.`)
-        : tx(lang, `UV 대비 ${garment.name}을(를) 착용했어요.`, `Equipped ${garment.name} for UV protection.`)
+        : tx(lang, `자외선 대비 ${garment.name}을(를) 착용했어요.`, `Equipped ${garment.name} for UV protection.`)
     );
   };
 
@@ -5154,7 +5162,7 @@ export default function OutfitStudioView({
                 setShowTomorrowPrompt(false);
               }}
             >
-              {tx(lang, '아니오', 'No, keep today')}
+              {tx(lang, '아니요', 'No, keep today')}
             </button>
             <button
               type="button"
@@ -5197,6 +5205,9 @@ export default function OutfitStudioView({
         }}
         streetViewUnavailable={isLiveSvUnavailableForTarget}
         streetViewBillingRequired={liveSvBillingError}
+        defaultLightingIntensity={
+          isDemoShowcaseAccount ? DEMO_CYBERPUNK_LIGHTING_INTENSITY : DEFAULT_LIGHTING_INTENSITY
+        }
       />
 
       {/* In-App Stage Background Store & Tiered Gacha Modal */}

@@ -265,7 +265,7 @@ export function createVtonRouter(options = {}) {
     if (!ipRate.allowed) {
       res.setHeader('Retry-After', String(ipRate.retryAfterSec));
       return res.status(429).json({
-        error: `요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: ipRate.retryAfterSec,
       });
@@ -288,7 +288,7 @@ export function createVtonRouter(options = {}) {
     if (!ipRate.allowed) {
       res.setHeader('Retry-After', String(ipRate.retryAfterSec));
       return res.status(429).json({
-        error: `가상 피팅 합성 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `가상 피팅 합성 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: ipRate.retryAfterSec,
       });
@@ -510,7 +510,7 @@ export function createVtonRouter(options = {}) {
     if (!ipRate.allowed) {
       res.setHeader('Retry-After', String(ipRate.retryAfterSec));
       return res.status(429).json({
-        error: `QC 로그 기록 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `QC 로그 기록 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: ipRate.retryAfterSec,
       });

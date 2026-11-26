@@ -571,7 +571,7 @@ const DEFAULT_INDOOR_RIG: IndoorLightingRigSpec = {
   nightFixture: 'recessed-cove',
   nightKelvinHex: 0xffdcb0,
   nightPhotoDim: 0.27,
-  rigNoteKo: '낮 좌측 쉬어 커튼 채광 · 일몰 후 2900K 매입 코브등 점등',
+  rigNoteKo: '낮 좌측 시어 커튼 채광 · 일몰 후 2900K 매입 간접등 점등',
   rigNoteEn: 'Daytime left sheer-curtain sun · Post-sunset 2900K recessed cove',
 };
 

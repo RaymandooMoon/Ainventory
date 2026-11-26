@@ -355,7 +355,7 @@ export default function AdminManagementView({
             <p className="admin-console-subtitle">
               {tx(
                 lang,
-                '유저별 메뉴 접근 권한 및 메뉴 내 개별 버튼 실행 권한을 실시간으로 제어합니다.',
+                '사용자별 메뉴 접근 권한 및 메뉴 내 개별 버튼 실행 권한을 실시간으로 제어합니다.',
                 'Configure per-user menu access and individual action button permissions in real time.'
               )}
             </p>
@@ -371,7 +371,7 @@ export default function AdminManagementView({
               className={`admin-console-seg-btn ${subTab === 'users' ? 'is-active' : ''}`}
             >
               <Users size={14} />
-              <span>{tx(lang, '유저별 메뉴·버튼 권한', 'Per-User Menu & Buttons')}</span>
+              <span>{tx(lang, '사용자별 메뉴·버튼 권한', 'Per-User Menu & Buttons')}</span>
             </button>
             <button
               type="button"
@@ -397,13 +397,13 @@ export default function AdminManagementView({
           </div>
           <div className="admin-console-kpi-card">
             <span className="admin-console-kpi-label">
-              {tx(lang, '개별 권한 커스텀 유저', 'Users with Custom Overrides')}
+              {tx(lang, '개별 권한 설정 사용자', 'Users with Custom Overrides')}
             </span>
             <span className="admin-console-kpi-value">{customizedUsers}</span>
           </div>
           <div className="admin-console-kpi-card">
             <span className="admin-console-kpi-label">
-              {tx(lang, '권한 거부 시 안내 이메일', 'Admin Inquiry Email')}
+              {tx(lang, '관리자 문의 이메일', 'Admin Inquiry Email')}
             </span>
             <span className="admin-console-kpi-email">
               <Mail size={14} aria-hidden="true" />
@@ -547,7 +547,7 @@ export default function AdminManagementView({
                       <p className="admin-console-selected-hint">
                         {tx(
                           lang,
-                          '메뉴 또는 버튼 권한을 끄면 해당 유저가 클릭 시 ‘권한이 없습니다’ 팝업과 관리자 이메일 링크가 표시됩니다.',
+                          '메뉴 또는 버튼 권한을 끄면 해당 사용자가 클릭할 때 ‘권한이 없습니다’ 팝업과 관리자 이메일 링크가 표시됩니다.',
                           'Turning off a menu or button triggers the Access Denied popup with the admin contact link when clicked.'
                         )}
                       </p>

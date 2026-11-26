@@ -115,7 +115,7 @@ export default function SmartLaundryBasketModal({
         showToast?.(
           tx(
             lang,
-            '최근 7일 내 캘린더 착용 기록이 없습니다. 아래에서 옷을 직접 담아보세요.',
+            '최근 7일 내 캘린더 착용 기록이 없습니다. 아래에서 옷을 직접 담아 보세요.',
             'No worn records found in the past 7 days. Pick items manually below.'
           )
         );
@@ -160,7 +160,7 @@ export default function SmartLaundryBasketModal({
       showToast?.(
         tx(
           lang,
-          `${bucket.titleKo} ${ids.length}벌 세탁 완료 처리되었습니다.`,
+          `${bucket.titleKo} ${ids.length}벌을 세탁 완료 처리했습니다.`,
           `Marked ${ids.length} item(s) in ${bucket.titleEn} as washed.`
         )
       );
@@ -175,7 +175,7 @@ export default function SmartLaundryBasketModal({
       title={tx(lang, '스마트 세탁 바구니', 'Smart Laundry Basket')}
       subtitle={tx(
         lang,
-        '세탁탭·소재 기반으로 합세탁 가능 여부와 코스를 자동 분류합니다',
+        '세탁 라벨·소재 기반으로 함께 세탁 가능 여부와 코스를 자동 분류합니다',
         'Auto-sorts wash courses and detects shrinkage or color-bleed conflicts'
       )}
       maxWidth={620}

@@ -69,7 +69,7 @@ export default function OfficialInfoSyncModal({
 
   const confidenceLabel =
     webMatch.confidence === 'high'
-      ? tx(lang, '공식 DB 높은 일치도', 'High Confidence Match')
+      ? tx(lang, '공식 DB 일치도 높음', 'High Confidence Match')
       : tx(lang, '공식 DB 추천 매칭', 'Recommended Match');
 
   return (

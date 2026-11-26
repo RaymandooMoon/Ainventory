@@ -887,6 +887,30 @@ const CYBER_DEMO_LOOK_SEEDS = [
     }),
   },
   {
+    idOffset: 926,
+    name: '블랙 버클 벨티드 플리츠 미니 스커트',
+    category: 'bottom',
+    subcategory: 'skirt',
+    color_name: '블랙',
+    color_hex: '#101015',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -4,
+    max_temp: 28,
+    water_resistant: false,
+    formality: 2,
+    brand: 'PRADA',
+    price: 1180000,
+    image_url: '/seed/cyber-black-belted-pleated-skirt.webp',
+    fabric: 'wool',
+    slot_key: 'bottom',
+    notes: '건메탈 핀 버클 레더 벨트와 날렵한 나이프 플리츠가 결합된 제트 블랙 미니 스커트',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      fit: 'tailored',
+      length_profile: 'mini',
+    }),
+  },
+  {
     idOffset: 923,
     name: '블랙 시어 싸이하이 스타킹',
     category: 'socks',
@@ -913,6 +937,32 @@ const CYBER_DEMO_LOOK_SEEDS = [
     }),
   },
   {
+    idOffset: 927,
+    name: '블랙 시어 더블밴드 오버니 스타킹',
+    category: 'socks',
+    subcategory: 'sheer_socks',
+    color_name: '블랙',
+    color_hex: '#16161C',
+    seasons: ['spring', 'fall', 'winter'],
+    min_temp: -5,
+    max_temp: 26,
+    water_resistant: false,
+    formality: 2,
+    brand: 'FALKE',
+    price: 54000,
+    image_url: '/seed/cyber-black-overknee-stockings.webp',
+    fabric: 'nylon',
+    slot_key: 'socks',
+    notes: '더블 웰트 커프와 40데니어 세미 시어 블랙 니트 텍스처의 오버니 스타킹',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      sock_height: 'over_knee',
+      opacity_level: 'semi_sheer',
+      thickness: 'thin',
+      fit: 'slim',
+    }),
+  },
+  {
     idOffset: 924,
     name: '블랙 청키 러그솔 레이스업 컴뱃 부츠',
     category: 'shoes',
@@ -930,6 +980,30 @@ const CYBER_DEMO_LOOK_SEEDS = [
     fabric: 'leather',
     slot_key: 'shoes',
     notes: '청키 러그솔 플랫폼과 미드카프 레이스업 실루엣의 매트 블랙 레더 컴뱃 부츠',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      shaft_height: 'mid_calf',
+      sole_profile: 'chunky_lug',
+    }),
+  },
+  {
+    idOffset: 928,
+    name: '블랙 플랫폼 레이스업 미드카프 워커 부츠',
+    category: 'shoes',
+    subcategory: 'boots',
+    color_name: '블랙',
+    color_hex: '#121216',
+    seasons: ['spring', 'fall', 'winter'],
+    min_temp: -10,
+    max_temp: 22,
+    water_resistant: true,
+    formality: 2,
+    brand: 'RICK OWENS',
+    price: 1720000,
+    image_url: '/seed/cyber-black-platform-walker-boots.webp',
+    fabric: 'leather',
+    slot_key: 'shoes',
+    notes: '볼드 플랫폼 트랙솔과 하이 샤프트 레이스업 디테일의 옵시디언 카프스킨 워커 부츠',
     garment_details_json: JSON.stringify({
       target_gender: 'female',
       shaft_height: 'mid_calf',
@@ -961,7 +1035,7 @@ const CYBER_DEMO_LOOK_SEEDS = [
   },
 ];
 
-function ensureCyberDemoLookSeeds(closetOwner = 'sample') {
+export function ensureCyberDemoLookSeeds(closetOwner = 'sample') {
   const existingRows = db
     .prepare('SELECT name, image_url FROM garments WHERE closet_owner = ?')
     .all(closetOwner);
@@ -1464,7 +1538,7 @@ export function initDb() {
         15,
         todayStr,
         '/seed/studio-briefcase.jpg',
-        '왼손 그립 소켓 진자 물리(Pendulum Physics)가 적용된 비스포크 브리프케이스',
+        '이탈리안 풀그레인 레더 비스포크 서류가방',
       ]);
       ensureSignatureItem('wife', 'accessory', 'tote', 'leather', [
         'wife',
@@ -1483,7 +1557,7 @@ export function initDb() {
         18,
         todayStr,
         '/seed/studio-tote.jpg',
-        '보행 리듬에 따라 경쾌하게 흔들리는 쇼퍼 토트백',
+        '데일리로 들기 좋은 미니멀 페블 레더 쇼퍼 토트백',
       ]);
       ensureSignatureItem('husband', 'neckwear', 'scarf', 'wool', [
         'husband',
@@ -1502,7 +1576,7 @@ export function initDb() {
         9,
         todayStr,
         '/seed/studio-muffler.jpg',
-        '소프트 클로스 지글 피직스가 적용된 캐시미어 머플러',
+        '부드럽고 자연스럽게 떨어지는 퓨어 캐시미어 프린지 머플러',
       ]);
     } catch {
       // ignore migration error
@@ -1805,7 +1879,7 @@ export function seedIfEmpty(forceReset = false) {
     ensureDefaultUser({
       username: 'admin',
       password: process.env.ADMIN_INITIAL_PASSWORD || 'admin',
-      displayName: '어드민 (남편)',
+      displayName: '관리자 (남편)',
       role: 'admin',
       defaultCloset: 'husband',
       closetName: '남편의 사이버 아틀리에',
@@ -1851,10 +1925,10 @@ export function seedIfEmpty(forceReset = false) {
     ensureDefaultUser({
       username: 'wife',
       password: 'wife1234',
-      displayName: '와이프',
+      displayName: '아내',
       role: 'member',
       defaultCloset: 'wife',
-      closetName: '와이프의 시그니처 옷장',
+      closetName: '아내의 시그니처 옷장',
       email: 'wife@ainventory.kr',
       ageGroup: '30s',
       age: 32,
@@ -1967,7 +2041,7 @@ export function seedIfEmpty(forceReset = false) {
         '주말 데일리 착용률 1위 청바지', 'denim',
       ],
       [
-        'husband', '미니멀 화이트 스웨이드코트 스니커즈', 'shoes', 'sneakers', '화이트', '#EAE7E1',
+        'husband', '미니멀 화이트 스웨이드 코트 스니커즈', 'shoes', 'sneakers', '화이트', '#EAE7E1',
         JSON.stringify(['봄', '여름', '가을', '겨울']), 0, 32, 0, 'casual',
         '커먼프로젝트 무드', 248000, 31, fmtDate(1), 'active', 1, '/seed/white-sneakers.jpg',
         '앞코 스웨이드 소재라 비 오는 날은 피하는 편', 'leather',
@@ -2093,7 +2167,7 @@ export function seedIfEmpty(forceReset = false) {
       VALUES (?, ?, ?, ?, ?, ?, ?, 'worn')
     `);
     insertLog.run('husband', fmtDate(1), null, JSON.stringify(casualCafeIds), '맑음', 15, '가볍게 동네 카페 외출');
-    insertLog.run('husband', fmtDate(2), outfit2Id, JSON.stringify(weekendNavyIds), '구름조금', 13, '와이프랑 성수동 쇼핑 데이트');
+    insertLog.run('husband', fmtDate(2), outfit2Id, JSON.stringify(weekendNavyIds), '구름 조금', 13, '아내와 성수동 쇼핑 데이트');
     insertLog.run('husband', fmtDate(5), outfit1Id, JSON.stringify(commuteItemIds), '비 조금', 11, '발수 트렌치코트 덕분에 쾌적했던 출근길');
     insertLog.run('wife', fmtDate(3), outfit3Id, JSON.stringify(wifeWalkIds), '맑음', 14, '올림픽공원 산책 코디');
 
