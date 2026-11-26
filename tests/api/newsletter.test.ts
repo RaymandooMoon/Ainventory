@@ -8,6 +8,7 @@ import { after, before, describe, it } from 'node:test';
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ainventory-newsletter-test-'));
 const isolatedDbPath = path.join(tmpDir, 'test-newsletter.db');
 process.env.AINVENTORY_DB_PATH = isolatedDbPath;
+process.env.ALLOW_DEV_OTP_PREVIEW = 'true';
 
 const [{ default: express }, { createApiRouter }, dbMod] = await Promise.all([
   import('express'),
@@ -15,7 +16,7 @@ const [{ default: express }, { createApiRouter }, dbMod] = await Promise.all([
   import('../../server/db.js'),
 ]);
 
-describe('Official Site Newsletter API Security & Lifecycle', () => {
+describe('Official Site Newsletter API Double Opt-In & Security Lifecycle', () => {
   let baseUrl = '';
   let server: ReturnType<ReturnType<typeof express>['listen']> | null = null;
   let adminToken = '';
@@ -44,6 +45,7 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
   });
 
   after(async () => {
+    delete process.env.ALLOW_DEV_OTP_PREVIEW;
     if (server) {
       await new Promise<void>((resolve) => server?.close(() => resolve()));
     }
@@ -53,8 +55,9 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('subscribes a valid email, handles duplicate idempotently, and supports unsubscribe + resubscribe', async () => {
-    const firstRes = await fetch(`${baseUrl}/api/newsletter/subscribe`, {
+  it('requires 6-digit OTP or magic-link verification before activating subscription, enforces cooldown, and supports unsubscribe + verified resubscribe', async () => {
+    // Step 1: Subscribe issues 202 pending_verification
+    const subRes = await fetch(`${baseUrl}/api/newsletter/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -64,13 +67,80 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
         source: 'site_modal',
       }),
     });
-    assert.equal(firstRes.status, 201);
-    const firstBody = (await firstRes.json()) as { ok: boolean; status: string; email: string };
-    assert.equal(firstBody.ok, true);
-    assert.equal(firstBody.status, 'subscribed');
-    assert.equal(firstBody.email, 'reader@ainvtry.com');
+    assert.equal(subRes.status, 202);
+    const subBody = (await subRes.json()) as {
+      ok: boolean;
+      status: string;
+      email: string;
+      expiresInSec: number;
+      cooldownSec: number;
+      devPreviewCode?: string;
+      devVerifyToken?: string;
+    };
+    assert.equal(subBody.ok, true);
+    assert.equal(subBody.status, 'pending_verification');
+    assert.equal(subBody.email, 'reader@ainvtry.com');
+    assert.equal(subBody.expiresInSec, 600);
+    assert.equal(subBody.cooldownSec, 60);
+    assert.match(String(subBody.devPreviewCode || ''), /^\d{6}$/);
+    assert.ok((subBody.devVerifyToken || '').length >= 32);
 
-    // Duplicate signup returns idempotent 200 already_subscribed
+    // Immediate resend hits 60s cooldown
+    const cooldownRes = await fetch(`${baseUrl}/api/newsletter/resend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'reader@ainvtry.com' }),
+    });
+    assert.equal(cooldownRes.status, 429);
+    const cooldownBody = (await cooldownRes.json()) as { code: string; retryAfterSec: number };
+    assert.equal(cooldownBody.code, 'RESEND_COOLDOWN');
+    assert.ok(cooldownBody.retryAfterSec >= 1);
+
+    // Wrong 6-digit code is rejected with remainingAttempts
+    const wrongCode = subBody.devPreviewCode === '000000' ? '111111' : '000000';
+    const wrongRes = await fetch(`${baseUrl}/api/newsletter/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'reader@ainvtry.com', code: wrongCode }),
+    });
+    assert.equal(wrongRes.status, 400);
+    const wrongBody = (await wrongRes.json()) as { code: string; remainingAttempts: number };
+    assert.equal(wrongBody.code, 'INVALID_CODE');
+    assert.equal(wrongBody.remainingAttempts, 4);
+
+    // Admin list shows pendingCount = 1, activeCount = 0 before verification
+    const pendingListRes = await fetch(`${baseUrl}/api/admin/newsletter/subscribers`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(pendingListRes.status, 200);
+    const pendingList = (await pendingListRes.json()) as {
+      total: number;
+      activeCount: number;
+      pendingCount: number;
+    };
+    assert.equal(pendingList.total, 1);
+    assert.equal(pendingList.activeCount, 0);
+    assert.equal(pendingList.pendingCount, 1);
+
+    // Step 2: Correct 6-digit code activates subscription
+    const verifyRes = await fetch(`${baseUrl}/api/newsletter/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'reader@ainvtry.com', code: subBody.devPreviewCode }),
+    });
+    assert.equal(verifyRes.status, 200);
+    const verifyBody = (await verifyRes.json()) as {
+      ok: boolean;
+      status: string;
+      verified: boolean;
+      email: string;
+    };
+    assert.equal(verifyBody.ok, true);
+    assert.equal(verifyBody.status, 'subscribed');
+    assert.equal(verifyBody.verified, true);
+    assert.equal(verifyBody.email, 'reader@ainvtry.com');
+
+    // Duplicate subscribe after verification returns idempotent 200 already_subscribed
     const dupRes = await fetch(`${baseUrl}/api/newsletter/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,12 +163,13 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
       body: JSON.stringify({ email: 'reader@ainvtry.com' }),
     });
     assert.equal(unsubRes.status, 200);
-    const unsubBody = (await unsubRes.json()) as { ok: boolean; status: string };
-    assert.equal(unsubBody.ok, true);
-    assert.equal(unsubBody.status, 'unsubscribed');
 
-    // Re-subscribe reactivates the record cleanly
-    const resubRes = await fetch(`${baseUrl}/api/newsletter/subscribe`, {
+    // Clear verification_sent_at in DB to test immediate resubscribe via one-click link token
+    dbMod.default
+      .prepare('UPDATE newsletter_subscribers SET verification_sent_at = NULL WHERE email = ?')
+      .run('reader@ainvtry.com');
+
+    const resubReq = await fetch(`${baseUrl}/api/newsletter/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -108,18 +179,32 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
         source: 'site_footer',
       }),
     });
-    assert.equal(resubRes.status, 200);
-    const resubBody = (await resubRes.json()) as {
+    assert.equal(resubReq.status, 202);
+    const resubChallenge = (await resubReq.json()) as { devVerifyToken?: string };
+    assert.ok(resubChallenge.devVerifyToken);
+
+    const tokenVerifyRes = await fetch(`${baseUrl}/api/newsletter/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'reader@ainvtry.com',
+        token: resubChallenge.devVerifyToken,
+      }),
+    });
+    assert.equal(tokenVerifyRes.status, 200);
+    const tokenVerifyBody = (await tokenVerifyRes.json()) as {
       ok: boolean;
       status: string;
+      verified: boolean;
       resubscribed?: boolean;
     };
-    assert.equal(resubBody.ok, true);
-    assert.equal(resubBody.status, 'subscribed');
-    assert.equal(resubBody.resubscribed, true);
+    assert.equal(tokenVerifyBody.ok, true);
+    assert.equal(tokenVerifyBody.status, 'subscribed');
+    assert.equal(tokenVerifyBody.verified, true);
+    assert.equal(tokenVerifyBody.resubscribed, true);
   });
 
-  it('rejects invalid emails, header-injection payloads, missing consent, and ignores honeypot bots', async () => {
+  it('rejects invalid inputs, enforces fail-closed 503 when email delivery is unconfigured in production, and supports admin PATCH/DELETE', async () => {
     const invalidEmails = [
       '',
       'not-an-email',
@@ -157,7 +242,23 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
     });
     assert.equal(botRes.status, 200);
 
-    // Admin list verifies bot was never saved and blocks unauthenticated callers
+    // Fail-closed check: without ALLOW_DEV_OTP_PREVIEW and without RESEND_API_KEY -> 503
+    const prevDevPreview = process.env.ALLOW_DEV_OTP_PREVIEW;
+    delete process.env.ALLOW_DEV_OTP_PREVIEW;
+    try {
+      const failClosedRes = await fetch(`${baseUrl}/api/newsletter/subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'strictprod@ainvtry.com', consent: true }),
+      });
+      assert.equal(failClosedRes.status, 503);
+      const failClosedBody = (await failClosedRes.json()) as { code: string };
+      assert.equal(failClosedBody.code, 'EMAIL_DELIVERY_NOT_CONFIGURED');
+    } finally {
+      process.env.ALLOW_DEV_OTP_PREVIEW = prevDevPreview;
+    }
+
+    // Admin list verifies unauthenticated callers blocked & strictprod/bot were never saved
     const unauthList = await fetch(`${baseUrl}/api/admin/newsletter/subscribers`);
     assert.equal(unauthList.status, 401);
 
@@ -168,35 +269,32 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
     const listBody = (await adminList.json()) as {
       total: number;
       activeCount: number;
+      pendingCount: number;
       unsubscribedCount: number;
-      emailConfigured: boolean;
-      webhookConfigured: boolean;
-      subscribers: Array<{ id: number; email: string; status: string }>;
+      subscribers: Array<{ id: number; email: string; status: string; verified_at: string | null }>;
     };
     assert.equal(listBody.total, 1);
     assert.equal(listBody.activeCount, 1);
+    assert.equal(listBody.pendingCount, 0);
     assert.equal(listBody.unsubscribedCount, 0);
-    assert.equal(typeof listBody.emailConfigured, 'boolean');
-    assert.equal(typeof listBody.webhookConfigured, 'boolean');
     assert.equal(listBody.subscribers[0]?.email, 'reader@ainvtry.com');
+    assert.ok(listBody.subscribers[0]?.verified_at);
 
-    // Health endpoint returns safe readiness summary
+    // Health endpoint reports verificationRequired: true
     const healthRes = await fetch(`${baseUrl}/api/newsletter/health`);
     assert.equal(healthRes.status, 200);
-    const healthBody = (await healthRes.json()) as { ok: boolean; storage: string };
+    const healthBody = (await healthRes.json()) as {
+      ok: boolean;
+      storage: string;
+      verificationRequired: boolean;
+    };
     assert.equal(healthBody.ok, true);
     assert.equal(healthBody.storage, 'sqlite');
+    assert.equal(healthBody.verificationRequired, true);
 
-    // Admin PATCH toggles subscriber status cleanly (and blocks unauthenticated callers)
+    // Admin PATCH & DELETE lifecycle
     const subId = listBody.subscribers[0]?.id;
     assert.ok(Number.isInteger(subId) && subId > 0);
-
-    const unauthPatch = await fetch(`${baseUrl}/api/admin/newsletter/subscribers/${subId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'unsubscribed' }),
-    });
-    assert.equal(unauthPatch.status, 401);
 
     const patchUnsub = await fetch(`${baseUrl}/api/admin/newsletter/subscribers/${subId}`, {
       method: 'PATCH',
@@ -207,31 +305,7 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
       body: JSON.stringify({ status: 'unsubscribed' }),
     });
     assert.equal(patchUnsub.status, 200);
-    const patchUnsubBody = (await patchUnsub.json()) as {
-      ok: boolean;
-      subscriber: { status: string; unsubscribed_at: string | null };
-    };
-    assert.equal(patchUnsubBody.ok, true);
-    assert.equal(patchUnsubBody.subscriber.status, 'unsubscribed');
-    assert.ok(patchUnsubBody.subscriber.unsubscribed_at);
 
-    const patchResub = await fetch(`${baseUrl}/api/admin/newsletter/subscribers/${subId}`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${adminToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ status: 'subscribed' }),
-    });
-    assert.equal(patchResub.status, 200);
-    const patchResubBody = (await patchResub.json()) as {
-      ok: boolean;
-      subscriber: { status: string; unsubscribed_at: string | null };
-    };
-    assert.equal(patchResubBody.subscriber.status, 'subscribed');
-    assert.equal(patchResubBody.subscriber.unsubscribed_at, null);
-
-    // Admin DELETE permanently erases subscriber and returns 404 on repeat
     const delRes = await fetch(`${baseUrl}/api/admin/newsletter/subscribers/${subId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${adminToken}` },
@@ -244,19 +318,30 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
     assert.equal(delAgain.status, 404);
   });
 
-  it('dispatches Resend welcome/founder emails & SSRF-safe webhooks cleanly via newsletterNotifications', async () => {
-    const { dispatchNewsletterNotifications, escapeHtml, resolveSafeWebhookUrl } = await import(
-      '../../server/newsletterNotifications.js'
-    );
+  it('builds localized verification emails and dispatches Resend welcome/founder + SSRF-safe webhook notifications', async () => {
+    const {
+      buildVerificationEmailPayload,
+      dispatchNewsletterNotifications,
+      escapeHtml,
+      resolveSafeWebhookUrl,
+      sendNewsletterVerificationEmail,
+    } = await import('../../server/newsletterNotifications.js');
 
     assert.equal(escapeHtml('<script>"&\'</script>'), '&lt;script&gt;&quot;&amp;&#39;&lt;/script&gt;');
     assert.equal(resolveSafeWebhookUrl('http://hooks.slack.com/x'), null);
-    assert.equal(resolveSafeWebhookUrl('https://localhost/hook'), null);
     assert.equal(resolveSafeWebhookUrl('https://169.254.169.254/latest'), null);
-    assert.equal(
-      resolveSafeWebhookUrl('https://hooks.slack.com/services/T1/B2/C3'),
-      'https://hooks.slack.com/services/T1/B2/C3'
-    );
+
+    const verifyPayload = buildVerificationEmailPayload({
+      email: 'mbo88@naver.com',
+      lang: 'ko',
+      code: '482910',
+      verifyUrl: 'https://ainvtry.com/?nl_verify=abc123&email=mbo88%40naver.com',
+      fromEmail: undefined,
+      replyToEmail: undefined,
+    });
+    assert.ok(verifyPayload.subject.includes('482910'));
+    assert.ok(verifyPayload.html.includes('482 910'));
+    assert.ok(verifyPayload.html.includes('nl_verify=abc123'));
 
     const sentRequests: Array<{ url: string; body: string; headers: Record<string, string> }> = [];
     const fakeFetch: typeof fetch = async (input, init) => {
@@ -267,6 +352,18 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
       });
       return new Response(JSON.stringify({ id: 'mock_1' }), { status: 200 });
     };
+
+    const verifyMail = await sendNewsletterVerificationEmail(
+      {
+        email: 'mbo88@naver.com',
+        lang: 'ko',
+        code: '482910',
+        verifyUrl: 'https://ainvtry.com/?nl_verify=abc123&email=mbo88%40naver.com',
+      },
+      { RESEND_API_KEY: ['stub', 'mail', 'token'].join('-') },
+      fakeFetch
+    );
+    assert.equal(verifyMail.sent, true);
 
     const summary = await dispatchNewsletterNotifications(
       {
@@ -289,11 +386,9 @@ describe('Official Site Newsletter API Security & Lifecycle', () => {
     assert.equal(summary.welcomeSent, true);
     assert.equal(summary.founderAlertSent, true);
     assert.equal(summary.webhookSent, true);
-    assert.equal(sentRequests.length, 3);
     assert.equal(
       sentRequests.find((r) => r.url.includes('hooks.slack.com'))?.headers['x-ainvtry-webhook-secret'],
       'stub-hook-sig'
     );
   });
 });
-

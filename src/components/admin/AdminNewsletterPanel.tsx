@@ -6,6 +6,7 @@ import type { NewsletterSubscriberRow } from '../../utils/newsletterCsv.ts';
 export interface AdminNewsletterOverview {
   readonly total: number;
   readonly activeCount: number;
+  readonly pendingCount: number;
   readonly unsubscribedCount: number;
   readonly emailConfigured: boolean;
   readonly webhookConfigured: boolean;
@@ -25,7 +26,7 @@ interface AdminNewsletterPanelProps {
   readonly onExportCsv: (rows: readonly NewsletterSubscriberRow[]) => void;
 }
 
-type FilterStatus = 'all' | 'subscribed' | 'unsubscribed';
+type FilterStatus = 'all' | 'subscribed' | 'pending' | 'unsubscribed';
 
 function formatSourceLabel(source: string | undefined, lang: string): string {
   switch (source) {
@@ -96,8 +97,8 @@ export default function AdminNewsletterPanel({
           <p className="admin-console-subtitle">
             {tx(
               lang,
-              '공식 홈페이지(ainvtry.com)에서 수집된 구독자 목록 조회, 수신 상태 전환, 영구 삭제 및 CSV 내보내기를 지원합니다.',
-              'Review official site (ainvtry.com) subscribers, update opt-in status, erase records, and export CSV.'
+              '공식 홈페이지(ainvtry.com)에서 이메일 소유권 인증을 거친 구독자 목록 조회, 상태 전환, 영구 삭제 및 CSV 내보내기를 지원합니다.',
+              'Review verified & pending official site (ainvtry.com) subscribers, update opt-in status, erase records, and export CSV.'
             )}
           </p>
         </div>
@@ -123,12 +124,16 @@ export default function AdminNewsletterPanel({
       {/* Metrics & Delivery Channel Strip */}
       <div className="admin-console-nl-meta-strip">
         <div className="admin-console-nl-stat">
-          <span className="admin-console-kpi-label">{tx(lang, '전체 구독자', 'Total')}</span>
+          <span className="admin-console-kpi-label">{tx(lang, '전체', 'Total')}</span>
           <span className="admin-console-nl-stat-value">{data.total}</span>
         </div>
         <div className="admin-console-nl-stat">
-          <span className="admin-console-kpi-label">{tx(lang, '활성 구독', 'Active')}</span>
+          <span className="admin-console-kpi-label">{tx(lang, '인증 구독', 'Verified')}</span>
           <span className="admin-console-nl-stat-value">{data.activeCount}</span>
+        </div>
+        <div className="admin-console-nl-stat">
+          <span className="admin-console-kpi-label">{tx(lang, '인증 대기', 'Pending')}</span>
+          <span className="admin-console-nl-stat-value">{data.pendingCount}</span>
         </div>
         <div className="admin-console-nl-stat">
           <span className="admin-console-kpi-label">{tx(lang, '수신 거부', 'Unsubscribed')}</span>
@@ -183,7 +188,11 @@ export default function AdminNewsletterPanel({
               { id: 'all', label: tx(lang, `전체 (${data.total})`, `All (${data.total})`) },
               {
                 id: 'subscribed',
-                label: tx(lang, `구독 중 (${data.activeCount})`, `Active (${data.activeCount})`),
+                label: tx(lang, `인증 구독 (${data.activeCount})`, `Verified (${data.activeCount})`),
+              },
+              {
+                id: 'pending',
+                label: tx(lang, `인증 대기 (${data.pendingCount})`, `Pending (${data.pendingCount})`),
               },
               {
                 id: 'unsubscribed',
@@ -227,6 +236,7 @@ export default function AdminNewsletterPanel({
         <div className="admin-console-nl-list" role="list">
           {filteredSubscribers.map((sub) => {
             const isSubscribed = sub.status === 'subscribed';
+            const isPending = sub.status === 'pending';
             const subId = Number(sub.id || 0);
             const rowBusy = busyKey === `nl:${subId}` || busyKey === `nl-del:${subId}`;
             const confirmingDelete = confirmDeleteId === subId;
@@ -242,11 +252,15 @@ export default function AdminNewsletterPanel({
                   <div className="admin-console-nl-email-line">
                     <span className="admin-console-nl-email">{sub.email}</span>
                     <span
-                      className={`admin-console-status-chip ${isSubscribed ? 'is-allowed' : 'is-blocked'}`}
+                      className={`admin-console-status-chip ${
+                        isSubscribed ? 'is-allowed' : isPending ? 'is-neutral' : 'is-blocked'
+                      }`}
                     >
                       {isSubscribed
-                        ? tx(lang, '구독 중', 'Subscribed')
-                        : tx(lang, '수신 거부', 'Unsubscribed')}
+                        ? tx(lang, '인증 완료 · 구독 중', 'Verified · Subscribed')
+                        : isPending
+                          ? tx(lang, '이메일 인증 대기', 'Pending Verification')
+                          : tx(lang, '수신 거부', 'Unsubscribed')}
                     </span>
                   </div>
                   <div className="admin-console-nl-meta">
@@ -258,7 +272,15 @@ export default function AdminNewsletterPanel({
                     <span className="admin-console-nl-date">
                       {tx(lang, '등록', 'Joined')} {formatDateCompact(sub.created_at)}
                     </span>
-                    {!isSubscribed && sub.unsubscribed_at && (
+                    {sub.verified_at && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="admin-console-nl-date">
+                          {tx(lang, '인증', 'Verified')} {formatDateCompact(sub.verified_at)}
+                        </span>
+                      </>
+                    )}
+                    {!isSubscribed && !isPending && sub.unsubscribed_at && (
                       <>
                         <span aria-hidden="true">·</span>
                         <span className="admin-console-nl-date">
@@ -285,7 +307,9 @@ export default function AdminNewsletterPanel({
                     <span>
                       {isSubscribed
                         ? tx(lang, '수신 거부 처리', 'Unsubscribe')
-                        : tx(lang, '구독 복원', 'Restore')}
+                        : isPending
+                          ? tx(lang, '수동 승인', 'Approve')
+                          : tx(lang, '구독 복원', 'Restore')}
                     </span>
                   </button>
 

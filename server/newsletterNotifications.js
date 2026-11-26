@@ -178,6 +178,142 @@ export function buildFounderAlertEmailPayload({
   };
 }
 
+export function buildVerificationEmailPayload({
+  email,
+  lang,
+  code,
+  verifyUrl,
+  expiresInMinutes = 10,
+  fromEmail,
+  replyToEmail,
+}) {
+  const isEn = lang === 'en';
+  const safeEmail = escapeHtml(email);
+  const safeCode = escapeHtml(code);
+  const safeVerifyUrl = escapeHtml(verifyUrl);
+  const spacedCode = safeCode.length === 6 ? `${safeCode.slice(0, 3)} ${safeCode.slice(3)}` : safeCode;
+
+  const subject = isEn
+    ? `[iNVTRY] Your verification code: ${code}`
+    : `[iNVTRY] 이메일 인증코드: ${code}`;
+
+  const text = isEn
+    ? [
+        'Verify your email for the iNVTRY Newsletter.',
+        '',
+        `6-digit verification code: ${code}`,
+        `Valid for ${expiresInMinutes} minutes.`,
+        '',
+        `Or verify in one click: ${verifyUrl}`,
+        '',
+        'If you did not request this, you can safely ignore this email.',
+        '— Ainvtry (iNVTRY) · Seoul',
+      ].join('\n')
+    : [
+        'iNVTRY 뉴스레터 이메일 인증을 완료해 주세요.',
+        '',
+        `6자리 인증코드: ${code}`,
+        `유효시간: ${expiresInMinutes}분`,
+        '',
+        `또는 아래 링크를 눌러 바로 인증할 수 있습니다:`,
+        verifyUrl,
+        '',
+        '본인이 요청하지 않으셨다면 이 메일을 무시해 주세요.',
+        '— Ainvtry (iNVTRY) · 서울',
+      ].join('\n');
+
+  const html = `<!doctype html>
+<html lang="${isEn ? 'en' : 'ko'}">
+<body style="margin:0;padding:32px 16px;background:#09090b;color:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Pretendard',sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;margin:0 auto;background:#111114;border:1px solid rgba(245,245,247,0.12);border-radius:16px;overflow:hidden;">
+    <tr>
+      <td style="padding:28px 28px 22px;">
+        <p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#d6b889;">iNVTRY · EMAIL VERIFICATION</p>
+        <h1 style="margin:0 0 10px;font-size:20px;line-height:1.35;color:#f5f5f7;">${
+          isEn ? 'Confirm your email address' : '이메일 주소를 인증해 주세요'
+        }</h1>
+        <p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:#d1d1d6;">${
+          isEn
+            ? `Enter the 6-digit code below on ainvtry.com or tap the verification button to confirm <strong>${safeEmail}</strong>.`
+            : `<strong>${safeEmail}</strong> 주소가 본인의 이메일이 맞는지 확인하기 위해 아래 6자리 인증코드를 입력하거나 인증 버튼을 눌러 주세요.`
+        }</p>
+        <div style="margin:0 0 18px;padding:18px 20px;background:#18181d;border:1px solid rgba(214,184,137,0.34);border-radius:12px;text-align:center;">
+          <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#a1a1aa;margin-bottom:6px;">${
+            isEn ? `VERIFICATION CODE · ${expiresInMinutes} MIN` : `인증코드 · ${expiresInMinutes}분 유효`
+          }</div>
+          <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:30px;font-weight:700;letter-spacing:0.18em;color:#f5f5f7;">${spacedCode}</div>
+        </div>
+        <div style="text-align:center;">
+          <a href="${safeVerifyUrl}" style="display:inline-block;padding:12px 24px;border-radius:999px;background:#f5f5f7;color:#101013;font-size:13px;font-weight:650;text-decoration:none;">${
+            isEn ? 'Verify Email in One Click' : '원클릭으로 이메일 인증 완료'
+          }</a>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:16px 28px;border-top:1px solid rgba(245,245,247,0.08);font-size:12px;line-height:1.5;color:#8e8e93;">
+        ${
+          isEn
+            ? 'If you did not request the iNVTRY newsletter, no action is needed and this email will not be subscribed.'
+            : '본인이 iNVTRY 뉴스레터를 신청하지 않으셨다면 이 메일을 무시해 주세요. 인증 전까지 구독되지 않습니다.'
+        }
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return {
+    from: fromEmail || DEFAULT_FROM_EMAIL,
+    to: [email],
+    reply_to: replyToEmail || DEFAULT_NOTIFY_EMAIL,
+    subject,
+    text,
+    html,
+  };
+}
+
+export async function sendNewsletterVerificationEmail(
+  { email, lang, code, verifyUrl, expiresInMinutes = 10 },
+  env = process.env,
+  fetchImpl = fetch
+) {
+  const resendKey = String(env?.RESEND_API_KEY || '').trim();
+  if (!resendKey) {
+    return { sent: false, configured: false };
+  }
+  const fromEmail = String(env?.RESEND_FROM_EMAIL || DEFAULT_FROM_EMAIL).trim() || DEFAULT_FROM_EMAIL;
+  const replyToEmail =
+    String(env?.NEWSLETTER_NOTIFY_EMAIL || DEFAULT_NOTIFY_EMAIL).trim() || DEFAULT_NOTIFY_EMAIL;
+
+  const payload = buildVerificationEmailPayload({
+    email,
+    lang,
+    code,
+    verifyUrl,
+    expiresInMinutes,
+    fromEmail,
+    replyToEmail,
+  });
+
+  try {
+    const res = await fetchWithTimeout(fetchImpl, RESEND_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      return { sent: false, configured: true, status: res.status };
+    }
+    return { sent: true, configured: true, status: res.status };
+  } catch {
+    return { sent: false, configured: true, status: 0 };
+  }
+}
+
 async function fetchWithTimeout(fetchImpl, url, init, timeoutMs = NOTIFY_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

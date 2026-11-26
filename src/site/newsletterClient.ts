@@ -10,7 +10,40 @@ export interface StoredNewsletterSubscription {
   readonly subscribedAt: string;
 }
 
+export interface PendingNewsletterVerification {
+  readonly email: string;
+  readonly lang: SiteLang;
+  readonly source: NewsletterSource;
+  readonly expiresAt: number;
+  readonly cooldownUntil: number;
+  readonly challengeToken?: string;
+  readonly devPreviewCode?: string;
+}
+
+export type NewsletterErrorCode =
+  | 'INVALID_EMAIL'
+  | 'CONSENT_REQUIRED'
+  | 'RATE_LIMITED'
+  | 'RESEND_COOLDOWN'
+  | 'INVALID_CODE'
+  | 'OTP_EXPIRED'
+  | 'OTP_ATTEMPTS_EXCEEDED'
+  | 'NO_PENDING_VERIFICATION'
+  | 'EMAIL_DELIVERY_NOT_CONFIGURED'
+  | 'EMAIL_SEND_FAILED'
+  | 'SERVER_ERROR';
+
 export type NewsletterSubscribeResult =
+  | {
+      readonly ok: true;
+      readonly status: 'pending_verification';
+      readonly email: string;
+      readonly expiresInSec: number;
+      readonly cooldownSec: number;
+      readonly challengeToken?: string;
+      readonly devPreviewCode?: string;
+      readonly storage?: string;
+    }
   | {
       readonly ok: true;
       readonly status: 'subscribed' | 'already_subscribed' | 'offline_saved';
@@ -19,15 +52,39 @@ export type NewsletterSubscribeResult =
     }
   | {
       readonly ok: false;
-      readonly code: 'INVALID_EMAIL' | 'CONSENT_REQUIRED' | 'RATE_LIMITED' | 'SERVER_ERROR';
+      readonly code: NewsletterErrorCode;
       readonly error?: string;
+      readonly retryAfterSec?: number;
+    };
+
+export type NewsletterVerifyResult =
+  | {
+      readonly ok: true;
+      readonly status: 'subscribed' | 'already_subscribed';
+      readonly email: string;
+      readonly storage?: string;
+    }
+  | {
+      readonly ok: false;
+      readonly code: NewsletterErrorCode;
+      readonly error?: string;
+      readonly remainingAttempts?: number;
+      readonly retryAfterSec?: number;
     };
 
 export type NewsletterUnsubscribeResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly code: 'INVALID_EMAIL' | 'RATE_LIMITED' | 'SERVER_ERROR' };
 
+export interface NewsletterRequestOptions {
+  readonly fetchImpl?: typeof fetch;
+  readonly envOverride?: Record<string, string | undefined>;
+  readonly hostnameOverride?: string;
+  readonly timeoutMs?: number;
+}
+
 const STORAGE_KEY = 'ainvtry_newsletter_sub_v1';
+const PENDING_STORAGE_KEY = 'ainvtry_newsletter_pending_v1';
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"']+@[^\s@<>()[\]\\,;:"']+\.[a-z]{2,63}$/i;
 const REQUEST_TIMEOUT_MS = 28_000;
 const PUBLIC_PRODUCTION_API_BASE = 'https://ainventory-api.onrender.com/api';
@@ -50,8 +107,14 @@ export function normalizeClientEmail(raw: string): string | null {
 
 export interface ResolvedNewsletterEndpoints {
   readonly subscribeUrls: readonly string[];
+  readonly verifyUrls: readonly string[];
+  readonly resendUrls: readonly string[];
   readonly unsubscribeUrls: readonly string[];
   readonly isStaticOnly: boolean;
+}
+
+function deriveActionUrl(subscribeUrl: string, action: 'verify' | 'resend' | 'unsubscribe'): string {
+  return subscribeUrl.replace(/\/subscribe$/, `/${action}`);
 }
 
 export function resolveNewsletterEndpoints(
@@ -72,7 +135,9 @@ export function resolveNewsletterEndpoints(
       const clean = customEndpoint.replace(/\/+$/, '');
       return {
         subscribeUrls: [clean],
-        unsubscribeUrls: [clean.replace(/\/subscribe$/, '/unsubscribe')],
+        verifyUrls: [deriveActionUrl(clean, 'verify')],
+        resendUrls: [deriveActionUrl(clean, 'resend')],
+        unsubscribeUrls: [deriveActionUrl(clean, 'unsubscribe')],
         isStaticOnly: false,
       };
     }
@@ -82,7 +147,9 @@ export function resolveNewsletterEndpoints(
         const clean = parsed.toString().replace(/\/+$/, '');
         return {
           subscribeUrls: [clean],
-          unsubscribeUrls: [clean.replace(/\/subscribe$/, '/unsubscribe')],
+          verifyUrls: [deriveActionUrl(clean, 'verify')],
+          resendUrls: [deriveActionUrl(clean, 'resend')],
+          unsubscribeUrls: [deriveActionUrl(clean, 'unsubscribe')],
           isStaticOnly: false,
         };
       }
@@ -93,20 +160,27 @@ export function resolveNewsletterEndpoints(
 
   const runtime = resolveApiRuntimeConfig(env);
   const primarySubscribe = `${runtime.apiBaseUrl}/newsletter/subscribe`;
+  const primaryVerify = `${runtime.apiBaseUrl}/newsletter/verify`;
+  const primaryResend = `${runtime.apiBaseUrl}/newsletter/resend`;
   const primaryUnsubscribe = `${runtime.apiBaseUrl}/newsletter/unsubscribe`;
   const isPublicHosted = PUBLIC_SITE_HOSTS.has(hostname);
 
   const subscribeUrls: string[] = [primarySubscribe];
+  const verifyUrls: string[] = [primaryVerify];
+  const resendUrls: string[] = [primaryResend];
   const unsubscribeUrls: string[] = [primaryUnsubscribe];
 
-  // On hosted ainvtry.com / github.io, keep Render API as an automatic backup if same-origin /api is unavailable
   if (isPublicHosted && primarySubscribe.startsWith('/')) {
     subscribeUrls.push(`${PUBLIC_PRODUCTION_API_BASE}/newsletter/subscribe`);
+    verifyUrls.push(`${PUBLIC_PRODUCTION_API_BASE}/newsletter/verify`);
+    resendUrls.push(`${PUBLIC_PRODUCTION_API_BASE}/newsletter/resend`);
     unsubscribeUrls.push(`${PUBLIC_PRODUCTION_API_BASE}/newsletter/unsubscribe`);
   }
 
   return {
     subscribeUrls,
+    verifyUrls,
+    resendUrls,
     unsubscribeUrls,
     isStaticOnly: runtime.isStaticStandaloneWithoutApi && !isPublicHosted,
   };
@@ -142,7 +216,7 @@ function writeStoredNewsletterSubscription(sub: StoredNewsletterSubscription): v
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sub));
   } catch {
-    // Ignore storage quota or sandboxed iframe storage errors
+    // Ignore storage quota errors
   }
 }
 
@@ -155,6 +229,72 @@ export function clearStoredNewsletterSubscription(): void {
   }
 }
 
+export function readPendingNewsletterVerification(): PendingNewsletterVerification | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PendingNewsletterVerification> | null;
+    if (!parsed || typeof parsed.email !== 'string') return null;
+    const email = normalizeClientEmail(parsed.email);
+    if (!email) return null;
+    if (typeof parsed.expiresAt !== 'number' || Date.now() >= parsed.expiresAt) {
+      window.sessionStorage.removeItem(PENDING_STORAGE_KEY);
+      return null;
+    }
+    return {
+      email,
+      lang: parsed.lang === 'en' ? 'en' : 'ko',
+      source:
+        parsed.source === 'site_footer' ||
+        parsed.source === 'site_about' ||
+        parsed.source === 'site_hero' ||
+        parsed.source === 'site_modal'
+          ? parsed.source
+          : 'site_modal',
+      expiresAt: parsed.expiresAt,
+      cooldownUntil: typeof parsed.cooldownUntil === 'number' ? parsed.cooldownUntil : 0,
+      challengeToken: typeof parsed.challengeToken === 'string' ? parsed.challengeToken : undefined,
+      devPreviewCode: typeof parsed.devPreviewCode === 'string' ? parsed.devPreviewCode : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writePendingNewsletterVerification(pending: PendingNewsletterVerification): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(pending));
+  } catch {
+    // Ignore sessionStorage errors
+  }
+}
+
+export function clearPendingNewsletterVerification(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(PENDING_STORAGE_KEY);
+  } catch {
+    // Ignore sessionStorage errors
+  }
+}
+
+interface RawNewsletterApiResponse {
+  ok?: boolean;
+  status?: string;
+  code?: string;
+  error?: string;
+  email?: string;
+  storage?: string;
+  expiresInSec?: number;
+  cooldownSec?: number;
+  retryAfterSec?: number;
+  remainingAttempts?: number;
+  challengeToken?: string;
+  devPreviewCode?: string;
+}
+
 async function postJsonWithTimeout(
   url: string,
   payload: Record<string, unknown>,
@@ -163,14 +303,7 @@ async function postJsonWithTimeout(
 ): Promise<{
   readonly kind: 'json' | 'non_json' | 'network_error';
   readonly status: number;
-  readonly data: {
-    ok?: boolean;
-    status?: string;
-    code?: string;
-    error?: string;
-    email?: string;
-    storage?: string;
-  } | null;
+  readonly data: RawNewsletterApiResponse | null;
 }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -188,19 +321,31 @@ async function postJsonWithTimeout(
     if (!contentType.includes('application/json')) {
       return { kind: 'non_json', status: response.status, data: null };
     }
-    const data = (await response.json().catch(() => null)) as {
-      ok?: boolean;
-      status?: string;
-      code?: string;
-      error?: string;
-      email?: string;
-      storage?: string;
-    } | null;
+    const data = (await response.json().catch(() => null)) as RawNewsletterApiResponse | null;
     return { kind: 'json', status: response.status, data };
   } catch {
     return { kind: 'network_error', status: 0, data: null };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+function mapServerErrorCode(rawCode: string | undefined, httpStatus: number): NewsletterErrorCode {
+  switch (rawCode) {
+    case 'INVALID_EMAIL':
+    case 'CONSENT_REQUIRED':
+    case 'RATE_LIMITED':
+    case 'RESEND_COOLDOWN':
+    case 'INVALID_CODE':
+    case 'OTP_EXPIRED':
+    case 'OTP_ATTEMPTS_EXCEEDED':
+    case 'NO_PENDING_VERIFICATION':
+    case 'EMAIL_DELIVERY_NOT_CONFIGURED':
+    case 'EMAIL_SEND_FAILED':
+      return rawCode;
+    default:
+      if (httpStatus === 429) return 'RATE_LIMITED';
+      return 'SERVER_ERROR';
   }
 }
 
@@ -212,12 +357,7 @@ export async function subscribeToNewsletter(
     readonly source: NewsletterSource;
     readonly website?: string;
   },
-  options?: {
-    readonly fetchImpl?: typeof fetch;
-    readonly envOverride?: Record<string, string | undefined>;
-    readonly hostnameOverride?: string;
-    readonly timeoutMs?: number;
-  }
+  options?: NewsletterRequestOptions
 ): Promise<NewsletterSubscribeResult> {
   const email = normalizeClientEmail(params.email);
   if (!email) {
@@ -262,29 +402,69 @@ export async function subscribeToNewsletter(
       options?.fetchImpl ?? fetch
     );
 
-    if (attempt.kind === 'network_error' || attempt.kind === 'non_json') {
+    if (attempt.kind === 'non_json' || attempt.kind === 'network_error') {
       sawRetryableFailure = true;
       if (hasNextFallback) continue;
       break;
     }
 
     const { status, data } = attempt;
-    if (status === 429 || data?.code === 'RATE_LIMITED') {
-      return { ok: false, code: 'RATE_LIMITED', error: data?.error };
+    if (status === 429) {
+      return {
+        ok: false,
+        code: mapServerErrorCode(data?.code, status),
+        error: data?.error,
+        retryAfterSec: typeof data?.retryAfterSec === 'number' ? data.retryAfterSec : undefined,
+      };
     }
-    if (status === 400 && data?.code === 'INVALID_EMAIL') {
-      return { ok: false, code: 'INVALID_EMAIL', error: data?.error };
+
+    if (status === 400) {
+      return {
+        ok: false,
+        code: mapServerErrorCode(data?.code, status),
+        error: data?.error,
+      };
     }
-    if (status === 400 && data?.code === 'CONSENT_REQUIRED') {
-      return { ok: false, code: 'CONSENT_REQUIRED', error: data?.error };
+
+    if (data?.code === 'EMAIL_DELIVERY_NOT_CONFIGURED' || data?.code === 'EMAIL_SEND_FAILED') {
+      return {
+        ok: false,
+        code: data.code,
+        error: data.error,
+      };
     }
-    if ((status >= 500 || status === 404 || status === 405) && hasNextFallback) {
-      sawRetryableFailure = true;
-      continue;
-    }
+
     if (status >= 200 && status < 300 && data?.ok) {
-      const finalStatus = data.status === 'already_subscribed' ? 'already_subscribed' : 'subscribed';
       const resolvedEmail = typeof data.email === 'string' ? data.email : email;
+
+      if (data.status === 'pending_verification') {
+        const expiresInSec = typeof data.expiresInSec === 'number' ? data.expiresInSec : 600;
+        const cooldownSec = typeof data.cooldownSec === 'number' ? data.cooldownSec : 60;
+        const now = Date.now();
+        writePendingNewsletterVerification({
+          email: resolvedEmail,
+          lang: params.lang,
+          source: params.source,
+          expiresAt: now + expiresInSec * 1000,
+          cooldownUntil: now + cooldownSec * 1000,
+          challengeToken: typeof data.challengeToken === 'string' ? data.challengeToken : undefined,
+          devPreviewCode: typeof data.devPreviewCode === 'string' ? data.devPreviewCode : undefined,
+        });
+        return {
+          ok: true,
+          status: 'pending_verification',
+          email: resolvedEmail,
+          expiresInSec,
+          cooldownSec,
+          challengeToken: typeof data.challengeToken === 'string' ? data.challengeToken : undefined,
+          devPreviewCode: typeof data.devPreviewCode === 'string' ? data.devPreviewCode : undefined,
+          storage: typeof data.storage === 'string' ? data.storage : undefined,
+        };
+      }
+
+      const finalStatus =
+        data.status === 'already_subscribed' ? 'already_subscribed' : 'subscribed';
+      clearPendingNewsletterVerification();
       writeStoredNewsletterSubscription({
         email: resolvedEmail,
         lang: params.lang,
@@ -301,9 +481,8 @@ export async function subscribeToNewsletter(
 
     if (status >= 500) {
       sawRetryableFailure = true;
-      break;
+      if (hasNextFallback) continue;
     }
-    return { ok: false, code: 'SERVER_ERROR', error: data?.error };
   }
 
   if (sawRetryableFailure) {
@@ -320,21 +499,182 @@ export async function subscribeToNewsletter(
   return { ok: false, code: 'SERVER_ERROR' };
 }
 
+export async function verifyNewsletterEmail(
+  params: {
+    readonly email: string;
+    readonly code?: string;
+    readonly token?: string;
+    readonly challengeToken?: string;
+    readonly lang?: SiteLang;
+  },
+  options?: NewsletterRequestOptions
+): Promise<NewsletterVerifyResult> {
+  const email = normalizeClientEmail(params.email);
+  if (!email) {
+    return { ok: false, code: 'INVALID_EMAIL' };
+  }
+  const cleanCode = typeof params.code === 'string' ? params.code.replace(/\D+/g, '').slice(0, 6) : '';
+  const cleanToken = typeof params.token === 'string' ? params.token.trim() : '';
+  if (cleanCode.length !== 6 && !cleanToken) {
+    return { ok: false, code: 'INVALID_CODE' };
+  }
+
+  const { verifyUrls } = resolveNewsletterEndpoints(
+    options?.envOverride,
+    options?.hostnameOverride
+  );
+  const payload: Record<string, unknown> = { email };
+  if (cleanCode.length === 6) payload.code = cleanCode;
+  if (cleanToken) payload.token = cleanToken;
+  if (params.challengeToken) payload.challengeToken = params.challengeToken;
+
+  for (let i = 0; i < verifyUrls.length; i += 1) {
+    const hasNextFallback = i < verifyUrls.length - 1;
+    const attempt = await postJsonWithTimeout(
+      verifyUrls[i],
+      payload,
+      options?.timeoutMs ?? REQUEST_TIMEOUT_MS,
+      options?.fetchImpl ?? fetch
+    );
+
+    if (attempt.kind === 'non_json' || attempt.kind === 'network_error') {
+      if (hasNextFallback) continue;
+      return { ok: false, code: 'SERVER_ERROR' };
+    }
+
+    const { status, data } = attempt;
+    if (status >= 200 && status < 300 && data?.ok) {
+      const resolvedEmail = typeof data.email === 'string' ? data.email : email;
+      const finalStatus =
+        data.status === 'already_subscribed' ? 'already_subscribed' : 'subscribed';
+      clearPendingNewsletterVerification();
+      writeStoredNewsletterSubscription({
+        email: resolvedEmail,
+        lang: params.lang === 'en' ? 'en' : 'ko',
+        status: finalStatus,
+        subscribedAt: new Date().toISOString(),
+      });
+      return {
+        ok: true,
+        status: finalStatus,
+        email: resolvedEmail,
+        storage: typeof data.storage === 'string' ? data.storage : undefined,
+      };
+    }
+
+    if (status >= 500 && hasNextFallback) {
+      continue;
+    }
+
+    return {
+      ok: false,
+      code: mapServerErrorCode(data?.code, status),
+      error: data?.error,
+      remainingAttempts:
+        typeof data?.remainingAttempts === 'number' ? data.remainingAttempts : undefined,
+      retryAfterSec: typeof data?.retryAfterSec === 'number' ? data.retryAfterSec : undefined,
+    };
+  }
+
+  return { ok: false, code: 'SERVER_ERROR' };
+}
+
+export async function resendNewsletterVerification(
+  params: {
+    readonly email: string;
+    readonly lang: SiteLang;
+    readonly source: NewsletterSource;
+  },
+  options?: NewsletterRequestOptions
+): Promise<NewsletterSubscribeResult> {
+  const email = normalizeClientEmail(params.email);
+  if (!email) {
+    return { ok: false, code: 'INVALID_EMAIL' };
+  }
+
+  const { resendUrls } = resolveNewsletterEndpoints(
+    options?.envOverride,
+    options?.hostnameOverride
+  );
+  const payload = {
+    email,
+    lang: params.lang,
+    source: params.source,
+  };
+
+  for (let i = 0; i < resendUrls.length; i += 1) {
+    const hasNextFallback = i < resendUrls.length - 1;
+    const attempt = await postJsonWithTimeout(
+      resendUrls[i],
+      payload,
+      options?.timeoutMs ?? REQUEST_TIMEOUT_MS,
+      options?.fetchImpl ?? fetch
+    );
+
+    if (attempt.kind === 'non_json' || attempt.kind === 'network_error') {
+      if (hasNextFallback) continue;
+      return { ok: false, code: 'SERVER_ERROR' };
+    }
+
+    const { status, data } = attempt;
+    if (status >= 200 && status < 300 && data?.ok) {
+      const resolvedEmail = typeof data.email === 'string' ? data.email : email;
+      if (data.status === 'already_subscribed') {
+        clearPendingNewsletterVerification();
+        writeStoredNewsletterSubscription({
+          email: resolvedEmail,
+          lang: params.lang,
+          status: 'already_subscribed',
+          subscribedAt: new Date().toISOString(),
+        });
+        return { ok: true, status: 'already_subscribed', email: resolvedEmail };
+      }
+      const expiresInSec = typeof data.expiresInSec === 'number' ? data.expiresInSec : 600;
+      const cooldownSec = typeof data.cooldownSec === 'number' ? data.cooldownSec : 60;
+      const now = Date.now();
+      writePendingNewsletterVerification({
+        email: resolvedEmail,
+        lang: params.lang,
+        source: params.source,
+        expiresAt: now + expiresInSec * 1000,
+        cooldownUntil: now + cooldownSec * 1000,
+        challengeToken: typeof data.challengeToken === 'string' ? data.challengeToken : undefined,
+        devPreviewCode: typeof data.devPreviewCode === 'string' ? data.devPreviewCode : undefined,
+      });
+      return {
+        ok: true,
+        status: 'pending_verification',
+        email: resolvedEmail,
+        expiresInSec,
+        cooldownSec,
+        challengeToken: typeof data.challengeToken === 'string' ? data.challengeToken : undefined,
+        devPreviewCode: typeof data.devPreviewCode === 'string' ? data.devPreviewCode : undefined,
+        storage: typeof data.storage === 'string' ? data.storage : undefined,
+      };
+    }
+
+    if (status >= 500 && hasNextFallback) continue;
+    return {
+      ok: false,
+      code: mapServerErrorCode(data?.code, status),
+      error: data?.error,
+      retryAfterSec: typeof data?.retryAfterSec === 'number' ? data.retryAfterSec : undefined,
+    };
+  }
+
+  return { ok: false, code: 'SERVER_ERROR' };
+}
+
 /**
  * Attempts to upgrade a previously device-saved (`offline_saved`) subscription
- * to a real server-persisted subscription once the live edge/API server is reachable.
+ * by initiating server-side email verification or confirming an already-verified address.
  */
 export async function syncOfflineNewsletterSubscription(
   sub: StoredNewsletterSubscription,
   source: NewsletterSource = 'site_about',
-  options?: {
-    readonly fetchImpl?: typeof fetch;
-    readonly envOverride?: Record<string, string | undefined>;
-    readonly hostnameOverride?: string;
-    readonly timeoutMs?: number;
-  }
+  options?: NewsletterRequestOptions
 ): Promise<NewsletterSubscribeResult> {
-  return subscribeToNewsletter(
+  const result = await subscribeToNewsletter(
     {
       email: sub.email,
       consent: true,
@@ -343,16 +683,15 @@ export async function syncOfflineNewsletterSubscription(
     },
     options
   );
+  if (result.ok && result.status === 'pending_verification') {
+    clearStoredNewsletterSubscription();
+  }
+  return result;
 }
 
 export async function unsubscribeFromNewsletter(
   rawEmail: string,
-  options?: {
-    readonly fetchImpl?: typeof fetch;
-    readonly envOverride?: Record<string, string | undefined>;
-    readonly hostnameOverride?: string;
-    readonly timeoutMs?: number;
-  }
+  options?: NewsletterRequestOptions
 ): Promise<NewsletterUnsubscribeResult> {
   const email = normalizeClientEmail(rawEmail);
   if (!email) {
@@ -364,6 +703,7 @@ export async function unsubscribeFromNewsletter(
     options?.hostnameOverride
   );
   clearStoredNewsletterSubscription();
+  clearPendingNewsletterVerification();
   if (isStaticOnly) {
     return { ok: true };
   }

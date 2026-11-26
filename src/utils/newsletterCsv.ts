@@ -11,6 +11,7 @@ export interface NewsletterSubscriberRow {
   readonly source?: string;
   readonly status: string;
   readonly consent_at?: string | null;
+  readonly verified_at?: string | null;
   readonly created_at?: string | null;
   readonly updated_at?: string | null;
   readonly unsubscribed_at?: string | null;
@@ -28,7 +29,17 @@ export function sanitizeCsvCell(value: unknown): string {
 }
 
 export function buildNewsletterSubscribersCsv(rows: readonly NewsletterSubscriberRow[]): string {
-  const header = ['id', 'email', 'status', 'lang', 'source', 'created_at', 'updated_at', 'unsubscribed_at'];
+  const header = [
+    'id',
+    'email',
+    'status',
+    'lang',
+    'source',
+    'verified_at',
+    'created_at',
+    'updated_at',
+    'unsubscribed_at',
+  ];
   const lines = [header.join(',')];
   for (const row of rows) {
     lines.push(
@@ -38,6 +49,7 @@ export function buildNewsletterSubscribersCsv(rows: readonly NewsletterSubscribe
         row.status,
         row.lang ?? 'ko',
         row.source ?? '',
+        row.verified_at ?? '',
         row.created_at ?? '',
         row.updated_at ?? '',
         row.unsubscribed_at ?? '',

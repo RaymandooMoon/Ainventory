@@ -581,6 +581,20 @@ export interface SiteCopy {
     readonly unsubscribeCta: string;
     readonly unsubscribedNotice: string;
     readonly changeEmailCta: string;
+    readonly verifyTitle: string;
+    readonly verifySubtitle: string;
+    readonly verifyCodeLabel: string;
+    readonly verifyCodePlaceholder: string;
+    readonly verifySubmitLabel: string;
+    readonly verifyingLabel: string;
+    readonly resendCta: string;
+    readonly resendCooldownTemplate: string;
+    readonly resentNotice: string;
+    readonly invalidCodeError: string;
+    readonly expiredCodeError: string;
+    readonly attemptsExceededError: string;
+    readonly deliveryNotConfiguredError: string;
+    readonly verifyLinkHint: string;
   };
   readonly legal: {
     readonly closeLabel: string;
@@ -1723,25 +1737,39 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       emailLabel: 'Email address',
       emailPlaceholder: 'you@domain.com',
       consentLabel: 'I agree to receive occasional Ainvtry email updates and know I can unsubscribe anytime.',
-      submitLabel: 'Subscribe',
-      submittingLabel: 'Subscribing…',
+      submitLabel: 'Send Verification Code',
+      submittingLabel: 'Sending code…',
       closeLabel: 'Close newsletter dialog',
-      privacyNote: 'Zero spam · Email only · Unsubscribe in one click.',
+      privacyNote: 'Zero spam · Email verification required · Unsubscribe in one click.',
       invalidEmailError: 'Please enter a valid email address.',
       consentRequiredError: 'Please confirm email update consent before subscribing.',
       rateLimitedError: 'Too many requests. Please try again in a few minutes.',
-      genericError: 'Could not complete your subscription. Please try again.',
-      successTitle: 'You are on the list',
-      successBody: 'We will send private beta invites and major release notes to this address.',
+      genericError: 'Could not complete your request. Please try again.',
+      successTitle: 'Email verified & subscribed',
+      successBody: 'Your email ownership is confirmed. We will send private beta invites and release notes here.',
       alreadyTitle: 'Already subscribed',
-      alreadyBody: 'This email is already registered for Ainvtry updates.',
+      alreadyBody: 'This email is already verified and registered for Ainvtry updates.',
       offlineTitle: 'Saved on this device',
-      offlineBody: 'The subscription server is currently offline. Tap below to confirm directly via email so we never miss you.',
+      offlineBody: 'The subscription server is currently unreachable. Retry when online or confirm directly via email below.',
       mailtoFallbackCta: 'Send Confirmation Email',
       doneCta: 'Done',
       unsubscribeCta: 'Unsubscribe',
       unsubscribedNotice: 'Your email has been unsubscribed from Ainvtry updates.',
       changeEmailCta: 'Use another email',
+      verifyTitle: 'Verify your email address',
+      verifySubtitle: 'We sent a 6-digit verification code and one-click link to this inbox. Valid for 10 minutes.',
+      verifyCodeLabel: '6-digit verification code',
+      verifyCodePlaceholder: '000000',
+      verifySubmitLabel: 'Verify & Subscribe',
+      verifyingLabel: 'Verifying…',
+      resendCta: 'Resend code',
+      resendCooldownTemplate: 'Resend in {sec}s',
+      resentNotice: 'A new 6-digit verification code has been sent to your inbox.',
+      invalidCodeError: 'The 6-digit code does not match. Please check and try again.',
+      expiredCodeError: 'Your verification code expired. Tap resend for a fresh code.',
+      attemptsExceededError: 'Too many incorrect attempts. Please request a new verification code.',
+      deliveryNotConfiguredError: 'Email verification delivery (RESEND_API_KEY) is not configured on the server yet.',
+      verifyLinkHint: 'Or tap the verification link inside the email to confirm automatically.',
     },
     legal: {
       closeLabel: 'Close legal notice',
@@ -2916,25 +2944,39 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       emailLabel: '이메일 주소',
       emailPlaceholder: 'name@example.com',
       consentLabel: '뉴스레터 발송을 위한 이메일 수집 · 이용에 동의하며 언제든 수신 거부할 수 있습니다.',
-      submitLabel: '뉴스레터 구독하기',
-      submittingLabel: '구독 등록 중…',
+      submitLabel: '인증코드 받기',
+      submittingLabel: '인증코드 발송 중…',
       closeLabel: '뉴스레터 창 닫기',
-      privacyNote: '광고성 스팸 없음 · 이메일 외 수집 없음 · 언제든 즉시 수신 거부.',
+      privacyNote: '광고성 스팸 없음 · 본인 이메일 인증 필수 · 언제든 즉시 수신 거부.',
       invalidEmailError: '올바른 이메일 주소를 입력해 주세요.',
       consentRequiredError: '이메일 수신 및 개인정보 수집 동의에 체크해 주세요.',
       rateLimitedError: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
-      genericError: '구독 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.',
-      successTitle: '뉴스레터 구독이 완료되었습니다',
-      successBody: '프라이빗 베타 초대와 주요 릴리스 소식을 보내드리겠습니다.',
+      genericError: '요청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+      successTitle: '이메일 인증 및 구독이 완료되었습니다',
+      successBody: '이메일 소유 확인이 완료되었습니다. 프라이빗 베타 초대와 주요 릴리스 소식을 보내 드리겠습니다.',
       alreadyTitle: '이미 구독 중인 이메일입니다',
-      alreadyBody: '입력하신 주소는 이미 iNVTRY 뉴스레터에 등록되어 있습니다.',
+      alreadyBody: '입력하신 주소는 이미 인증이 완료되어 iNVTRY 뉴스레터에 등록되어 있습니다.',
       offlineTitle: '이 기기에 구독 요청을 임시 저장했습니다',
-      offlineBody: '현재 서버와 연결할 수 없어 아래 버튼으로 확인 메일을 보내주시면 바로 등록해 드립니다.',
+      offlineBody: '현재 서버와 연결할 수 없어 아래 버튼으로 다시 시도하거나 확인 메일을 보내 주시면 바로 등록해 드립니다.',
       mailtoFallbackCta: '이메일로 구독 신청 보내기',
       doneCta: '확인',
       unsubscribeCta: '수신 거부',
       unsubscribedNotice: '뉴스레터 수신 거부가 처리되었습니다.',
-      changeEmailCta: '다른 이메일로 등록',
+      changeEmailCta: '다른 이메일로 변경',
+      verifyTitle: '이메일 인증을 완료해 주세요',
+      verifySubtitle: '입력하신 주소로 6자리 인증코드와 원클릭 인증 링크를 보냈습니다. (10분 유효)',
+      verifyCodeLabel: '6자리 인증코드',
+      verifyCodePlaceholder: '000000',
+      verifySubmitLabel: '인증 완료하고 구독하기',
+      verifyingLabel: '인증 확인 중…',
+      resendCta: '인증코드 재발송',
+      resendCooldownTemplate: '{sec}초 후 재발송 가능',
+      resentNotice: '새 6자리 인증코드를 이메일로 다시 발송했습니다.',
+      invalidCodeError: '인증코드 6자리가 일치하지 않습니다. 다시 확인해 주세요.',
+      expiredCodeError: '인증코드 유효시간(10분)이 만료되었습니다. 재발송 버튼을 눌러 주세요.',
+      attemptsExceededError: '인증 시도 횟수를 초과했습니다. 인증코드를 다시 발송해 주세요.',
+      deliveryNotConfiguredError: '인증 메일 발송 서버(RESEND_API_KEY)가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요.',
+      verifyLinkHint: '또는 수신한 메일 안의 인증 버튼을 눌러 바로 완료할 수도 있습니다.',
     },
     legal: {
       closeLabel: '안내 닫기',

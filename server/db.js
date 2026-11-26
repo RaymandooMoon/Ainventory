@@ -1419,8 +1419,14 @@ export function initDb() {
       email TEXT UNIQUE NOT NULL,
       lang TEXT NOT NULL DEFAULT 'ko',
       source TEXT NOT NULL DEFAULT 'site_footer',
-      status TEXT NOT NULL DEFAULT 'subscribed',
+      status TEXT NOT NULL DEFAULT 'pending',
       consent_at TEXT NOT NULL DEFAULT (datetime('now')),
+      verified_at TEXT DEFAULT NULL,
+      verification_code_hash TEXT DEFAULT NULL,
+      verification_token_hash TEXT DEFAULT NULL,
+      verification_expires_at TEXT DEFAULT NULL,
+      verification_sent_at TEXT DEFAULT NULL,
+      verification_fail_count INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       unsubscribed_at TEXT DEFAULT NULL
@@ -1479,6 +1485,12 @@ export function initDb() {
     "ALTER TABLE garments ADD COLUMN official_source_url TEXT DEFAULT ''",
     "ALTER TABLE garments ADD COLUMN cutout_source TEXT DEFAULT 'local'",
     "ALTER TABLE wear_logs ADD COLUMN status TEXT NOT NULL DEFAULT 'worn'",
+    'ALTER TABLE newsletter_subscribers ADD COLUMN verified_at TEXT DEFAULT NULL',
+    'ALTER TABLE newsletter_subscribers ADD COLUMN verification_code_hash TEXT DEFAULT NULL',
+    'ALTER TABLE newsletter_subscribers ADD COLUMN verification_token_hash TEXT DEFAULT NULL',
+    'ALTER TABLE newsletter_subscribers ADD COLUMN verification_expires_at TEXT DEFAULT NULL',
+    'ALTER TABLE newsletter_subscribers ADD COLUMN verification_sent_at TEXT DEFAULT NULL',
+    'ALTER TABLE newsletter_subscribers ADD COLUMN verification_fail_count INTEGER NOT NULL DEFAULT 0',
   ];
 
   for (const stmt of alterStatements) {

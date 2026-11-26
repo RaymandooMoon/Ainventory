@@ -36,6 +36,7 @@ import SiteNewsletterModal from './SiteNewsletterModal.tsx';
 import {
   readStoredNewsletterSubscription,
   syncOfflineNewsletterSubscription,
+  verifyNewsletterEmail,
 } from './newsletterClient.ts';
 import SiteStageAnalytics from './SiteStageAnalytics.tsx';
 import SiteStageHud from './SiteStageHud.tsx';
@@ -148,6 +149,8 @@ export default function AinvtrySiteApp() {
   const [legalDoc, setLegalDoc] = useState<LegalDocKind | null>(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [newsletterOpen, setNewsletterOpen] = useState(false);
+  const [newsletterLinkNotice, setNewsletterLinkNotice] = useState('');
+  const [newsletterLinkError, setNewsletterLinkError] = useState('');
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const activeStageRef = useRef<StageId>(activeStage);
@@ -498,13 +501,52 @@ export default function AinvtrySiteApp() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const params = new URLSearchParams(window.location.search);
+    const verifyToken = params.get('nl_verify')?.trim() || '';
+    const verifyEmail = params.get('email')?.trim() || '';
+
+    if (verifyToken && verifyEmail) {
+      // Immediately scrub sensitive verification token from browser URL bar & history
+      params.delete('nl_verify');
+      params.delete('email');
+      const nextSearch = params.toString();
+      const cleanUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, '', cleanUrl);
+
+      let cancelled = false;
+      void verifyNewsletterEmail({ email: verifyEmail, token: verifyToken, lang }).then((res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          setNewsletterLinkError('');
+          setNewsletterLinkNotice(
+            lang === 'ko'
+              ? '이메일 소유권 인증이 완료되어 뉴스레터 구독이 활성화되었습니다.'
+              : 'Your email ownership is verified and your newsletter subscription is active.'
+          );
+        } else {
+          setNewsletterLinkNotice('');
+          setNewsletterLinkError(
+            res.error ||
+              (lang === 'ko'
+                ? '인증 링크가 만료되었거나 유효하지 않습니다. 다시 인증코드를 요청해 주세요.'
+                : 'This verification link is invalid or expired. Please request a new code.')
+          );
+        }
+        setNewsletterOpen(true);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     return scheduleAfterFirstPaint(() => {
       const saved = readStoredNewsletterSubscription();
       if (saved && saved.status === 'offline_saved') {
         void syncOfflineNewsletterSubscription(saved, 'site_about');
       }
     });
-  }, []);
+  }, [lang]);
 
   const handleOpacityPointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -1005,7 +1047,13 @@ export default function AinvtrySiteApp() {
         isOpen={newsletterOpen}
         copy={copy.newsletter}
         lang={lang}
-        onClose={() => setNewsletterOpen(false)}
+        externalNotice={newsletterLinkNotice}
+        externalError={newsletterLinkError}
+        onClose={() => {
+          setNewsletterOpen(false);
+          setNewsletterLinkNotice('');
+          setNewsletterLinkError('');
+        }}
       />
 
       <SiteLegalModal doc={legalDoc} copy={copy.legal} onClose={handleCloseLegal} />

@@ -4,18 +4,23 @@
  * Cloudflare Worker Edge API + Static Assets Router for https://ainvtry.com
  *
  * - Serves static site assets directly via Cloudflare Static Assets (`run_worker_first: ["/api/*"]`).
- * - Handles `/api/newsletter/*` at the edge with strict validation, honeypot,
- *   per-IP sliding-window rate limiting, and 3-tier storage:
- *     1) Cloudflare D1 (`env.NEWSLETTER_DB`) when bound (permanent edge SQL)
- *     2) Cloudflare KV (`env.NEWSLETTER_KV`) when bound (permanent edge KV)
- *     3) Render Express upstream (`env.API_UPSTREAM_ORIGIN`) by default with
- *        cold-start-tolerant retry so it works immediately with zero dashboard setup!
- * - Dispatches non-blocking Resend welcome/founder emails (`env.RESEND_API_KEY`)
- *   and SSRF-validated webhook alerts (`env.NEWSLETTER_WEBHOOK_URL`) via `ctx.waitUntil`.
- * - Proxies remaining `/api/*` requests cleanly to `env.API_UPSTREAM_ORIGIN`.
+ * - Enforces real email ownership verification (Double Opt-In: 6-digit OTP + one-click magic link)
+ *   across all 3 deployment tiers:
+ *     1) Cloudflare D1 (`env.NEWSLETTER_DB`) when bound (stateful edge SQL)
+ *     2) Cloudflare KV (`env.NEWSLETTER_KV`) when bound (stateful edge KV)
+ *     3) Zero-config Default:
+ *        - If `env.RESEND_API_KEY` is configured on Cloudflare: HMAC-SHA256 signed stateless
+ *          verification challenge (`challengeToken` + one-click `nlv1.*` link) + Resend delivery
+ *          + optional HMAC-signed mirror to Render SQLite (`env.NEWSLETTER_SYNC_SECRET`).
+ *        - If `env.RESEND_API_KEY` is configured on Render instead: transparent cold-start-tolerant
+ *          proxy of `/api/newsletter/{subscribe,verify,resend,unsubscribe}` to Render Express.
+ * - Never leaks verification codes or allows unverified addresses into `subscribed` status.
+ * - Dispatches non-blocking Resend welcome/founder emails and SSRF-safe webhook alerts AFTER
+ *   verification succeeds via `ctx.waitUntil`.
  */
 
 const DEFAULT_UPSTREAM_ORIGIN = 'https://ainventory-api.onrender.com';
+const DEFAULT_SITE_ORIGIN = 'https://ainvtry.com';
 const DEFAULT_FROM_EMAIL = 'iNVTRY <newsletter@ainvtry.com>';
 const DEFAULT_NOTIFY_EMAIL = 'raymond@ainvtry.com';
 const RESEND_API_URL = 'https://api.resend.com/emails';
@@ -31,15 +36,25 @@ const ALLOWED_ORIGINS = new Set([
 const MAX_BODY_BYTES = 8 * 1024;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_MAX_REQUESTS = 12;
+const OTP_TTL_MS = 10 * 60 * 1000;
+const RESEND_COOLDOWN_MS = 60 * 1000;
+const MAX_VERIFY_FAILS = 5;
 const UPSTREAM_TIMEOUT_MS = 26_000;
 const NOTIFY_TIMEOUT_MS = 8_000;
 const KV_INDEX_KEY = 'newsletter:index:v1';
 const KV_SUB_PREFIX = 'newsletter:sub:';
 
 const rateBuckets = new Map();
+const resendCooldowns = new Map();
+const edgeVerifyFails = new Map();
+const consumedEdgeNonces = new Map();
+const initializedD1Instances = new WeakSet();
 
 export function resetWorkerRateLimitsForTests() {
   rateBuckets.clear();
+  resendCooldowns.clear();
+  edgeVerifyFails.clear();
+  consumedEdgeNonces.clear();
 }
 
 export function normalizeEmail(raw) {
@@ -108,6 +123,12 @@ function resolveUpstreamOrigin(env) {
   return new URL(candidate).origin;
 }
 
+function resolveSiteOrigin(env) {
+  const candidate = resolveSafeHttpsUrl(env?.SITE_PUBLIC_ORIGIN || DEFAULT_SITE_ORIGIN);
+  if (!candidate) return DEFAULT_SITE_ORIGIN;
+  return new URL(candidate).origin;
+}
+
 function resolveCorsOrigin(request, env) {
   const origin = String(request.headers.get('origin') || '').trim();
   if (!origin) return null;
@@ -139,7 +160,113 @@ function buildJsonResponse(body, status, request, env, extraHeaders = {}) {
   return new Response(status === 204 ? null : JSON.stringify(body), { status, headers });
 }
 
-function checkEdgeRateLimit(key, now = Date.now()) {
+/* ==========================================================================
+ * WebCrypto Security Primitives (SHA-256, HMAC-SHA256, CSPRNG OTP/Token)
+ * ========================================================================== */
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+function bytesToHex(bytes) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function base64UrlEncode(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function base64UrlDecodeToString(b64u) {
+  const padded = String(b64u || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padLen = (4 - (padded.length % 4)) % 4;
+  const binary = atob(padded + '='.repeat(padLen));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return textDecoder.decode(bytes);
+}
+
+function timingSafeEqual(a, b) {
+  const left = String(a || '');
+  const right = String(b || '');
+  if (!left || left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i += 1) {
+    diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+async function sha256Hex(input) {
+  const buf = await crypto.subtle.digest('SHA-256', textEncoder.encode(String(input)));
+  return bytesToHex(new Uint8Array(buf));
+}
+
+async function hmacHex(secret, message) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    textEncoder.encode(String(secret)),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, textEncoder.encode(String(message)));
+  return bytesToHex(new Uint8Array(sig));
+}
+
+function generateSixDigitCode() {
+  // Rejection sampling for uniform [0, 900000) + 100000 => [100000, 999999]
+  const limit = Math.floor(0x100000000 / 900000) * 900000;
+  const buf = new Uint32Array(1);
+  while (true) {
+    crypto.getRandomValues(buf);
+    if (buf[0] < limit) {
+      return String(100000 + (buf[0] % 900000));
+    }
+  }
+}
+
+function generateRandomHex(byteLen = 24) {
+  const bytes = new Uint8Array(byteLen);
+  crypto.getRandomValues(bytes);
+  return bytesToHex(bytes);
+}
+
+async function hashNewsletterSecret(email, rawSecret) {
+  return sha256Hex(`ainvtry-nl-v1:${email}:${String(rawSecret || '').trim()}`);
+}
+
+function resolveSigningSecret(env) {
+  return String(env?.NEWSLETTER_SIGNING_SECRET || env?.RESEND_API_KEY || '').trim();
+}
+
+async function signEdgeToken(prefix, payload, secret) {
+  const encoded = base64UrlEncode(textEncoder.encode(JSON.stringify(payload)));
+  const sig = await hmacHex(secret, `${prefix}.${encoded}`);
+  return `${prefix}.${encoded}.${sig}`;
+}
+
+async function verifyEdgeToken(prefix, rawToken, secret) {
+  if (typeof rawToken !== 'string' || !secret) return null;
+  const parts = rawToken.trim().split('.');
+  if (parts.length !== 3 || parts[0] !== prefix) return null;
+  const [, encoded, sig] = parts;
+  if (!encoded || !sig || encoded.length > 2048 || sig.length !== 64) return null;
+  const expected = await hmacHex(secret, `${prefix}.${encoded}`);
+  if (!timingSafeEqual(expected, sig)) return null;
+  try {
+    const parsed = JSON.parse(base64UrlDecodeToString(encoded));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function checkEdgeRateLimit(key, maxRequests = RATE_MAX_REQUESTS, now = Date.now()) {
   const entry = rateBuckets.get(key);
   if (!entry || now >= entry.resetAt) {
     rateBuckets.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
@@ -150,7 +277,7 @@ function checkEdgeRateLimit(key, now = Date.now()) {
     }
     return { allowed: true, retryAfterSec: 0 };
   }
-  if (entry.count >= RATE_MAX_REQUESTS) {
+  if (entry.count >= maxRequests) {
     return {
       allowed: false,
       retryAfterSec: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)),
@@ -158,6 +285,34 @@ function checkEdgeRateLimit(key, now = Date.now()) {
   }
   entry.count += 1;
   return { allowed: true, retryAfterSec: 0 };
+}
+
+function checkResendCooldown(email, now = Date.now()) {
+  const sentAt = resendCooldowns.get(email);
+  if (sentAt && now - sentAt < RESEND_COOLDOWN_MS) {
+    return {
+      allowed: false,
+      retryAfterSec: Math.max(1, Math.ceil((RESEND_COOLDOWN_MS - (now - sentAt)) / 1000)),
+    };
+  }
+  return { allowed: true, retryAfterSec: 0 };
+}
+
+function markResendCooldown(email, now = Date.now()) {
+  resendCooldowns.set(email, now);
+  if (resendCooldowns.size > 2000) {
+    for (const [k, v] of resendCooldowns.entries()) {
+      if (now - v >= RESEND_COOLDOWN_MS) resendCooldowns.delete(k);
+    }
+  }
+}
+
+function parseIsoMs(raw) {
+  if (!raw) return 0;
+  const str = String(raw).trim();
+  const iso = str.includes('T') ? str : `${str.replace(' ', 'T')}Z`;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 async function readJsonBody(request) {
@@ -196,143 +351,71 @@ async function fetchWithTimeout(fetchImpl, url, init, timeoutMs) {
 }
 
 /* ==========================================================================
- * Optional Edge Storage Drivers (Cloudflare D1 & Cloudflare KV)
+ * Edge Email Delivery (Verification Email + Verified Welcome/Founder/Webhook)
  * ========================================================================== */
 
-const initializedD1Instances = new WeakSet();
-
-async function ensureD1NewsletterTable(db) {
-  if (initializedD1Instances.has(db)) return;
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS newsletter_subscribers (
-         id INTEGER PRIMARY KEY AUTOINCREMENT,
-         email TEXT UNIQUE NOT NULL,
-         lang TEXT NOT NULL DEFAULT 'ko',
-         source TEXT NOT NULL DEFAULT 'site_about',
-         status TEXT NOT NULL DEFAULT 'subscribed',
-         consent_at TEXT NOT NULL DEFAULT (datetime('now')),
-         created_at TEXT NOT NULL DEFAULT (datetime('now')),
-         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-         unsubscribed_at TEXT DEFAULT NULL
-       )`
-    )
-    .run();
-  initializedD1Instances.add(db);
-}
-
-async function subscribeInD1(db, { email, lang, source }) {
-  await ensureD1NewsletterTable(db);
-  const existing = await db
-    .prepare('SELECT id, status FROM newsletter_subscribers WHERE email = ?')
-    .bind(email)
-    .first();
-
-  if (existing) {
-    if (existing.status === 'subscribed') {
-      await db
-        .prepare(
-          "UPDATE newsletter_subscribers SET lang = ?, source = ?, updated_at = datetime('now') WHERE id = ?"
-        )
-        .bind(lang, source, existing.id)
-        .run();
-      return { httpStatus: 200, status: 'already_subscribed', resubscribed: false, email, storage: 'd1' };
-    }
-    await db
-      .prepare(
-        "UPDATE newsletter_subscribers SET status = 'subscribed', lang = ?, source = ?, consent_at = datetime('now'), updated_at = datetime('now'), unsubscribed_at = NULL WHERE id = ?"
-      )
-      .bind(lang, source, existing.id)
-      .run();
-    return { httpStatus: 200, status: 'subscribed', resubscribed: true, email, storage: 'd1' };
+async function sendEdgeVerificationEmail({ email, lang, code, verifyUrl }, env, fetchImpl) {
+  const resendKey = String(env?.RESEND_API_KEY || '').trim();
+  if (!resendKey) {
+    return { sent: false, configured: false };
   }
+  const fromEmail = String(env?.RESEND_FROM_EMAIL || DEFAULT_FROM_EMAIL).trim() || DEFAULT_FROM_EMAIL;
+  const replyTo =
+    String(env?.NEWSLETTER_NOTIFY_EMAIL || DEFAULT_NOTIFY_EMAIL).trim() || DEFAULT_NOTIFY_EMAIL;
+  const isEn = lang === 'en';
+  const safeEmail = escapeHtml(email);
+  const safeUrl = escapeHtml(verifyUrl);
+  const spacedCode = `${code.slice(0, 3)} ${code.slice(3)}`;
 
-  await db
-    .prepare(
-      "INSERT INTO newsletter_subscribers (email, lang, source, status) VALUES (?, ?, ?, 'subscribed')"
-    )
-    .bind(email, lang, source)
-    .run();
-  return { httpStatus: 201, status: 'subscribed', resubscribed: false, email, storage: 'd1' };
-}
+  const payload = {
+    from: fromEmail,
+    to: [email],
+    reply_to: replyTo,
+    subject: isEn ? `[iNVTRY] Your verification code: ${code}` : `[iNVTRY] 이메일 인증코드: ${code}`,
+    text: isEn
+      ? `Verify your iNVTRY newsletter email (${email}).\n6-digit code: ${code} (valid 10 min)\nOr click: ${verifyUrl}`
+      : `iNVTRY 뉴스레터 이메일 인증 (${email})\n6자리 인증코드: ${code} (10분 유효)\n또는 원클릭 인증: ${verifyUrl}`,
+    html: `<div style="background:#09090b;color:#f5f5f7;padding:28px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;border-radius:14px;">
+      <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.12em;color:#d6b889;font-weight:700;">iNVTRY · EMAIL VERIFICATION</p>
+      <h1 style="margin:0 0 10px;font-size:19px;">${isEn ? 'Confirm your email address' : '이메일 주소를 인증해 주세요'}</h1>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#d1d1d6;">${
+        isEn
+          ? `Enter this 6-digit code on ainvtry.com or click the button below to confirm <strong>${safeEmail}</strong>.`
+          : `<strong>${safeEmail}</strong> 주소가 본인의 이메일이 맞는지 확인하기 위해 아래 6자리 인증코드를 입력하거나 버튼을 눌러 주세요.`
+      }</p>
+      <div style="margin:0 0 16px;padding:16px;background:#18181d;border:1px solid rgba(214,184,137,0.34);border-radius:12px;text-align:center;">
+        <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:28px;font-weight:700;letter-spacing:0.18em;color:#f5f5f7;">${spacedCode}</div>
+      </div>
+      <div style="text-align:center;margin-bottom:14px;">
+        <a href="${safeUrl}" style="display:inline-block;padding:11px 22px;border-radius:999px;background:#f5f5f7;color:#101013;font-size:13px;font-weight:650;text-decoration:none;">${
+          isEn ? 'Verify Email in One Click' : '원클릭으로 이메일 인증 완료'
+        }</a>
+      </div>
+      <p style="margin:0;font-size:12px;color:#8e8e93;">${
+        isEn ? 'Valid for 10 minutes. Ignore if you did not request this.' : '10분간 유효합니다. 본인이 요청하지 않으셨다면 무시해 주세요.'
+      }</p>
+    </div>`,
+  };
 
-async function unsubscribeInD1(db, email) {
-  await ensureD1NewsletterTable(db);
-  await db
-    .prepare(
-      "UPDATE newsletter_subscribers SET status = 'unsubscribed', unsubscribed_at = datetime('now'), updated_at = datetime('now') WHERE email = ?"
-    )
-    .bind(email)
-    .run();
-}
-
-async function subscribeInKv(kv, { email, lang, source }) {
-  const now = new Date().toISOString();
-  const key = `${KV_SUB_PREFIX}${email}`;
-  const raw = await kv.get(key, 'json');
-
-  let result;
-  let record;
-  if (raw && raw.status === 'subscribed') {
-    record = { ...raw, lang, source, updated_at: now };
-    result = { httpStatus: 200, status: 'already_subscribed', resubscribed: false, email, storage: 'kv' };
-  } else if (raw) {
-    record = {
-      ...raw,
-      email,
-      lang,
-      source,
-      status: 'subscribed',
-      consent_at: now,
-      updated_at: now,
-      unsubscribed_at: null,
-    };
-    result = { httpStatus: 200, status: 'subscribed', resubscribed: true, email, storage: 'kv' };
-  } else {
-    record = {
-      email,
-      lang,
-      source,
-      status: 'subscribed',
-      consent_at: now,
-      created_at: now,
-      updated_at: now,
-      unsubscribed_at: null,
-    };
-    result = { httpStatus: 201, status: 'subscribed', resubscribed: false, email, storage: 'kv' };
-  }
-
-  await kv.put(key, JSON.stringify(record));
   try {
-    const rawIdx = (await kv.get(KV_INDEX_KEY, 'json')) || [];
-    const list = Array.isArray(rawIdx) ? rawIdx.filter((e) => e !== email) : [];
-    list.unshift(email);
-    await kv.put(KV_INDEX_KEY, JSON.stringify(list.slice(0, 1000)));
+    const res = await fetchWithTimeout(
+      fetchImpl,
+      RESEND_API_URL,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      },
+      NOTIFY_TIMEOUT_MS
+    );
+    return { sent: res.ok, configured: true, status: res.status };
   } catch {
-    // Non-fatal index update
+    return { sent: false, configured: true, status: 0 };
   }
-  return result;
 }
-
-async function unsubscribeInKv(kv, email) {
-  const key = `${KV_SUB_PREFIX}${email}`;
-  const raw = await kv.get(key, 'json');
-  if (!raw) return;
-  const now = new Date().toISOString();
-  await kv.put(
-    key,
-    JSON.stringify({
-      ...raw,
-      status: 'unsubscribed',
-      unsubscribed_at: now,
-      updated_at: now,
-    })
-  );
-}
-
-/* ==========================================================================
- * Edge Notifications (Resend Welcome + Founder Alert + SSRF-Safe Webhook)
- * ========================================================================== */
 
 async function dispatchEdgeNotifications(event, env, fetchImpl) {
   const summary = { welcomeSent: false, founderAlertSent: false, webhookSent: false };
@@ -377,14 +460,14 @@ async function dispatchEdgeNotifications(event, env, fetchImpl) {
           reply_to: notifyEmail,
           subject: isEn
             ? '[iNVTRY] Welcome to the iNVTRY Newsletter'
-            : '[iNVTRY] 뉴스레터 구독이 완료되었습니다',
+            : '[iNVTRY] 이메일 인증 및 뉴스레터 구독이 완료되었습니다',
           text: isEn
-            ? `Your email (${event.email}) is subscribed to the iNVTRY newsletter. Unsubscribe anytime at https://ainvtry.com.`
-            : `${event.email} 주소로 iNVTRY 뉴스레터 구독이 완료되었습니다. 언제든 https://ainvtry.com 에서 수신 거부할 수 있습니다.`,
+            ? `Your email (${event.email}) is verified and subscribed to the iNVTRY newsletter. Unsubscribe anytime at https://ainvtry.com.`
+            : `${event.email} 이메일 인증 및 iNVTRY 뉴스레터 구독이 완료되었습니다. 언제든 https://ainvtry.com 에서 수신 거부할 수 있습니다.`,
           html: `<div style="background:#09090b;color:#f5f5f7;padding:28px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;border-radius:14px;">
             <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.12em;color:#d6b889;font-weight:700;">iNVTRY · NEWSLETTER</p>
             <h1 style="margin:0 0 12px;font-size:19px;">${
-              isEn ? 'You are subscribed.' : '뉴스레터 구독이 완료되었습니다.'
+              isEn ? 'Email verified & subscribed.' : '이메일 인증 및 구독이 완료되었습니다.'
             }</h1>
             <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#d1d1d6;">${
               isEn
@@ -403,7 +486,7 @@ async function dispatchEdgeNotifications(event, env, fetchImpl) {
     );
 
     if (notifyEmail.toLowerCase() !== event.email.toLowerCase()) {
-      const actionLabel = event.resubscribed ? '재구독' : '신규 구독';
+      const actionLabel = event.resubscribed ? '인증 재구독' : '인증 신규 구독';
       tasks.push(
         sendEmail(
           {
@@ -423,7 +506,7 @@ async function dispatchEdgeNotifications(event, env, fetchImpl) {
     const text =
       event.type === 'unsubscribed'
         ? `[iNVTRY Newsletter] 수신 거부: ${event.email}`
-        : `[iNVTRY Newsletter] ${event.resubscribed ? '재구독' : '신규 구독'}: ${event.email} (${event.lang} · ${event.source})`;
+        : `[iNVTRY Newsletter] ${event.resubscribed ? '인증 재구독' : '인증 신규 구독'}: ${event.email} (${event.lang} · ${event.source})`;
     const headers = { 'Content-Type': 'application/json' };
     if (webhookSecret) headers['X-Ainvtry-Webhook-Secret'] = webhookSecret;
 
@@ -441,6 +524,7 @@ async function dispatchEdgeNotifications(event, env, fetchImpl) {
                 email: event.email,
                 lang: event.lang,
                 source: event.source,
+                verified: event.type === 'subscribed',
                 resubscribed: Boolean(event.resubscribed),
                 storage: event.storage,
                 timestamp: new Date().toISOString(),
@@ -465,21 +549,333 @@ async function dispatchEdgeNotifications(event, env, fetchImpl) {
 }
 
 /* ==========================================================================
- * Upstream Render Express Proxy (Cold-Start Tolerant)
+ * Optional Edge Storage Drivers (Cloudflare D1 & Cloudflare KV)
  * ========================================================================== */
 
-async function forwardNewsletterToUpstream(pathSuffix, payload, env, fetchImpl, notifyHandledAtEdge) {
+async function ensureD1NewsletterTable(db) {
+  if (initializedD1Instances.has(db)) return;
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         email TEXT UNIQUE NOT NULL,
+         lang TEXT NOT NULL DEFAULT 'ko',
+         source TEXT NOT NULL DEFAULT 'site_about',
+         status TEXT NOT NULL DEFAULT 'pending',
+         consent_at TEXT NOT NULL DEFAULT (datetime('now')),
+         verified_at TEXT DEFAULT NULL,
+         verification_code_hash TEXT DEFAULT NULL,
+         verification_token_hash TEXT DEFAULT NULL,
+         verification_expires_at TEXT DEFAULT NULL,
+         verification_sent_at TEXT DEFAULT NULL,
+         verification_fail_count INTEGER NOT NULL DEFAULT 0,
+         created_at TEXT NOT NULL DEFAULT (datetime('now')),
+         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+         unsubscribed_at TEXT DEFAULT NULL
+       )`
+    )
+    .run();
+  initializedD1Instances.add(db);
+}
+
+async function startD1Verification(db, { email, lang, source }) {
+  await ensureD1NewsletterTable(db);
+  const existing = await db
+    .prepare('SELECT id, status, verification_sent_at FROM newsletter_subscribers WHERE email = ?')
+    .bind(email)
+    .first();
+
+  if (existing && existing.status === 'subscribed') {
+    await db
+      .prepare("UPDATE newsletter_subscribers SET lang = ?, source = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind(lang, source, existing.id)
+      .run();
+    return { alreadySubscribed: true };
+  }
+
+  if (existing && existing.verification_sent_at) {
+    const elapsed = Date.now() - parseIsoMs(existing.verification_sent_at);
+    if (elapsed >= 0 && elapsed < RESEND_COOLDOWN_MS) {
+      return {
+        cooldown: true,
+        retryAfterSec: Math.max(1, Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000)),
+      };
+    }
+  }
+
+  return { existing, alreadySubscribed: false, cooldown: false };
+}
+
+async function saveD1PendingChallenge(db, existing, { email, lang, source, codeHash, tokenHash, nowIso, expiresIso }) {
+  if (existing) {
+    await db
+      .prepare(
+        `UPDATE newsletter_subscribers
+         SET status = 'pending', lang = ?, source = ?, consent_at = datetime('now'),
+             verification_code_hash = ?, verification_token_hash = ?,
+             verification_expires_at = ?, verification_sent_at = ?,
+             verification_fail_count = 0, updated_at = datetime('now')
+         WHERE id = ?`
+      )
+      .bind(lang, source, codeHash, tokenHash, expiresIso, nowIso, existing.id)
+      .run();
+  } else {
+    await db
+      .prepare(
+        `INSERT INTO newsletter_subscribers (
+           email, lang, source, status,
+           verification_code_hash, verification_token_hash,
+           verification_expires_at, verification_sent_at, verification_fail_count
+         ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, 0)`
+      )
+      .bind(email, lang, source, codeHash, tokenHash, expiresIso, nowIso)
+      .run();
+  }
+}
+
+async function verifyInD1(db, { email, code, token }) {
+  await ensureD1NewsletterTable(db);
+  const row = await db
+    .prepare(
+      `SELECT id, lang, source, status, unsubscribed_at,
+              verification_code_hash, verification_token_hash,
+              verification_expires_at, verification_fail_count
+       FROM newsletter_subscribers WHERE email = ?`
+    )
+    .bind(email)
+    .first();
+
+  if (!row) return { ok: false, status: 400, code: 'NO_PENDING_VERIFICATION' };
+  if (row.status === 'subscribed') return { ok: true, alreadySubscribed: true, lang: row.lang, source: row.source };
+  if (row.status !== 'pending' || (!row.verification_code_hash && !row.verification_token_hash)) {
+    return { ok: false, status: 400, code: 'NO_PENDING_VERIFICATION' };
+  }
+
+  const expiresMs = parseIsoMs(row.verification_expires_at);
+  if (!expiresMs || Date.now() > expiresMs) {
+    await db
+      .prepare("UPDATE newsletter_subscribers SET verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now') WHERE id = ?")
+      .bind(row.id)
+      .run();
+    return { ok: false, status: 400, code: 'OTP_EXPIRED' };
+  }
+
+  const fails = Number(row.verification_fail_count || 0);
+  if (fails >= MAX_VERIFY_FAILS) {
+    return { ok: false, status: 429, code: 'OTP_ATTEMPTS_EXCEEDED', remainingAttempts: 0 };
+  }
+
+  const codeMatched =
+    Boolean(code) &&
+    Boolean(row.verification_code_hash) &&
+    timingSafeEqual(row.verification_code_hash, await hashNewsletterSecret(email, code));
+  const tokenMatched =
+    Boolean(token) &&
+    Boolean(row.verification_token_hash) &&
+    timingSafeEqual(row.verification_token_hash, await hashNewsletterSecret(email, token));
+
+  if (!codeMatched && !tokenMatched) {
+    const nextFails = fails + 1;
+    if (nextFails >= MAX_VERIFY_FAILS) {
+      await db
+        .prepare("UPDATE newsletter_subscribers SET verification_fail_count = ?, verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now') WHERE id = ?")
+        .bind(nextFails, row.id)
+        .run();
+      return { ok: false, status: 429, code: 'OTP_ATTEMPTS_EXCEEDED', remainingAttempts: 0 };
+    }
+    await db
+      .prepare("UPDATE newsletter_subscribers SET verification_fail_count = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind(nextFails, row.id)
+      .run();
+    return { ok: false, status: 400, code: 'INVALID_CODE', remainingAttempts: MAX_VERIFY_FAILS - nextFails };
+  }
+
+  await db
+    .prepare(
+      `UPDATE newsletter_subscribers
+       SET status = 'subscribed', verified_at = datetime('now'), consent_at = datetime('now'),
+           unsubscribed_at = NULL, verification_code_hash = NULL, verification_token_hash = NULL,
+           verification_expires_at = NULL, verification_fail_count = 0, updated_at = datetime('now')
+       WHERE id = ?`
+    )
+    .bind(row.id)
+    .run();
+
+  return {
+    ok: true,
+    alreadySubscribed: false,
+    resubscribed: Boolean(row.unsubscribed_at),
+    lang: row.lang || 'ko',
+    source: row.source || 'site_modal',
+  };
+}
+
+async function unsubscribeInD1(db, email) {
+  await ensureD1NewsletterTable(db);
+  await db
+    .prepare(
+      "UPDATE newsletter_subscribers SET status = 'unsubscribed', unsubscribed_at = datetime('now'), verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now') WHERE email = ?"
+    )
+    .bind(email)
+    .run();
+}
+
+async function checkKvBeforeChallenge(kv, email) {
+  const raw = await kv.get(`${KV_SUB_PREFIX}${email}`, 'json');
+  if (raw && raw.status === 'subscribed') return { alreadySubscribed: true, raw };
+  if (raw && raw.verification_sent_at) {
+    const elapsed = Date.now() - parseIsoMs(raw.verification_sent_at);
+    if (elapsed >= 0 && elapsed < RESEND_COOLDOWN_MS) {
+      return {
+        cooldown: true,
+        retryAfterSec: Math.max(1, Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000)),
+        raw,
+      };
+    }
+  }
+  return { alreadySubscribed: false, cooldown: false, raw };
+}
+
+async function saveKvPendingChallenge(kv, existing, { email, lang, source, codeHash, tokenHash, nowIso, expiresIso }) {
+  const key = `${KV_SUB_PREFIX}${email}`;
+  const record = {
+    ...(existing || {}),
+    email,
+    lang,
+    source,
+    status: 'pending',
+    consent_at: nowIso,
+    created_at: existing?.created_at || nowIso,
+    updated_at: nowIso,
+    verification_code_hash: codeHash,
+    verification_token_hash: tokenHash,
+    verification_expires_at: expiresIso,
+    verification_sent_at: nowIso,
+    verification_fail_count: 0,
+  };
+  await kv.put(key, JSON.stringify(record));
+}
+
+async function verifyInKv(kv, { email, code, token }) {
+  const key = `${KV_SUB_PREFIX}${email}`;
+  const raw = await kv.get(key, 'json');
+  if (!raw) return { ok: false, status: 400, code: 'NO_PENDING_VERIFICATION' };
+  if (raw.status === 'subscribed') {
+    return { ok: true, alreadySubscribed: true, lang: raw.lang || 'ko', source: raw.source || 'site_modal' };
+  }
+  if (raw.status !== 'pending' || (!raw.verification_code_hash && !raw.verification_token_hash)) {
+    return { ok: false, status: 400, code: 'NO_PENDING_VERIFICATION' };
+  }
+
+  const expiresMs = parseIsoMs(raw.verification_expires_at);
+  if (!expiresMs || Date.now() > expiresMs) {
+    await kv.put(
+      key,
+      JSON.stringify({ ...raw, verification_code_hash: null, verification_token_hash: null, updated_at: new Date().toISOString() })
+    );
+    return { ok: false, status: 400, code: 'OTP_EXPIRED' };
+  }
+
+  const fails = Number(raw.verification_fail_count || 0);
+  if (fails >= MAX_VERIFY_FAILS) {
+    return { ok: false, status: 429, code: 'OTP_ATTEMPTS_EXCEEDED', remainingAttempts: 0 };
+  }
+
+  const codeMatched =
+    Boolean(code) &&
+    Boolean(raw.verification_code_hash) &&
+    timingSafeEqual(raw.verification_code_hash, await hashNewsletterSecret(email, code));
+  const tokenMatched =
+    Boolean(token) &&
+    Boolean(raw.verification_token_hash) &&
+    timingSafeEqual(raw.verification_token_hash, await hashNewsletterSecret(email, token));
+
+  if (!codeMatched && !tokenMatched) {
+    const nextFails = fails + 1;
+    const exhausted = nextFails >= MAX_VERIFY_FAILS;
+    await kv.put(
+      key,
+      JSON.stringify({
+        ...raw,
+        verification_fail_count: nextFails,
+        verification_code_hash: exhausted ? null : raw.verification_code_hash,
+        verification_token_hash: exhausted ? null : raw.verification_token_hash,
+        updated_at: new Date().toISOString(),
+      })
+    );
+    return {
+      ok: false,
+      status: exhausted ? 429 : 400,
+      code: exhausted ? 'OTP_ATTEMPTS_EXCEEDED' : 'INVALID_CODE',
+      remainingAttempts: Math.max(0, MAX_VERIFY_FAILS - nextFails),
+    };
+  }
+
+  const now = new Date().toISOString();
+  const wasResubscribed = Boolean(raw.unsubscribed_at);
+  await kv.put(
+    key,
+    JSON.stringify({
+      ...raw,
+      status: 'subscribed',
+      verified_at: now,
+      consent_at: now,
+      unsubscribed_at: null,
+      verification_code_hash: null,
+      verification_token_hash: null,
+      verification_expires_at: null,
+      verification_fail_count: 0,
+      updated_at: now,
+    })
+  );
+  try {
+    const rawIdx = (await kv.get(KV_INDEX_KEY, 'json')) || [];
+    const list = Array.isArray(rawIdx) ? rawIdx.filter((e) => e !== email) : [];
+    list.unshift(email);
+    await kv.put(KV_INDEX_KEY, JSON.stringify(list.slice(0, 1000)));
+  } catch {
+    // Non-fatal
+  }
+  return {
+    ok: true,
+    alreadySubscribed: false,
+    resubscribed: wasResubscribed,
+    lang: raw.lang || 'ko',
+    source: raw.source || 'site_modal',
+  };
+}
+
+async function unsubscribeInKv(kv, email) {
+  const key = `${KV_SUB_PREFIX}${email}`;
+  const raw = await kv.get(key, 'json');
+  if (!raw) return;
+  const now = new Date().toISOString();
+  await kv.put(
+    key,
+    JSON.stringify({
+      ...raw,
+      status: 'unsubscribed',
+      unsubscribed_at: now,
+      verification_code_hash: null,
+      verification_token_hash: null,
+      updated_at: now,
+    })
+  );
+}
+
+/* ==========================================================================
+ * Upstream Render Express Proxy & Optional HMAC-Signed Verified Mirror
+ * ========================================================================== */
+
+async function forwardNewsletterToUpstream(pathSuffix, payload, env, fetchImpl, extraHeaders = {}) {
   const upstreamOrigin = resolveUpstreamOrigin(env);
   const url = `${upstreamOrigin}/api/newsletter/${pathSuffix}`;
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
+    ...extraHeaders,
   };
-  if (notifyHandledAtEdge) {
-    headers['X-Newsletter-Notify-Handled'] = '1';
-  }
 
-  // Up to 2 attempts to tolerate transient Render 502/503 cold-start hiccups
   let lastStatus = 503;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
@@ -499,7 +895,7 @@ async function forwardNewsletterToUpstream(pathSuffix, payload, env, fetchImpl, 
       }
       const ct = res.headers.get('content-type') || '';
       const data = ct.includes('application/json') ? await res.json().catch(() => null) : null;
-      return { ok: res.ok && Boolean(data?.ok), status: res.status, data };
+      return { ok: res.ok, status: res.status, data };
     } catch {
       lastStatus = 504;
     }
@@ -507,7 +903,28 @@ async function forwardNewsletterToUpstream(pathSuffix, payload, env, fetchImpl, 
   return { ok: false, status: lastStatus, data: null };
 }
 
-async function handleNewsletterSubscribe(request, env, ctx, fetchImpl) {
+async function mirrorVerifiedToUpstream({ email, lang, source }, env, fetchImpl) {
+  const syncSecret = String(env?.NEWSLETTER_SYNC_SECRET || '').trim();
+  if (syncSecret.length < 16) return;
+  const ts = String(Date.now());
+  const sig = await hmacHex(syncSecret, `${ts}:${email}:subscribed`);
+  await forwardNewsletterToUpstream(
+    'sync-verified',
+    { email, lang, source },
+    env,
+    fetchImpl,
+    {
+      'X-Newsletter-Sync-Ts': ts,
+      'X-Newsletter-Sync-Signature': sig,
+    }
+  );
+}
+
+/* ==========================================================================
+ * Edge Newsletter Route Handlers (Subscribe / Resend / Verify / Unsubscribe)
+ * ========================================================================== */
+
+async function handleNewsletterSubscribeOrResend(request, env, _ctx, fetchImpl, isResend) {
   const clientIp = String(request.headers.get('cf-connecting-ip') || 'edge').slice(0, 64);
   const rate = checkEdgeRateLimit(`sub:${clientIp}`);
   if (!rate.allowed) {
@@ -536,7 +953,7 @@ async function handleNewsletterSubscribe(request, env, ctx, fetchImpl) {
   }
 
   const body = parsed.body;
-  if (typeof body.website === 'string' && body.website.trim().length > 0) {
+  if (!isResend && typeof body.website === 'string' && body.website.trim().length > 0) {
     return buildJsonResponse({ ok: true, status: 'subscribed' }, 200, request, env);
   }
 
@@ -550,7 +967,7 @@ async function handleNewsletterSubscribe(request, env, ctx, fetchImpl) {
     );
   }
 
-  if (body.consent !== true) {
+  if (!isResend && body.consent !== true) {
     return buildJsonResponse(
       { ok: false, error: '뉴스레터 수신 및 개인정보 수집 동의가 필요합니다.', code: 'CONSENT_REQUIRED' },
       400,
@@ -562,10 +979,315 @@ async function handleNewsletterSubscribe(request, env, ctx, fetchImpl) {
   const lang = body.lang === 'en' ? 'en' : 'ko';
   const rawSource = typeof body.source === 'string' ? body.source.trim() : 'site_modal';
   const source = ALLOWED_SOURCES.has(rawSource) ? rawSource : 'site_modal';
+  const hasEdgeResend = Boolean(String(env?.RESEND_API_KEY || '').trim());
+  const hasD1 = Boolean(env?.NEWSLETTER_DB && typeof env.NEWSLETTER_DB.prepare === 'function');
+  const hasKv = Boolean(env?.NEWSLETTER_KV && typeof env.NEWSLETTER_KV.get === 'function');
 
-  const hasEdgeNotification = Boolean(
-    String(env?.RESEND_API_KEY || '').trim() || resolveSafeHttpsUrl(env?.NEWSLETTER_WEBHOOK_URL)
+  // If Edge has Resend configured (with D1, KV, or stateless HMAC challenge), own verification at the edge!
+  if (hasD1 || hasKv || hasEdgeResend) {
+    if (!hasEdgeResend) {
+      return buildJsonResponse(
+        {
+          ok: false,
+          error: '이메일 인증 발송 서비스(RESEND_API_KEY)가 아직 설정되지 않았습니다.',
+          code: 'EMAIL_DELIVERY_NOT_CONFIGURED',
+        },
+        503,
+        request,
+        env
+      );
+    }
+
+    const emailRate = checkEdgeRateLimit(`otp:${email}`, 5);
+    if (!emailRate.allowed) {
+      return buildJsonResponse(
+        {
+          ok: false,
+          error: '인증 메일 발송 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.',
+          code: 'RATE_LIMITED',
+          retryAfterSec: emailRate.retryAfterSec,
+        },
+        429,
+        request,
+        env,
+        { 'Retry-After': String(emailRate.retryAfterSec) }
+      );
+    }
+
+    const code = generateSixDigitCode();
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const expiresMs = nowMs + OTP_TTL_MS;
+    const expiresIso = new Date(expiresMs).toISOString();
+    const siteOrigin = resolveSiteOrigin(env);
+
+    // Tier 1: Cloudflare D1
+    if (hasD1) {
+      const check = await startD1Verification(env.NEWSLETTER_DB, {
+        email,
+        lang,
+        source,
+      });
+      if (check.alreadySubscribed) {
+        return buildJsonResponse({ ok: true, status: 'already_subscribed', email, storage: 'd1' }, 200, request, env);
+      }
+      if (check.cooldown) {
+        return buildJsonResponse(
+          {
+            ok: false,
+            error: `인증코드를 방금 발송했습니다. ${check.retryAfterSec}초 후에 다시 요청해 주세요.`,
+            code: 'RESEND_COOLDOWN',
+            retryAfterSec: check.retryAfterSec,
+          },
+          429,
+          request,
+          env,
+          { 'Retry-After': String(check.retryAfterSec) }
+        );
+      }
+
+      const rawToken = generateRandomHex(24);
+      const verifyUrl = `${siteOrigin}/?nl_verify=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(email)}`;
+      const mail = await sendEdgeVerificationEmail({ email, lang, code, verifyUrl }, env, fetchImpl);
+      if (!mail.sent) {
+        return buildJsonResponse(
+          { ok: false, error: '인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.', code: 'EMAIL_SEND_FAILED' },
+          502,
+          request,
+          env
+        );
+      }
+
+      const [codeHash, tokenHash] = await Promise.all([
+        hashNewsletterSecret(email, code),
+        hashNewsletterSecret(email, rawToken),
+      ]);
+      await saveD1PendingChallenge(env.NEWSLETTER_DB, check.existing, {
+        email,
+        lang,
+        source,
+        codeHash,
+        tokenHash,
+        nowIso,
+        expiresIso,
+      });
+
+      return buildJsonResponse(
+        {
+          ok: true,
+          status: 'pending_verification',
+          email,
+          expiresInSec: Math.floor(OTP_TTL_MS / 1000),
+          cooldownSec: Math.floor(RESEND_COOLDOWN_MS / 1000),
+          storage: 'd1',
+          delivery: 'email',
+        },
+        202,
+        request,
+        env
+      );
+    }
+
+    // Tier 2: Cloudflare KV
+    if (hasKv) {
+      const check = await checkKvBeforeChallenge(env.NEWSLETTER_KV, email);
+      if (check.alreadySubscribed) {
+        return buildJsonResponse({ ok: true, status: 'already_subscribed', email, storage: 'kv' }, 200, request, env);
+      }
+      if (check.cooldown) {
+        return buildJsonResponse(
+          {
+            ok: false,
+            error: `인증코드를 방금 발송했습니다. ${check.retryAfterSec}초 후에 다시 요청해 주세요.`,
+            code: 'RESEND_COOLDOWN',
+            retryAfterSec: check.retryAfterSec,
+          },
+          429,
+          request,
+          env,
+          { 'Retry-After': String(check.retryAfterSec) }
+        );
+      }
+
+      const rawToken = generateRandomHex(24);
+      const verifyUrl = `${siteOrigin}/?nl_verify=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(email)}`;
+      const mail = await sendEdgeVerificationEmail({ email, lang, code, verifyUrl }, env, fetchImpl);
+      if (!mail.sent) {
+        return buildJsonResponse(
+          { ok: false, error: '인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.', code: 'EMAIL_SEND_FAILED' },
+          502,
+          request,
+          env
+        );
+      }
+
+      const [codeHash, tokenHash] = await Promise.all([
+        hashNewsletterSecret(email, code),
+        hashNewsletterSecret(email, rawToken),
+      ]);
+      await saveKvPendingChallenge(env.NEWSLETTER_KV, check.raw, {
+        email,
+        lang,
+        source,
+        codeHash,
+        tokenHash,
+        nowIso,
+        expiresIso,
+      });
+
+      return buildJsonResponse(
+        {
+          ok: true,
+          status: 'pending_verification',
+          email,
+          expiresInSec: Math.floor(OTP_TTL_MS / 1000),
+          cooldownSec: Math.floor(RESEND_COOLDOWN_MS / 1000),
+          storage: 'kv',
+          delivery: 'email',
+        },
+        202,
+        request,
+        env
+      );
+    }
+
+    // Tier 3A: Edge HMAC-SHA256 Signed Verification Challenge (Zero DB binding required!)
+    const cooldown = checkResendCooldown(email, nowMs);
+    if (!cooldown.allowed) {
+      return buildJsonResponse(
+        {
+          ok: false,
+          error: `인증코드를 방금 발송했습니다. ${cooldown.retryAfterSec}초 후에 다시 요청해 주세요.`,
+          code: 'RESEND_COOLDOWN',
+          retryAfterSec: cooldown.retryAfterSec,
+        },
+        429,
+        request,
+        env,
+        { 'Retry-After': String(cooldown.retryAfterSec) }
+      );
+    }
+
+    const secret = resolveSigningSecret(env);
+    const nonce = generateRandomHex(12);
+    const saltedCodeHash = await sha256Hex(`${email}:${code}:${nonce}`);
+    const [challengeToken, linkToken] = await Promise.all([
+      signEdgeToken('nlc1', { e: email, l: lang, s: source, n: nonce, exp: expiresMs, h: saltedCodeHash }, secret),
+      signEdgeToken('nlv1', { e: email, l: lang, s: source, n: nonce, exp: expiresMs, m: 'link' }, secret),
+    ]);
+
+    const verifyUrl = `${siteOrigin}/?nl_verify=${encodeURIComponent(linkToken)}&email=${encodeURIComponent(email)}`;
+    const mail = await sendEdgeVerificationEmail({ email, lang, code, verifyUrl }, env, fetchImpl);
+    if (!mail.sent) {
+      return buildJsonResponse(
+        { ok: false, error: '인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.', code: 'EMAIL_SEND_FAILED' },
+        502,
+        request,
+        env
+      );
+    }
+
+    markResendCooldown(email, nowMs);
+    edgeVerifyFails.delete(nonce);
+
+    return buildJsonResponse(
+      {
+        ok: true,
+        status: 'pending_verification',
+        email,
+        expiresInSec: Math.floor(OTP_TTL_MS / 1000),
+        cooldownSec: Math.floor(RESEND_COOLDOWN_MS / 1000),
+        challengeToken,
+        storage: 'edge_hmac',
+        delivery: 'email',
+      },
+      202,
+      request,
+      env
+    );
+  }
+
+  // Tier 3B: Transparent proxy to Render Express backend (when RESEND_API_KEY lives on Render)
+  const upstream = await forwardNewsletterToUpstream(
+    isResend ? 'resend' : 'subscribe',
+    isResend ? { email, lang, source } : { email, consent: true, lang, source },
+    env,
+    fetchImpl
   );
+
+  if (upstream.data) {
+    return buildJsonResponse(
+      { ...upstream.data, storage: upstream.data.storage || 'upstream' },
+      upstream.status,
+      request,
+      env
+    );
+  }
+
+  return buildJsonResponse(
+    {
+      ok: false,
+      error: '구독 인증 서버에 일시적으로 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+      code: 'UPSTREAM_UNAVAILABLE',
+    },
+    503,
+    request,
+    env
+  );
+}
+
+async function handleNewsletterVerify(request, env, ctx, fetchImpl) {
+  const clientIp = String(request.headers.get('cf-connecting-ip') || 'edge').slice(0, 64);
+  const ipRate = checkEdgeRateLimit(`verify:${clientIp}`, RATE_MAX_REQUESTS * 2);
+  if (!ipRate.allowed) {
+    return buildJsonResponse(
+      {
+        ok: false,
+        error: '인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+        code: 'RATE_LIMITED',
+        retryAfterSec: ipRate.retryAfterSec,
+      },
+      429,
+      request,
+      env,
+      { 'Retry-After': String(ipRate.retryAfterSec) }
+    );
+  }
+
+  const parsed = await readJsonBody(request);
+  if (parsed.errorStatus) {
+    return buildJsonResponse(
+      { ok: false, error: parsed.errorMessage, code: parsed.errorCode },
+      parsed.errorStatus,
+      request,
+      env
+    );
+  }
+
+  const body = parsed.body;
+  const email = normalizeEmail(body.email);
+  const code = typeof body.code === 'string' ? body.code.replace(/\s+/g, '').trim() : '';
+  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  const challengeToken = typeof body.challengeToken === 'string' ? body.challengeToken.trim() : '';
+
+  if (!email) {
+    return buildJsonResponse(
+      { ok: false, error: '올바른 이메일 주소를 입력해 주세요.', code: 'INVALID_EMAIL' },
+      400,
+      request,
+      env
+    );
+  }
+
+  if (!/^\d{6}$/.test(code) && !token) {
+    return buildJsonResponse(
+      { ok: false, error: '6자리 인증코드 또는 인증 링크가 필요합니다.', code: 'INVALID_CODE' },
+      400,
+      request,
+      env
+    );
+  }
+
   const schedule = (promise) => {
     if (ctx && typeof ctx.waitUntil === 'function') {
       ctx.waitUntil(promise);
@@ -574,148 +1296,245 @@ async function handleNewsletterSubscribe(request, env, ctx, fetchImpl) {
     }
   };
 
-  // Tier 1: Permanent Cloudflare D1 binding
-  if (env?.NEWSLETTER_DB && typeof env.NEWSLETTER_DB.prepare === 'function') {
-    const saved = await subscribeInD1(env.NEWSLETTER_DB, { email, lang, source });
-    if (saved.status === 'subscribed') {
-      schedule(
-        dispatchEdgeNotifications(
-          { type: 'subscribed', email, lang, source, resubscribed: saved.resubscribed, storage: 'd1' },
-          env,
-          fetchImpl
-        )
+  const hasD1 = Boolean(env?.NEWSLETTER_DB && typeof env.NEWSLETTER_DB.prepare === 'function');
+  const hasKv = Boolean(env?.NEWSLETTER_KV && typeof env.NEWSLETTER_KV.get === 'function');
+
+  // Tier 1: Cloudflare D1
+  if (hasD1) {
+    const result = await verifyInD1(env.NEWSLETTER_DB, { email, code, token });
+    if (!result.ok) {
+      return buildJsonResponse(
+        {
+          ok: false,
+          code: result.code,
+          remainingAttempts: result.remainingAttempts,
+          error:
+            result.code === 'OTP_EXPIRED'
+              ? '인증 유효시간(10분)이 만료되었습니다. 인증코드를 다시 요청해 주세요.'
+              : result.code === 'OTP_ATTEMPTS_EXCEEDED'
+                ? '인증 시도 횟수를 초과했습니다. 인증코드를 다시 발송해 주세요.'
+                : result.code === 'NO_PENDING_VERIFICATION'
+                  ? '진행 중인 이메일 인증 내역이 없습니다.'
+                  : '인증코드가 일치하지 않습니다.',
+        },
+        result.status,
+        request,
+        env
       );
     }
-    schedule(
-      forwardNewsletterToUpstream(
-        'subscribe',
-        { email, consent: true, lang, source },
-        env,
-        fetchImpl,
-        true
-      )
-    );
-    return buildJsonResponse(
-      {
-        ok: true,
-        status: saved.status,
-        resubscribed: saved.resubscribed || undefined,
-        email,
-        storage: 'd1',
-      },
-      saved.httpStatus,
-      request,
-      env
-    );
-  }
-
-  // Tier 2: Permanent Cloudflare KV binding
-  if (env?.NEWSLETTER_KV && typeof env.NEWSLETTER_KV.get === 'function') {
-    const saved = await subscribeInKv(env.NEWSLETTER_KV, { email, lang, source });
-    if (saved.status === 'subscribed') {
-      schedule(
-        dispatchEdgeNotifications(
-          { type: 'subscribed', email, lang, source, resubscribed: saved.resubscribed, storage: 'kv' },
-          env,
-          fetchImpl
-        )
-      );
-    }
-    schedule(
-      forwardNewsletterToUpstream(
-        'subscribe',
-        { email, consent: true, lang, source },
-        env,
-        fetchImpl,
-        true
-      )
-    );
-    return buildJsonResponse(
-      {
-        ok: true,
-        status: saved.status,
-        resubscribed: saved.resubscribed || undefined,
-        email,
-        storage: 'kv',
-      },
-      saved.httpStatus,
-      request,
-      env
-    );
-  }
-
-  // Tier 3: Zero-config Render Express Upstream Proxy (+ Edge Resend/Webhook relay)
-  const upstream = await forwardNewsletterToUpstream(
-    'subscribe',
-    { email, consent: true, lang, source },
-    env,
-    fetchImpl,
-    hasEdgeNotification
-  );
-
-  if (upstream.ok && upstream.data) {
-    const finalStatus =
-      upstream.data.status === 'already_subscribed' ? 'already_subscribed' : 'subscribed';
-    if (finalStatus === 'subscribed' && hasEdgeNotification) {
+    if (!result.alreadySubscribed) {
       schedule(
         dispatchEdgeNotifications(
           {
             type: 'subscribed',
             email,
-            lang,
-            source,
-            resubscribed: Boolean(upstream.data.resubscribed),
-            storage: 'upstream',
+            lang: result.lang,
+            source: result.source,
+            resubscribed: Boolean(result.resubscribed),
+            storage: 'd1',
           },
           env,
           fetchImpl
         )
       );
+      schedule(mirrorVerifiedToUpstream({ email, lang: result.lang, source: result.source }, env, fetchImpl));
     }
     return buildJsonResponse(
       {
         ok: true,
-        status: finalStatus,
-        resubscribed: upstream.data.resubscribed || undefined,
-        email: typeof upstream.data.email === 'string' ? upstream.data.email : email,
-        storage: 'upstream',
+        status: result.alreadySubscribed ? 'already_subscribed' : 'subscribed',
+        verified: true,
+        resubscribed: result.resubscribed || undefined,
+        email,
+        storage: 'd1',
       },
-      upstream.status,
+      200,
       request,
       env
     );
   }
 
-  if (upstream.status === 400 || upstream.status === 429) {
-    return buildJsonResponse(
-      upstream.data || { ok: false, code: upstream.status === 429 ? 'RATE_LIMITED' : 'INVALID_EMAIL' },
-      upstream.status,
-      request,
-      env
-    );
-  }
-
-  // Last-resort durable relay: if upstream is temporarily sleeping/unreachable but Resend/Webhook is live
-  if (hasEdgeNotification) {
-    const notifyResult = await dispatchEdgeNotifications(
-      { type: 'subscribed', email, lang, source, resubscribed: false, storage: 'relay' },
-      env,
-      fetchImpl
-    );
-    if (notifyResult.welcomeSent || notifyResult.founderAlertSent || notifyResult.webhookSent) {
+  // Tier 2: Cloudflare KV
+  if (hasKv) {
+    const result = await verifyInKv(env.NEWSLETTER_KV, { email, code, token });
+    if (!result.ok) {
       return buildJsonResponse(
-        { ok: true, status: 'subscribed', email, storage: 'relay' },
-        201,
+        {
+          ok: false,
+          code: result.code,
+          remainingAttempts: result.remainingAttempts,
+          error:
+            result.code === 'OTP_EXPIRED'
+              ? '인증 유효시간(10분)이 만료되었습니다. 인증코드를 다시 요청해 주세요.'
+              : result.code === 'OTP_ATTEMPTS_EXCEEDED'
+                ? '인증 시도 횟수를 초과했습니다. 인증코드를 다시 발송해 주세요.'
+                : result.code === 'NO_PENDING_VERIFICATION'
+                  ? '진행 중인 이메일 인증 내역이 없습니다.'
+                  : '인증코드가 일치하지 않습니다.',
+        },
+        result.status,
         request,
         env
       );
     }
+    if (!result.alreadySubscribed) {
+      schedule(
+        dispatchEdgeNotifications(
+          {
+            type: 'subscribed',
+            email,
+            lang: result.lang,
+            source: result.source,
+            resubscribed: Boolean(result.resubscribed),
+            storage: 'kv',
+          },
+          env,
+          fetchImpl
+        )
+      );
+      schedule(mirrorVerifiedToUpstream({ email, lang: result.lang, source: result.source }, env, fetchImpl));
+    }
+    return buildJsonResponse(
+      {
+        ok: true,
+        status: result.alreadySubscribed ? 'already_subscribed' : 'subscribed',
+        verified: true,
+        resubscribed: result.resubscribed || undefined,
+        email,
+        storage: 'kv',
+      },
+      200,
+      request,
+      env
+    );
+  }
+
+  // Tier 3A: Edge HMAC-SHA256 Signed Verification (when verified using nlv1.* link or nlc1.* challengeToken)
+  const secret = resolveSigningSecret(env);
+  if (secret && (token.startsWith('nlv1.') || challengeToken.startsWith('nlc1.'))) {
+    let verifiedPayload = null;
+    if (token.startsWith('nlv1.')) {
+      const p = await verifyEdgeToken('nlv1', token, secret);
+      if (!p || p.e !== email || p.m !== 'link') {
+        return buildJsonResponse(
+          { ok: false, error: '유효하지 않은 인증 링크입니다.', code: 'INVALID_CODE' },
+          400,
+          request,
+          env
+        );
+      }
+      if (!Number.isFinite(p.exp) || Date.now() > p.exp) {
+        return buildJsonResponse(
+          { ok: false, error: '인증 유효시간(10분)이 만료되었습니다. 다시 요청해 주세요.', code: 'OTP_EXPIRED' },
+          400,
+          request,
+          env
+        );
+      }
+      verifiedPayload = p;
+    } else {
+      const p = await verifyEdgeToken('nlc1', challengeToken, secret);
+      if (!p || p.e !== email || !p.h || !p.n) {
+        return buildJsonResponse(
+          { ok: false, error: '인증 세션이 유효하지 않습니다. 인증코드를 다시 요청해 주세요.', code: 'NO_PENDING_VERIFICATION' },
+          400,
+          request,
+          env
+        );
+      }
+      if (!Number.isFinite(p.exp) || Date.now() > p.exp) {
+        return buildJsonResponse(
+          { ok: false, error: '인증 유효시간(10분)이 만료되었습니다. 인증코드를 다시 요청해 주세요.', code: 'OTP_EXPIRED' },
+          400,
+          request,
+          env
+        );
+      }
+      const fails = Number(edgeVerifyFails.get(p.n) || 0);
+      if (fails >= MAX_VERIFY_FAILS) {
+        return buildJsonResponse(
+          { ok: false, error: '인증 시도 횟수를 초과했습니다. 인증코드를 다시 발송해 주세요.', code: 'OTP_ATTEMPTS_EXCEEDED', remainingAttempts: 0 },
+          429,
+          request,
+          env
+        );
+      }
+      const candidateHash = await sha256Hex(`${email}:${code}:${p.n}`);
+      if (!timingSafeEqual(p.h, candidateHash)) {
+        const nextFails = fails + 1;
+        edgeVerifyFails.set(p.n, nextFails);
+        const exhausted = nextFails >= MAX_VERIFY_FAILS;
+        return buildJsonResponse(
+          {
+            ok: false,
+            code: exhausted ? 'OTP_ATTEMPTS_EXCEEDED' : 'INVALID_CODE',
+            remainingAttempts: Math.max(0, MAX_VERIFY_FAILS - nextFails),
+            error: exhausted
+              ? '인증 시도 횟수를 초과했습니다. 인증코드를 다시 발송해 주세요.'
+              : `인증코드가 일치하지 않습니다. (남은 시도 ${Math.max(0, MAX_VERIFY_FAILS - nextFails)}회)`,
+          },
+          exhausted ? 429 : 400,
+          request,
+          env
+        );
+      }
+      verifiedPayload = p;
+    }
+
+    const nonce = String(verifiedPayload.n || '');
+    const alreadyConsumed = nonce && consumedEdgeNonces.has(nonce);
+    if (nonce) {
+      consumedEdgeNonces.set(nonce, Date.now());
+      edgeVerifyFails.delete(nonce);
+    }
+    const lang = verifiedPayload.l === 'en' ? 'en' : 'ko';
+    const source = ALLOWED_SOURCES.has(verifiedPayload.s) ? verifiedPayload.s : 'site_modal';
+
+    if (!alreadyConsumed) {
+      schedule(
+        dispatchEdgeNotifications(
+          { type: 'subscribed', email, lang, source, resubscribed: false, storage: 'edge_hmac' },
+          env,
+          fetchImpl
+        )
+      );
+      schedule(mirrorVerifiedToUpstream({ email, lang, source }, env, fetchImpl));
+    }
+
+    return buildJsonResponse(
+      {
+        ok: true,
+        status: alreadyConsumed ? 'already_subscribed' : 'subscribed',
+        verified: true,
+        email,
+        storage: 'edge_hmac',
+      },
+      200,
+      request,
+      env
+    );
+  }
+
+  // Tier 3B: Transparent proxy to Render Express backend
+  const upstream = await forwardNewsletterToUpstream(
+    'verify',
+    { email, code: code || undefined, token: token || undefined },
+    env,
+    fetchImpl
+  );
+  if (upstream.data) {
+    return buildJsonResponse(
+      { ...upstream.data, storage: upstream.data.storage || 'upstream' },
+      upstream.status,
+      request,
+      env
+    );
   }
 
   return buildJsonResponse(
     {
       ok: false,
-      error: '구독 서버에 일시적으로 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+      error: '인증 확인 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
       code: 'UPSTREAM_UNAVAILABLE',
     },
     503,
@@ -772,19 +1591,19 @@ async function handleNewsletterUnsubscribe(request, env, ctx, fetchImpl) {
 
   if (env?.NEWSLETTER_DB && typeof env.NEWSLETTER_DB.prepare === 'function') {
     await unsubscribeInD1(env.NEWSLETTER_DB, email);
-    schedule(forwardNewsletterToUpstream('unsubscribe', { email }, env, fetchImpl, true));
+    schedule(forwardNewsletterToUpstream('unsubscribe', { email }, env, fetchImpl, { 'X-Newsletter-Notify-Handled': '1' }));
     schedule(dispatchEdgeNotifications({ type: 'unsubscribed', email, storage: 'd1' }, env, fetchImpl));
     return buildJsonResponse({ ok: true, status: 'unsubscribed' }, 200, request, env);
   }
 
   if (env?.NEWSLETTER_KV && typeof env.NEWSLETTER_KV.get === 'function') {
     await unsubscribeInKv(env.NEWSLETTER_KV, email);
-    schedule(forwardNewsletterToUpstream('unsubscribe', { email }, env, fetchImpl, true));
+    schedule(forwardNewsletterToUpstream('unsubscribe', { email }, env, fetchImpl, { 'X-Newsletter-Notify-Handled': '1' }));
     schedule(dispatchEdgeNotifications({ type: 'unsubscribed', email, storage: 'kv' }, env, fetchImpl));
     return buildJsonResponse({ ok: true, status: 'unsubscribed' }, 200, request, env);
   }
 
-  await forwardNewsletterToUpstream('unsubscribe', { email }, env, fetchImpl, true);
+  await forwardNewsletterToUpstream('unsubscribe', { email }, env, fetchImpl, { 'X-Newsletter-Notify-Handled': '1' });
   schedule(dispatchEdgeNotifications({ type: 'unsubscribed', email, storage: 'upstream' }, env, fetchImpl));
   return buildJsonResponse({ ok: true, status: 'unsubscribed' }, 200, request, env);
 }
@@ -852,12 +1671,15 @@ export function createWorkerHandler(fetchImpl = fetch) {
               ? 'd1'
               : env?.NEWSLETTER_KV && typeof env.NEWSLETTER_KV.get === 'function'
                 ? 'kv'
-                : 'upstream';
+                : String(env?.RESEND_API_KEY || '').trim()
+                  ? 'edge_hmac'
+                  : 'upstream';
           return buildJsonResponse(
             {
               ok: true,
               service: 'ainvtry-edge-newsletter',
               storage,
+              verificationRequired: true,
               emailConfigured: Boolean(String(env?.RESEND_API_KEY || '').trim()),
               webhookConfigured: Boolean(resolveSafeHttpsUrl(env?.NEWSLETTER_WEBHOOK_URL)),
             },
@@ -868,7 +1690,15 @@ export function createWorkerHandler(fetchImpl = fetch) {
         }
 
         if (url.pathname === '/api/newsletter/subscribe' && request.method === 'POST') {
-          return handleNewsletterSubscribe(request, env, ctx, fetchImpl);
+          return handleNewsletterSubscribeOrResend(request, env, ctx, fetchImpl, false);
+        }
+
+        if (url.pathname === '/api/newsletter/resend' && request.method === 'POST') {
+          return handleNewsletterSubscribeOrResend(request, env, ctx, fetchImpl, true);
+        }
+
+        if (url.pathname === '/api/newsletter/verify' && request.method === 'POST') {
+          return handleNewsletterVerify(request, env, ctx, fetchImpl);
         }
 
         if (url.pathname === '/api/newsletter/unsubscribe' && request.method === 'POST') {

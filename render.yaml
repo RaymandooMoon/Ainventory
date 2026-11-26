@@ -27,3 +27,5 @@ services:
         sync: false
       - key: NEWSLETTER_WEBHOOK_SECRET
         sync: false
+      - key: NEWSLETTER_SYNC_SECRET
+        sync: false

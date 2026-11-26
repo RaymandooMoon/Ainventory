@@ -23,6 +23,7 @@ import AdminNewsletterPanel from './admin/AdminNewsletterPanel.tsx';
 const EMPTY_NEWSLETTER_OVERVIEW = {
   total: 0,
   activeCount: 0,
+  pendingCount: 0,
   unsubscribedCount: 0,
   emailConfigured: false,
   webhookConfigured: false,
@@ -102,14 +103,19 @@ export default function AdminManagementView({
           typeof nl.activeCount === 'number'
             ? nl.activeCount
             : subscribers.filter((s) => s.status === 'subscribed').length;
+        const pendingCount =
+          typeof nl.pendingCount === 'number'
+            ? nl.pendingCount
+            : subscribers.filter((s) => s.status === 'pending').length;
         const total = typeof nl.total === 'number' ? nl.total : subscribers.length;
         const unsubscribedCount =
           typeof nl.unsubscribedCount === 'number'
             ? nl.unsubscribedCount
-            : Math.max(0, total - activeCount);
+            : subscribers.filter((s) => s.status === 'unsubscribed').length;
         setNewsletterData({
           total,
           activeCount,
+          pendingCount,
           unsubscribedCount,
           emailConfigured: Boolean(nl.emailConfigured),
           webhookConfigured: Boolean(nl.webhookConfigured),
@@ -355,11 +361,14 @@ export default function AdminManagementView({
           row.id === subscriber.id ? updatedRow : row
         );
         const activeCount = nextList.filter((row) => row.status === 'subscribed').length;
+        const pendingCount = nextList.filter((row) => row.status === 'pending').length;
+        const unsubscribedCount = nextList.filter((row) => row.status === 'unsubscribed').length;
         return {
           ...prev,
           total: nextList.length,
           activeCount,
-          unsubscribedCount: Math.max(0, nextList.length - activeCount),
+          pendingCount,
+          unsubscribedCount,
           subscribers: nextList,
         };
       });
@@ -397,11 +406,14 @@ export default function AdminManagementView({
       setNewsletterData((prev) => {
         const nextList = prev.subscribers.filter((row) => row.id !== subscriber.id);
         const activeCount = nextList.filter((row) => row.status === 'subscribed').length;
+        const pendingCount = nextList.filter((row) => row.status === 'pending').length;
+        const unsubscribedCount = nextList.filter((row) => row.status === 'unsubscribed').length;
         return {
           ...prev,
           total: nextList.length,
           activeCount,
-          unsubscribedCount: Math.max(0, nextList.length - activeCount),
+          pendingCount,
+          unsubscribedCount,
           subscribers: nextList,
         };
       });
