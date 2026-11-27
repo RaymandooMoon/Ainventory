@@ -1,7 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ArrowRight,
-  ArrowUpRight,
   BarChart3,
   ChevronsUpDown,
   Compass,
@@ -18,6 +17,7 @@ import {
   cycleLoginThreeVariant,
   DEFAULT_LOGIN_THREE_VARIANT,
   getLoginThreeVariantMeta,
+  normalizeLoginThreeVariant,
   type LoginThreeVariantId,
 } from '../components/auth/loginThreeVariants.ts';
 import type { MarbleGyroStatus } from '../components/auth/useMarbleBackdropStage.ts';
@@ -153,19 +153,55 @@ function SiteBrandMark({
   );
 }
 
+function readInitialCoverEmbedConfig(): {
+  readonly isIrCoverEmbed: boolean;
+  readonly theme: SiteTheme;
+  readonly lang: SiteLang;
+  readonly mood: LoginThreeVariantId;
+} {
+  if (typeof window === 'undefined') {
+    return {
+      isIrCoverEmbed: false,
+      theme: 'dark',
+      lang: 'en',
+      mood: DEFAULT_LOGIN_THREE_VARIANT,
+    };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const isIrCoverEmbed = params.get('embed') === 'ir-cover';
+  const rawTheme = params.get('theme');
+  const rawLang = params.get('lang');
+  const rawMood = params.get('mood');
+  return {
+    isIrCoverEmbed,
+    theme: rawTheme === 'light' || rawTheme === 'dark' ? rawTheme : 'dark',
+    lang: rawLang === 'ko' || rawLang === 'en' ? rawLang : isIrCoverEmbed ? 'ko' : 'en',
+    mood: rawMood ? normalizeLoginThreeVariant(rawMood) : DEFAULT_LOGIN_THREE_VARIANT,
+  };
+}
+
 export default function AinvtrySiteApp() {
-  const [theme, setTheme] = useState<SiteTheme>('dark');
-  const [lang, setLang] = useState<SiteLang>('en');
+  const [initialCoverConfig] = useState(() => readInitialCoverEmbedConfig());
+  const isIrCoverEmbed = initialCoverConfig.isIrCoverEmbed;
+  const [theme, setTheme] = useState<SiteTheme>(initialCoverConfig.theme);
+  const [lang, setLang] = useState<SiteLang>(initialCoverConfig.lang);
   const [heroThreeReady, setHeroThreeReady] = useState(false);
+  const lastSyncedCoverStateRef = useRef<{
+    lang: SiteLang;
+    theme: SiteTheme;
+    mood: LoginThreeVariantId;
+  }>({
+    lang: initialCoverConfig.lang,
+    theme: initialCoverConfig.theme,
+    mood: initialCoverConfig.mood,
+  });
 
   useEffect(() => {
     return scheduleAfterFirstPaint(() => {
       setHeroThreeReady(true);
     });
   }, []);
-  const [motionVariant, setMotionVariant] = useState<LoginThreeVariantId>(
-    DEFAULT_LOGIN_THREE_VARIANT
-  );
+  const [motionVariant, setMotionVariant] = useState<LoginThreeVariantId>(initialCoverConfig.mood);
   const [variantOrigin, setVariantOrigin] = useState<{
     readonly x: number;
     readonly y: number;
@@ -211,6 +247,7 @@ export default function AinvtrySiteApp() {
   }, [offlineGameInlineOpen]);
 
   useEffect(() => {
+    if (isIrCoverEmbed) return undefined;
     const cancelSw = scheduleAfterFirstPaint(() => {
       void registerOfflineMinigameServiceWorker();
       // Pre-warm the lightweight minigame module in memory while online
@@ -230,7 +267,7 @@ export default function AinvtrySiteApp() {
       cancelSw();
       unsubHealth();
     };
-  }, []);
+  }, [isIrCoverEmbed]);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const activeStageRef = useRef<StageId>(activeStage);
@@ -370,6 +407,97 @@ export default function AinvtrySiteApp() {
     }
   }, [theme, lang]);
 
+  // Bidirectional same-origin bridge for IR Deck Slide 01 live first-screen sync
+  useEffect(() => {
+    if (!isIrCoverEmbed || typeof window === 'undefined' || window.parent === window) {
+      return undefined;
+    }
+    const targetOrigin = window.location.origin;
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== targetOrigin) return;
+      const data = event.data as
+        | {
+            type?: string;
+            lang?: string;
+            theme?: string;
+            mood?: string;
+            resetHero?: boolean;
+          }
+        | null
+        | undefined;
+      if (!data || data.type !== 'invtry:ir-cover-sync') return;
+      const nextTheme: SiteTheme =
+        data.theme === 'dark' || data.theme === 'light'
+          ? data.theme
+          : lastSyncedCoverStateRef.current.theme;
+      const nextLang: SiteLang =
+        data.lang === 'ko' || data.lang === 'en'
+          ? data.lang
+          : lastSyncedCoverStateRef.current.lang;
+      const nextMood: LoginThreeVariantId =
+        data.mood === 'luxury' || data.mood === 'aurora'
+          ? data.mood
+          : lastSyncedCoverStateRef.current.mood;
+      lastSyncedCoverStateRef.current = { lang: nextLang, theme: nextTheme, mood: nextMood };
+      setTheme(nextTheme);
+      setLang(nextLang);
+      setMotionVariant(nextMood);
+      if (data.resetHero && activeStageRef.current !== 'hero') {
+        setActiveStage('hero');
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (
+        event.key === 'ArrowRight' ||
+        event.key === 'ArrowLeft' ||
+        event.key === 'PageDown' ||
+        event.key === 'PageUp' ||
+        event.key === 'Home' ||
+        event.key === 'End'
+      ) {
+        event.preventDefault();
+        window.parent.postMessage({ type: 'invtry:ir-cover-key', key: event.key }, targetOrigin);
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    window.addEventListener('keydown', onKeyDown);
+    window.parent.postMessage(
+      {
+        type: 'invtry:ir-cover-ready',
+        lang: initialCoverConfig.lang,
+        theme: initialCoverConfig.theme,
+        mood: initialCoverConfig.mood,
+      },
+      targetOrigin
+    );
+
+    return () => {
+      window.removeEventListener('message', onMessage);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isIrCoverEmbed, initialCoverConfig]);
+
+  useEffect(() => {
+    if (!isIrCoverEmbed || typeof window === 'undefined' || window.parent === window) {
+      return;
+    }
+    const synced = lastSyncedCoverStateRef.current;
+    if (synced.lang === lang && synced.theme === theme && synced.mood === motionVariant) {
+      return;
+    }
+    lastSyncedCoverStateRef.current = { lang, theme, mood: motionVariant };
+    window.parent.postMessage(
+      { type: 'invtry:ir-cover-state', lang, theme, mood: motionVariant },
+      window.location.origin
+    );
+  }, [isIrCoverEmbed, lang, theme, motionVariant]);
+
   // Escape key smoothly returns from any 3D stage back to HERO (when modals are closed)
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -504,6 +632,7 @@ export default function AinvtrySiteApp() {
 
   const handleSelectStage = useCallback(
     (nextStage: StageId, trigger: StageSwitchTrigger = 'dock') => {
+      if (isIrCoverEmbed) return;
       triggerHaptic('selection');
       if (nextStage === 'specs' && !isIosWebKit) {
         warmStageModule('studio');
@@ -534,7 +663,7 @@ export default function AinvtrySiteApp() {
         }, 920);
       }
     },
-    [isIosWebKit, stageTracker]
+    [isIosWebKit, isIrCoverEmbed, stageTracker]
   );
 
   const handleUpdateInteraction = useCallback(
@@ -769,6 +898,7 @@ export default function AinvtrySiteApp() {
       data-site-theme={theme}
       data-active-view={activeView}
       data-active-stage={activeStage}
+      data-embed-mode={isIrCoverEmbed ? 'ir-cover' : undefined}
     >
       {/* ================================================================
           PERSISTENT SINGLE-CANVAS 3D SILK + MARBLE + 4-STAGE DIRECTOR
@@ -798,6 +928,7 @@ export default function AinvtrySiteApp() {
             onStageUiSync={handleUpdateInteraction}
             viewportRootRef={rootRef}
             reducedMotionOverride={motionOverrideEnabled}
+            hideMarble={isIrCoverEmbed}
             onGyroStatusChange={handleGyroStatusChange}
             onGyroRequesterReady={handleGyroRequesterReady}
           />
@@ -818,6 +949,7 @@ export default function AinvtrySiteApp() {
         {/* ================================================================
             ZERO-CHROME EDITORIAL TOPBAR (MARBLE-HITTABLE IN HERO)
            ================================================================ */}
+        {!isIrCoverEmbed && (
         <header className="site-header-stack">
           <div className="site-topbar">
             <div className="site-topbar-left site-utility-rail">
@@ -931,12 +1063,13 @@ export default function AinvtrySiteApp() {
             </div>
           </div>
         </header>
+        )}
 
         {/* ================================================================
             CENTRAL SPATIAL STAGE: EDITORIAL HERO OR LIVE STUDIO / 3D + HUD
            ================================================================ */}
         <main className="site-stage">
-          {(isIosWebKit ? activeStage === 'studio' : hasVisitedStudio) && (
+          {!isIrCoverEmbed && (isIosWebKit ? activeStage === 'studio' : hasVisitedStudio) && (
             <LiveAppStageOverlay
               screen={stageInteraction.studioPreviewScreen}
               lang={lang}
@@ -951,7 +1084,7 @@ export default function AinvtrySiteApp() {
             />
           )}
 
-          {activeStage === 'hero' ? (
+          {isIrCoverEmbed || activeStage === 'hero' ? (
             <section key="hero" className="site-view site-view--home">
               <div className="site-hero-grid">
                 <div className="site-hero-editorial">
@@ -963,7 +1096,19 @@ export default function AinvtrySiteApp() {
                   </p>
 
                   <h1 className="site-hero-title site-hero-title--brand">
-                    <span className="site-hero-title-sheen">{copy.hero.titleLead}</span>
+                    <span className="site-hero-title-line">
+                      {copy.hero.titleLead.split(/(인벤토리|inventory)/i).map((part, idx) =>
+                        /^(인벤토리|inventory)$/i.test(part) ? (
+                          <span key={idx} className="site-hero-title-highlight">
+                            {part}
+                          </span>
+                        ) : part ? (
+                          <span key={idx} className="site-hero-title-sheen">
+                            {part}
+                          </span>
+                        ) : null,
+                      )}
+                    </span>
                     <span className="site-hero-brand-line" aria-label={copy.hero.titleAccent}>
                       <SiteBrandMark theme={theme} size="hero" />
                     </span>
@@ -971,22 +1116,14 @@ export default function AinvtrySiteApp() {
 
                   <p className="site-hero-subtitle">{copy.hero.subtitle}</p>
 
-                  <div className="site-hero-actions" data-no-marble="true">
-                    <a
-                      href={betaMailto}
-                      className="site-hero-cta site-hero-cta--secondary"
-                    >
-                      <span>{copy.hero.secondaryCta}</span>
-                      <ArrowUpRight size={14} aria-hidden="true" />
-                    </a>
-                  </div>
 
-                  {(systemReducedMotion ||
-                    (!effectiveReducedMotion &&
-                      gyroRequiresPermission &&
-                      gyroStatus !== 'granted' &&
-                      gyroStatus !== 'attached' &&
-                      gyroStatus !== 'unsupported')) && (
+                  {!isIrCoverEmbed &&
+                    (systemReducedMotion ||
+                      (!effectiveReducedMotion &&
+                        gyroRequiresPermission &&
+                        gyroStatus !== 'granted' &&
+                        gyroStatus !== 'attached' &&
+                        gyroStatus !== 'unsupported')) && (
                     <div className="site-hero-motion-strip" data-no-marble="true">
                       <div className="site-hero-motion-row">
                         {systemReducedMotion && !motionOverrideEnabled ? (
@@ -1099,6 +1236,7 @@ export default function AinvtrySiteApp() {
         {/* ================================================================
             UNIFIED ARCHITECTURAL 4-STAGE HAIRLINE RAIL + FOOTER
            ================================================================ */}
+        {!isIrCoverEmbed && (
         <div className="site-bottom-stack">
           <nav
             className="site-pinball-dock site-dock"
@@ -1294,52 +1432,57 @@ export default function AinvtrySiteApp() {
             </footer>
           </div>
         </div>
+        )}
       </div>
 
-      <SiteStageAnalytics
-        isOpen={analyticsOpen}
-        lang={lang}
-        snapshot={analyticsSnapshot}
-        onClose={() => setAnalyticsOpen(false)}
-        onReset={handleResetAnalytics}
-        onNavigateStage={handleNavigateFromAnalytics}
-      />
+      {!isIrCoverEmbed && (
+        <>
+          <SiteStageAnalytics
+            isOpen={analyticsOpen}
+            lang={lang}
+            snapshot={analyticsSnapshot}
+            onClose={() => setAnalyticsOpen(false)}
+            onReset={handleResetAnalytics}
+            onNavigateStage={handleNavigateFromAnalytics}
+          />
 
-      <SiteNewsletterModal
-        isOpen={newsletterOpen}
-        copy={copy.newsletter}
-        lang={lang}
-        externalNotice={newsletterLinkNotice}
-        externalError={newsletterLinkError}
-        onClose={() => {
-          setNewsletterOpen(false);
-          setNewsletterLinkNotice('');
-          setNewsletterLinkError('');
-        }}
-      />
+          <SiteNewsletterModal
+            isOpen={newsletterOpen}
+            copy={copy.newsletter}
+            lang={lang}
+            externalNotice={newsletterLinkNotice}
+            externalError={newsletterLinkError}
+            onClose={() => {
+              setNewsletterOpen(false);
+              setNewsletterLinkNotice('');
+              setNewsletterLinkError('');
+            }}
+          />
 
-      <SiteLegalModal doc={legalDoc} copy={copy.legal} onClose={handleCloseLegal} />
+          <SiteLegalModal doc={legalDoc} copy={copy.legal} onClose={handleCloseLegal} />
 
-      <SiteOfflineGameModal
-        isOpen={offlineModalOpen}
-        isPlayingInline={offlineGameInlineOpen}
-        health={connectionHealth}
-        lang={lang}
-        onPlayInline={() => {
-          triggerHaptic('selection');
-          offlineDismissedRef.current = true;
-          setOfflineModalOpen(false);
-          setOfflineGameInlineOpen(true);
-        }}
-        onExitInline={() => {
-          triggerHaptic('selection');
-          setOfflineGameInlineOpen(false);
-        }}
-        onDismiss={() => {
-          offlineDismissedRef.current = true;
-          setOfflineModalOpen(false);
-        }}
-      />
+          <SiteOfflineGameModal
+            isOpen={offlineModalOpen}
+            isPlayingInline={offlineGameInlineOpen}
+            health={connectionHealth}
+            lang={lang}
+            onPlayInline={() => {
+              triggerHaptic('selection');
+              offlineDismissedRef.current = true;
+              setOfflineModalOpen(false);
+              setOfflineGameInlineOpen(true);
+            }}
+            onExitInline={() => {
+              triggerHaptic('selection');
+              setOfflineGameInlineOpen(false);
+            }}
+            onDismiss={() => {
+              offlineDismissedRef.current = true;
+              setOfflineModalOpen(false);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

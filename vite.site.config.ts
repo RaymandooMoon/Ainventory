@@ -60,10 +60,24 @@ function ainventoryBackendPlugin(): Plugin {
  * for the embedded real live app (`/app.html`) in dev/preview and copies them on site build.
  */
 function rootPublicAssetFallbackPlugin(): Plugin {
-  const mountStaticFallback = async (server: ViteDevServer | PreviewServer): Promise<void> => {
-    server.middlewares.use((req, _res, next) => {
+  const mountStaticFallback = async (
+    server: ViteDevServer | PreviewServer,
+    isDevServer: boolean
+  ): Promise<void> => {
+    server.middlewares.use((req, res, next) => {
       if (req.url) {
         const [pathname, search] = req.url.split('?');
+        if (
+          isDevServer &&
+          pathname === '/' &&
+          !search?.includes('site=1') &&
+          !search?.includes('embed=ir-cover')
+        ) {
+          res.statusCode = 302;
+          res.setHeader('Location', `/ir/${search ? `?${search}` : ''}`);
+          res.end();
+          return;
+        }
         if (pathname === '/ir' || pathname === '/ir/') {
           req.url = `/ir/index.html${search ? `?${search}` : ''}`;
         } else if (pathname === '/minigame' || pathname === '/minigame/') {
@@ -112,8 +126,8 @@ function rootPublicAssetFallbackPlugin(): Plugin {
 
   return {
     name: 'ainventory-root-public-fallback',
-    configureServer: mountStaticFallback,
-    configurePreviewServer: mountStaticFallback,
+    configureServer: (server) => mountStaticFallback(server, true),
+    configurePreviewServer: (server) => mountStaticFallback(server, false),
     closeBundle() {
       for (const subdir of ['seed', 'models', 'textures', 'mediapipe', 'assets']) {
         copyDirNonDestructive(path.join(rootPublicDir, subdir), path.join(siteOutDir, subdir));

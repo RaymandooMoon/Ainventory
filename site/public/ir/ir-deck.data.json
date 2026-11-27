@@ -14,17 +14,19 @@
     "locationDate": "대한민국 서울 · 2026.11"
   },
   "hero": {
-    "kicker": "내 폰에서 안전하게 지키는 디지털 옷장",
-    "titleLead": "내 옷장의 모든 순간",
+    "kicker": "프라이버시를 지키는 디지털 옷장",
+    "titleLead": "어서 오세요, 당신의 인벤토리에",
     "titleAccent": "iNVTRY",
-    "subtitle": "사진 1장 배경 제거 · 8방향 4겹 AI 가상 피팅 · 날씨 연동 · 얼굴 전송 0건.",
-    "tocCover": "01 · 표지 — 내 옷장의 모든 순간 · iNVTRY",
-    "tocAgendaItem": "표지 · 내 옷장의 모든 순간",
+    "subtitle": "옷을 사는 순간부터 매일의 코디와 관리, 다음 주인에게 건네는 날까지.",
+    "secondaryCta": "창업자 문의",
+    "tocCover": "01 · 표지 — 어서 오세요, 당신의 인벤토리에 · iNVTRY",
+    "tocAgendaItem": "어서 오세요, 당신의 인벤토리에",
     "en": {
       "kicker": "PRIVACY-FIRST DIGITAL CLOSET",
-      "titleLead": "Every moment of your wardrobe",
+      "titleLead": "Welcome to your",
       "titleAccent": "iNVTRY",
-      "subtitle": "1-photo cutout, 8-angle 4-layer AI virtual try-on, live weather & 0B face privacy."
+      "subtitle": "From the moment you buy, through daily styling and care, to its next life.",
+      "secondaryCta": "Contact Founder"
     }
   },
   "performance": {
@@ -57,10 +59,10 @@
     "unitSuites": 47,
     "apiSuites": 10,
     "e2eSuites": 6,
-    "caseCount": 427,
+    "caseCount": 429,
     "roundedPlus": "420+",
-    "summaryShort": "63개 묶음 · 427개 검증 통과",
-    "summaryLine": "자동 품질 검증 63개 묶음(427개 항목) · 웹·앱"
+    "summaryShort": "63개 묶음 · 429개 검증 통과",
+    "summaryLine": "자동 품질 검증 63개 묶음(429개 항목) · 웹·앱"
   },
   "garment": {
     "beforeBytes": 582332,
@@ -126,7 +128,7 @@
       "status": "done",
       "badgeText": "1단계 · 완료",
       "badgeClass": "badge badge--live",
-      "title": "레이어드 피팅 · 내 폰 피부톤"
+      "title": "레이어드 피팅 · 온디바이스 피부톤"
     },
     "stage-2": {
       "phase": "LIVE 02",
@@ -166,10 +168,10 @@
       "site/public/assets/previews/app-calendar-ko-dark.webp": "eaf5ff134c34",
       "site/public/assets/previews/app-calendar-en-light.webp": "b568daf8bf12",
       "site/public/assets/previews/app-calendar-en-dark.webp": "59ce538ab1b4",
-      "site/public/assets/previews/site-hero-ko-light.webp": "069872b49077",
-      "site/public/assets/previews/site-hero-ko-dark.webp": "9c16507ac50c",
-      "site/public/assets/previews/site-hero-en-light.webp": "e924ae0a7cf1",
-      "site/public/assets/previews/site-hero-en-dark.webp": "3e6c256e574d",
+      "site/public/assets/previews/site-hero-ko-light.webp": "06bf37b4c808",
+      "site/public/assets/previews/site-hero-ko-dark.webp": "cc7beea1b586",
+      "site/public/assets/previews/site-hero-en-light.webp": "cb064e98c7a2",
+      "site/public/assets/previews/site-hero-en-dark.webp": "86565aca07b2",
       "site/public/assets/previews/site-live-studio-ko-light.webp": "1d29785bbc88",
       "site/public/assets/previews/site-live-studio-ko-dark.webp": "95356ac467d2",
       "site/public/assets/previews/site-live-studio-en-light.webp": "3083424ec6b7",

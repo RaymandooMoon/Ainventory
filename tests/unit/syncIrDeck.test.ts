@@ -107,4 +107,21 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
     const i18nSrc = fs.readFileSync(docsI18nPath, 'utf8');
     assert.ok(i18nSrc.includes('RICH_HTML_EN') && i18nSrc.includes('TEXT_EN') && i18nSrc.includes('formatBoundEn'));
   });
+
+  test('Slide 01 mounts live official site Hero via iframe and syncs lang/theme/mood', () => {
+    const html = fs.readFileSync(DECK_HTML_PATH, 'utf8');
+    const js = fs.readFileSync(path.join(REPO_ROOT, 'docs', 'ir-deck', 'ir-deck.js'), 'utf8');
+    assert.ok(html.includes('id="ir-live-hero-frame"'), 'Slide 01 must include live official site iframe');
+    assert.ok(js.includes("'ir-cover'") && js.includes('invtry:ir-cover-sync'), 'ir-deck.js must wire live cover embed sync');
+    assert.ok(!html.includes('s-head-right'), 'slides must not render cluttered right-side header badges');
+    assert.ok(!html.includes('하루 옷 입기 6순간'), 'unnatural Korean slide title must stay removed');
+    assert.ok(!/420\+|410\+|428개|data-ir-bind="tests\./.test(html), 'IR deck must not display internal 420+ test count metrics');
+    const ninetySixMatches = html.match(/96%/g) ?? [];
+    assert.equal(ninetySixMatches.length, 1, 'IR deck must mention 96% image-size reduction strictly once');
+    const slide08Match = html.match(/<section id="slide-08"[\s\S]*?<\/section>/);
+    assert.ok(slide08Match && slide08Match[0].includes('96%'), 'the sole 96% reduction mention must live inside Slide 08 core tech');
+    assert.ok(html.includes('id="ir-mobile-bottom-nav"') && html.includes('id="ir-mobile-sheet"'), 'IR deck must include single-DOM synced mobile nav and settings sheet');
+    assert.ok(js.includes('MOBILE_BREAKPOINT') && js.includes('data-layout'), 'ir-deck.js must auto-sync desktop and mobile layouts from the same single DOM');
+  });
 });
+

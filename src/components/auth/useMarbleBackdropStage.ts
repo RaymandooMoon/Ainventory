@@ -502,6 +502,7 @@ export function useMarbleBackdropStage(
           initialVariant: initialVariantRef.current,
           reducedMotion,
           safeMode,
+          initialExternalMarbleHidden: Boolean(initialOpts.externalMarbleHidden),
           onMarbleStep: handleMarbleStep,
           onFloorBounce: floorRailSelector ? handleFloorBounce : undefined,
           onOverlayRender: initialOpts.onOverlayRender

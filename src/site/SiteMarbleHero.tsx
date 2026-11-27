@@ -87,6 +87,7 @@ export interface SiteMarbleHeroProps {
   readonly onStageUiSync: (patch: Partial<StageInteractionState>) => void;
   readonly viewportRootRef: React.RefObject<HTMLElement | null>;
   readonly reducedMotionOverride?: boolean;
+  readonly hideMarble?: boolean;
   readonly onGyroStatusChange?: (status: MarbleGyroStatus, requiresPermission: boolean) => void;
   readonly onGyroRequesterReady?: (
     requester: (() => Promise<MarbleGyroStatus>) | null
@@ -244,12 +245,16 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   onStageUiSync,
   viewportRootRef,
   reducedMotionOverride = false,
+  hideMarble = false,
   onGyroStatusChange,
   onGyroRequesterReady,
 }: SiteMarbleHeroProps) {
   const isDark = theme === 'dark';
   const mood: MoodMode = motionVariant;
-  const hideMarbleForCleanCapture = useMemo(() => isNoMarbleQueryEnabled(), []);
+  const hideMarbleForCleanCapture = useMemo(
+    () => Boolean(hideMarble) || isNoMarbleQueryEnabled(),
+    [hideMarble]
+  );
   const isSpecsThreeBackground =
     activeStage === 'specs' &&
     (interaction.specsSubtab === 'fitting' || interaction.specsSubtab === 'care');
@@ -751,6 +756,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     shouldDispatchClick: shouldSiteDispatchClick,
     getHitParams: getSiteHitParams,
     floorRailSelector: SITE_FLOOR_RAIL_SELECTOR,
+    externalMarbleHidden: hideMarbleForCleanCapture,
     disableHeroMarbleInput: activeStage !== 'hero' || hideMarbleForCleanCapture,
     deferBootUntilPaint: false,
     onOverlayRender: handleOverlayRender,

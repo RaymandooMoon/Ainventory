@@ -159,7 +159,7 @@ html, body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 18px;
+  padding: 0 16px;
   background: var(--bg-toolbar);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
@@ -169,18 +169,27 @@ html, body {
 .ir-tb-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
+}
+
+.ir-tb-group--left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ir-tb-group--right {
+  flex: 0 0 auto;
 }
 
 .ir-tb-brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   color: var(--ink-primary);
   text-decoration: none;
   padding: 5px 10px;
@@ -188,6 +197,7 @@ html, body {
   border: 1px solid var(--hairline);
   background: var(--bg-surface);
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .ir-tb-dot {
@@ -195,6 +205,7 @@ html, body {
   height: 6px;
   border-radius: 50%;
   background: var(--accent-live);
+  flex: none;
 }
 
 .ir-seg {
@@ -204,6 +215,7 @@ html, body {
   border-radius: 999px;
   border: 1px solid var(--hairline);
   background: var(--bg-recessed);
+  flex: 0 0 auto;
 }
 
 .ir-seg button {
@@ -214,7 +226,7 @@ html, body {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  padding: 4px 9px;
+  padding: 4px 8px;
   border-radius: 999px;
   cursor: pointer;
   transition: background 150ms ease, color 150ms ease;
@@ -234,10 +246,11 @@ html, body {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 5px 9px;
   border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
+  flex: 0 0 auto;
   transition: border-color 150ms ease, background 150ms ease;
 }
 
@@ -260,18 +273,55 @@ html, body {
   font-weight: 600;
   padding: 5px 12px;
   border-radius: 999px;
-  max-width: 240px;
+  flex: 0 1 230px;
+  min-width: 110px;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .ir-tb-counter {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--accent-gold);
-  min-width: 52px;
+  min-width: 48px;
   text-align: center;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.ir-tb-mobile-menu {
+  display: none;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 36px;
+  min-width: 44px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+:root[data-layout='mobile'] .ir-seg--ratio {
+  display: none;
+}
+
+.ir-mobile-bottom-nav,
+.ir-mobile-sheet {
+  display: none;
 }
 
 .ir-progress-track {
@@ -2073,7 +2123,7 @@ html, body {
 
 .s14-proof-val {
   font-family: var(--font-mono);
-  font-size: 15.5px;
+  font-size: 13.5px;
   font-weight: 780;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -2324,7 +2374,7 @@ html, body {
 
 .s17-anchor-val {
   font-family: var(--font-mono);
-  font-size: 25px;
+  font-size: 20px;
   font-weight: 780;
   white-space: nowrap;
 }
@@ -3249,6 +3299,1052 @@ html, body {
 }
 
 /* ============================================================================
+ * v5.4 Live Site First-Screen Cover & Visual-First Layout System
+ * ============================================================================ */
+.s01-live-cover {
+  padding: 0 !important;
+  overflow: hidden;
+  background: var(--bg-canvas);
+}
+
+.s01-live-cover::before {
+  display: none;
+}
+
+.s01-mirror-fallback {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 68% 58% at 22% 18%, rgba(196, 162, 108, 0.22), transparent 62%),
+    radial-gradient(ellipse 64% 56% at 80% 82%, rgba(140, 114, 78, 0.18), transparent 64%),
+    linear-gradient(155deg, #070709 0%, #0d0c0e 52%, #050507 100%);
+  transition: opacity 220ms ease;
+}
+
+:root[data-theme='light'] .s01-mirror-fallback {
+  background:
+    radial-gradient(ellipse 68% 58% at 24% 20%, rgba(206, 176, 128, 0.24), transparent 62%),
+    radial-gradient(ellipse 64% 56% at 78% 80%, rgba(180, 152, 112, 0.16), transparent 64%),
+    linear-gradient(155deg, #faf8f4 0%, #f1ece3 54%, #e8e1d5 100%);
+}
+
+:root[data-mood='aurora'] .s01-mirror-fallback {
+  background:
+    radial-gradient(ellipse 68% 58% at 22% 18%, rgba(108, 166, 238, 0.24), transparent 62%),
+    radial-gradient(ellipse 64% 56% at 80% 82%, rgba(146, 124, 224, 0.2), transparent 64%),
+    linear-gradient(155deg, #070912 0%, #0d111e 52%, #05070e 100%);
+}
+
+:root[data-theme='light'][data-mood='aurora'] .s01-mirror-fallback {
+  background:
+    radial-gradient(ellipse 68% 58% at 24% 20%, rgba(124, 176, 240, 0.24), transparent 62%),
+    radial-gradient(ellipse 64% 56% at 78% 80%, rgba(164, 146, 232, 0.18), transparent 64%),
+    linear-gradient(155deg, #f6f9fd 0%, #eaf0f9 54%, #e1e8f4 100%);
+}
+
+.s01-mirror-editorial {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 680px;
+  padding: 28px 34px;
+  border-radius: 20px;
+  background: transparent;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  color: #F5F5F7;
+}
+
+:root[data-theme='light'] .s01-mirror-editorial {
+  background: transparent;
+  color: #101216;
+}
+
+.s01-mirror-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent-gold);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.s01-mirror-title {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  text-wrap: balance;
+  word-break: keep-all;
+}
+
+.s01-mirror-brand-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.s01-mirror-sub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.s01-mirror-cta {
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline-gold);
+  background: var(--accent-gold-soft);
+  color: var(--accent-gold);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.s01-mirror-sig {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.s01-live-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: 0;
+  z-index: 2;
+  background: var(--bg-canvas);
+  transition: opacity 180ms ease;
+}
+
+.s01-live-cover.is-live-ready .s01-live-iframe {
+  opacity: 1;
+}
+
+.s01-live-cover.is-live-ready .s01-mirror-fallback {
+  display: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Slide 02 — 2x2 Visual-First Showcase (Large Widescreen Site Previews + Clean TOC) */
+.s02-acts--visual {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-height: 0;
+}
+
+.s02-acts--visual .s02-act {
+  display: grid;
+  grid-template-columns: 1.56fr 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 10px 14px;
+  padding: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.s02-acts--visual .s02-act-visual {
+  grid-row: 1 / -1;
+  grid-column: 1;
+  height: 100%;
+  min-height: 0;
+  border-radius: 10px;
+}
+
+.s02-acts--visual .s02-act-head {
+  grid-row: 1;
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 2px;
+  padding-bottom: 8px;
+}
+
+.s02-acts--visual .s02-act-title {
+  font-size: 16px;
+  font-weight: 760;
+  margin-top: 0;
+}
+
+.s02-acts--visual .s02-items {
+  grid-row: 2;
+  grid-column: 2;
+  gap: 6px;
+  min-height: 0;
+}
+
+.s02-acts--visual .s02-item {
+  padding: 6px 9px;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.s02-acts--visual .s02-num {
+  width: 22px;
+  height: 22px;
+  font-size: 9.5px;
+}
+
+.s02-acts--visual .s02-label {
+  font-size: 12px;
+}
+
+/* Slide 03 — Hero Studio Capture + 2x2 KPIs + Photo 5-Stage Strip */
+.s03-visual-top {
+  flex: 1.28 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.54fr 0.86fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.s03-hero-shot {
+  height: 100%;
+  min-height: 0;
+}
+
+.s03-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-height: 0;
+}
+
+.s03-kpi-tile {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.s03-kpi-val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.s03-kpi-lbl {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.s03-nodes--photo {
+  flex: 0.92 1 0;
+  min-height: 0;
+}
+
+.s03-nodes--photo .s03-node {
+  padding: 9px 10px 10px;
+  gap: 5px;
+  justify-content: space-between;
+  min-height: 0;
+}
+
+.s03-nodes--photo .s03-node-thumb {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 98px;
+}
+
+.s03-nodes--photo .s03-node-title {
+  font-size: 14px;
+}
+
+/* Slide 04 — 6 Large Photo-Anchored Pain Cards */
+.s04-photo-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.s04-photo-card {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+}
+
+.s04-photo {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-recessed);
+}
+
+.s04-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 26%;
+  display: block;
+}
+
+.s04-photo-stat {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(5, 5, 7, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #F5F5F7;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 760;
+  backdrop-filter: blur(6px);
+}
+
+.s04-photo-stat.danger-accent {
+  color: #FB7185;
+  border-color: rgba(251, 113, 133, 0.42);
+}
+
+.s04-photo-cap {
+  padding: 10px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--hairline);
+  flex: none;
+}
+
+.s04-photo-title {
+  font-size: 13.5px;
+  font-weight: 740;
+  line-height: 1.25;
+}
+
+.s04-photo-sub {
+  font-size: 11.5px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Slide 05 — Large Dual Live Showcase + 6 Clean Resolution Rows */
+.s05-visual-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.22fr 0.78fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.s05-showcase-left {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 0;
+}
+
+.s05-site-big {
+  width: 85%;
+  height: 92%;
+  min-height: 0;
+}
+
+.s05-phone-big {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  width: 194px;
+  height: 396px;
+  border-radius: 26px;
+  padding: 6px;
+  border: 1.6px solid var(--accent-gold);
+  background: #0A0B0F;
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.58);
+  z-index: 2;
+}
+
+.s05-phone-big .device-screen {
+  border-radius: 20px;
+  padding-top: 12px;
+}
+
+.s05-phone-big .device-island {
+  width: 36px;
+  height: 7px;
+  top: 3px;
+}
+
+.s05-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  justify-content: space-between;
+  min-height: 0;
+}
+
+.s05-pair {
+  flex: 1 1 0;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto 1.2fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+}
+
+.s05-pair-before {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s05-pair-arrow {
+  font-family: var(--font-mono);
+  color: var(--accent-gold);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.s05-pair-after {
+  font-size: 13px;
+  font-weight: 740;
+  text-align: right;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Slide 06 — Full-Height 6-Cut Storyboard */
+.s06-grid--full {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.s06-cap-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent-gold);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* Slide 07 — Clean 5-Phone Runway */
+.s07-grid--5 .s07-phone {
+  max-width: 222px;
+}
+
+.s07-grid--5 .s07-cap {
+  align-items: center;
+  text-align: center;
+  padding-top: 6px;
+}
+
+/* Slide 08 — Large Site Weather 3D Capture + -96% Cutout Proof */
+.s08-visual-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.24fr 0.76fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.s08-hero-frame {
+  height: 100%;
+  min-height: 0;
+}
+
+.s08-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.s08-mini-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  flex: none;
+}
+
+.s08-mini-kpi {
+  padding: 12px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.s08-mini-val {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.s08-mini-lbl {
+  font-size: 10.5px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s08-cutout-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.s08-cutout-note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+}
+
+.s08-cutout-note strong {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  word-break: keep-all;
+}
+
+.s08-cutout-note span {
+  font-size: 10.5px;
+  line-height: 1.38;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.s08-garments--lg {
+  justify-content: center;
+  gap: 18px;
+  flex: 1 1 auto;
+}
+
+.s08-garments--lg .s08-thumb-box {
+  width: 122px;
+}
+
+.s08-garments--lg .s08-thumb {
+  width: 122px;
+  height: 122px;
+}
+
+.s08-garments--lg .s08-after-stack img {
+  height: 52px;
+}
+
+.s08-thumb-cap {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.s08-arrow {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+/* Slide 09 — Full-Column Security Shield Captures */
+.s09-visual-grid > .s09-card-stack {
+  height: 100%;
+  gap: 8px;
+}
+
+/* Slide 10 — Subtle Source Link Text */
+.s10-src-link {
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Slide 11 — Large Mannequin Site Capture + Compact Quadrant & Matrix */
+.s11-visual-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.12fr 0.88fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.s11-hero-mannequin {
+  height: 100%;
+  min-height: 0;
+}
+
+.s11-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.s11-map-compact {
+  padding: 10px 12px;
+  height: 222px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.s11-right-col .s11-matrix-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px 16px;
+}
+
+.s11-right-col .s11-table td {
+  padding: 8px 6px;
+  font-size: 12px;
+}
+
+/* Slide 12 — Large 4-Card Product Monetization Gallery */
+.s12-gallery {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.s12-card {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+}
+
+.s12-card-shot {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-recessed);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.s12-card-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  display: block;
+}
+
+.s12-card-shot--wide img {
+  object-position: center center;
+}
+
+.s12-card-body {
+  padding: 13px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+}
+
+.s12-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+.s12-name {
+  font-size: 14.5px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.s12-sub {
+  font-size: 11.5px;
+  color: var(--ink-secondary);
+}
+
+/* Slide 13 — Full-Height Site Loop Showcase + Zero-Cost Shield */
+.s13-grid--visual {
+  grid-template-columns: 1.18fr 0.82fr;
+}
+
+.s13-loop-big {
+  height: 100%;
+  min-height: 0;
+}
+
+.s13-row-lbl {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.s13-grid--visual .s13-cost-card {
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
+
+.s13-margin-compact {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+}
+
+.s13-margin-big {
+  font-family: var(--font-mono);
+  font-size: 40px;
+  font-weight: 820;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.s13-margin-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.s13-margin-copy strong {
+  font-size: 14px;
+  font-weight: 740;
+}
+
+.s13-margin-copy span {
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+/* Slide 14 — Dual Large Site Captures + Clean 6-Tier Architecture */
+.s14-proof-sub {
+  font-size: 10.5px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s14-right-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.s14-specs-hero {
+  flex: 1.05 1 0;
+  min-height: 200px;
+}
+
+.s14-tiers-panel {
+  flex: 0.95 1 0;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 0;
+}
+
+.s14-tiers-panel .s14-tier {
+  padding: 6px 10px;
+  grid-template-columns: 112px 1fr;
+  gap: 10px;
+}
+
+/* Slide 15 — 3 Large Visual Acquisition Channel Cards */
+.s15-phase-title {
+  font-size: 14.5px;
+  font-weight: 740;
+}
+
+.s15-channel-gallery {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.s15-ch-card {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+}
+
+.s15-ch-shot {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-recessed);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.s15-ch-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  display: block;
+}
+
+.s15-ch-shot--wide img {
+  object-position: center center;
+}
+
+.s15-ch-body {
+  padding: 12px 14px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: none;
+}
+
+.s15-ch-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.s15-ch-title {
+  font-size: 15px;
+  font-weight: 760;
+}
+
+.s15-ch-sub {
+  font-size: 11.5px;
+  color: var(--ink-secondary);
+}
+
+/* Slide 16 — Large 4-Up Shipped Proof Gallery + Clean Team Row + Compact Security */
+.s16-proof-gallery {
+  flex: 1.2 1 0;
+  min-height: 195px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.s16-proof-tile {
+  height: 100%;
+  min-height: 0;
+}
+
+.s16-proof-tile:nth-child(2) img {
+  object-position: center 24%;
+}
+
+.s16-team-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr 1fr;
+  gap: 12px;
+  flex: none;
+}
+
+.s16-member {
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.s16-member-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.s16-hire-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.s16-member strong {
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.s16-member-sub {
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+.s16-shields--compact {
+  flex: none;
+  gap: 12px;
+}
+
+.s16-shield-mini {
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.s16-shield-mini span {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.s16-shield-mini strong {
+  font-size: 13px;
+  font-weight: 720;
+}
+
+/* Slide 17 — Donut + Large Visual Milestone Cards */
+.s17-anchor-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+.s17-anchor-sub {
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+.s17-leg-sub {
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+.s17-milestones {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.s17-ms-card {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+}
+
+.s17-ms-shot {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-recessed);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.s17-ms-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  display: block;
+}
+
+.s17-ms-shot--wide img {
+  object-position: center center;
+}
+
+.s17-ms-body {
+  padding: 11px 13px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: none;
+}
+
+.s17-ms-time {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.s17-ms-body strong {
+  font-size: 14px;
+  font-weight: 760;
+}
+
+.s17-ms-body span:last-child {
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+/* Slide 18 — Maximized Closing Dual-Device Showcase */
+.s18-device-stage {
+  height: 456px;
+}
+
+.s18-browser--dual {
+  height: 422px;
+  width: 91%;
+}
+
+.s18-floating-phone {
+  width: 176px;
+  height: 360px;
+}
+
+/* ============================================================================
  * 4:3 Compact Ratio Adaptation (1024x768)
  * ============================================================================ */
 :root[data-ratio='4-3'] .ir-slide {
@@ -3257,48 +4353,851 @@ html, body {
 :root[data-ratio='4-3'] .s-title { font-size: 23px; }
 :root[data-ratio='4-3'] .s01-h1 { font-size: 35px; }
 :root[data-ratio='4-3'] .s01-hero-logo { height: 52px; }
-:root[data-ratio='4-3'] .s01-right { grid-template-columns: 175px 1fr; gap: 12px; }
-:root[data-ratio='4-3'] .s01-phone { width: 175px; height: 392px; }
-:root[data-ratio='4-3'] .s01-right-stack { height: 392px; gap: 8px; }
-:root[data-ratio='4-3'] .s01-site-preview { height: 132px; }
-:root[data-ratio='4-3'] .s02-acts { gap: 10px; }
-:root[data-ratio='4-3'] .s02-act { padding: 10px; }
-:root[data-ratio='4-3'] .s02-act-visual { height: 68px; }
-:root[data-ratio='4-3'] .s02-label { font-size: 11px; }
-:root[data-ratio='4-3'] .s03-g-val { font-size: 21px; }
-:root[data-ratio='4-3'] .s03-ring { width: 54px; height: 54px; }
-:root[data-ratio='4-3'] .s03-node-thumb { height: 64px; }
-:root[data-ratio='4-3'] .s05-stage { grid-template-columns: 1fr 215px 1fr; }
-:root[data-ratio='4-3'] .s05-phone-hub { width: 122px; height: 248px; }
+:root[data-ratio='4-3'] .s02-acts--visual { gap: 10px; }
+:root[data-ratio='4-3'] .s02-acts--visual .s02-act {
+  grid-template-columns: 1.32fr 1fr;
+  gap: 8px 10px;
+  padding: 10px;
+}
+:root[data-ratio='4-3'] .s02-acts--visual .s02-label { font-size: 11px; }
+:root[data-ratio='4-3'] .s03-visual-top { grid-template-columns: 1.32fr 0.88fr; gap: 10px; }
+:root[data-ratio='4-3'] .s03-kpi-val { font-size: 22px; }
+:root[data-ratio='4-3'] .s03-nodes--photo .s03-node-thumb { min-height: 78px; }
+:root[data-ratio='4-3'] .s05-visual-stage { grid-template-columns: 1.12fr 0.88fr; gap: 12px; }
+:root[data-ratio='4-3'] .s05-phone-big { width: 156px; height: 320px; }
 :root[data-ratio='4-3'] .s07-grid--5 { gap: 9px; }
 :root[data-ratio='4-3'] .s07-grid--5 .s07-cap-title { font-size: 10.5px; }
-:root[data-ratio='4-3'] .s08-lab-main--rich { grid-template-columns: 224px 1fr 176px; gap: 12px; }
-:root[data-ratio='4-3'] .s08-thumb-box,
-:root[data-ratio='4-3'] .s08-thumb { width: 88px; height: 88px; }
-:root[data-ratio='4-3'] .s08-after-stack img { height: 36px; }
-:root[data-ratio='4-3'] .s08-pct-num { font-size: 36px; }
+:root[data-ratio='4-3'] .s08-visual-grid { grid-template-columns: 1.12fr 0.88fr; gap: 12px; }
+:root[data-ratio='4-3'] .s08-garments--lg .s08-thumb-box,
+:root[data-ratio='4-3'] .s08-garments--lg .s08-thumb { width: 110px; height: 110px; }
+:root[data-ratio='4-3'] .s08-garments--lg .s08-after-stack img { height: 46px; }
 :root[data-ratio='4-3'] .s09-visual-grid { grid-template-columns: 1.15fr 1fr; gap: 10px; }
 :root[data-ratio='4-3'] .s09-kpi-val { font-size: 14px; }
-:root[data-ratio='4-3'] .s11-mannequin-card { grid-template-columns: 112px 1fr; }
-:root[data-ratio='4-3'] .s12-val { font-size: 20px; }
-:root[data-ratio='4-3'] .s12-shot { height: 74px; }
-:root[data-ratio='4-3'] .s13-margin-card { grid-template-columns: 158px 1fr; }
-:root[data-ratio='4-3'] .s13-gauge-svg { width: 154px; height: 102px; }
-:root[data-ratio='4-3'] .s14-specs-banner { grid-template-columns: 150px 1fr; height: 96px; }
-:root[data-ratio='4-3'] .s14-specs-img { height: 78px; }
-:root[data-ratio='4-3'] .s14-tier { grid-template-columns: 104px 1fr auto; }
-:root[data-ratio='4-3'] .s15-funnel { grid-template-columns: 1.35fr 70px 0.72fr; }
-:root[data-ratio='4-3'] .s16-org { grid-template-columns: 1.25fr 22px 1fr 1fr 1fr; gap: 8px; padding: 12px; }
+:root[data-ratio='4-3'] .s11-visual-grid { grid-template-columns: 1.02fr 0.98fr; gap: 12px; }
+:root[data-ratio='4-3'] .s11-map-compact { height: 190px; }
+:root[data-ratio='4-3'] .s12-val { font-size: 19px; }
+:root[data-ratio='4-3'] .s13-grid--visual { grid-template-columns: 1.05fr 0.95fr; }
+:root[data-ratio='4-3'] .s13-margin-big { font-size: 32px; }
+:root[data-ratio='4-3'] .s14-specs-hero { min-height: 168px; }
+:root[data-ratio='4-3'] .s14-tiers-panel .s14-tier { grid-template-columns: 98px 1fr; }
+:root[data-ratio='4-3'] .s16-proof-gallery { min-height: 158px; gap: 9px; }
+:root[data-ratio='4-3'] .s16-team-row { gap: 9px; }
 :root[data-ratio='4-3'] .s18-h1 { font-size: 40px; }
-:root[data-ratio='4-3'] .s18-floating-phone { width: 132px; height: 270px; }
+:root[data-ratio='4-3'] .s18-device-stage { height: 390px; }
+:root[data-ratio='4-3'] .s18-browser--dual { height: 360px; }
+:root[data-ratio='4-3'] .s18-floating-phone { width: 142px; height: 290px; }
+
+/* ============================================================================
+ * Compact / Tablet / Mobile Chrome (Zero-Overlap 3-Zone Top Bar + Bottom Nav)
+ * ============================================================================ */
+@media (max-width: 1180px) {
+  .ir-toolbar {
+    height: 50px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .ir-tb-group--right {
+    display: none;
+  }
+  .ir-tb-group--left {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 8px;
+  }
+  .ir-tb-select {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    height: 36px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+  .ir-tb-mobile-menu {
+    display: inline-flex;
+  }
+  .ir-progress-track {
+    top: 50px;
+  }
+
+  /* Thumb-zone bottom navigation bar in Deck mode (<= 15% sticky total height) */
+  :root[data-view='deck'] .ir-mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 98;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 10px;
+    min-height: 54px;
+    padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: var(--bg-toolbar);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid var(--hairline);
+  }
+  .ir-mb-nav-btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 42px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1px solid var(--hairline);
+    background: var(--bg-surface);
+    color: var(--ink-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 150ms ease, border-color 150ms ease;
+  }
+  .ir-mb-nav-btn--primary {
+    background: var(--ink-primary);
+    color: var(--bg-surface);
+    border-color: transparent;
+  }
+  .ir-mb-nav-btn:disabled {
+    opacity: 0.34;
+    cursor: not-allowed;
+  }
+  .ir-mb-counter {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--accent-gold);
+    min-width: 62px;
+    text-align: center;
+  }
+
+  /* Mobile Display Settings Bottom Sheet */
+  .ir-mobile-sheet:not([hidden]) {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .ir-mobile-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.56);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .ir-mobile-sheet-panel {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 520px;
+    border-radius: 22px 22px 0 0;
+    border-top: 1px solid var(--hairline-strong);
+    background: var(--bg-canvas);
+    color: var(--ink-primary);
+    padding: 10px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.42);
+  }
+  .ir-mobile-sheet-handle {
+    width: 38px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--hairline-strong);
+    margin: 0 auto 10px;
+  }
+  .ir-mobile-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .ir-mobile-sheet-head strong {
+    font-size: 15px;
+    font-weight: 740;
+  }
+  .ir-mobile-sheet-close {
+    appearance: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    border: 1px solid var(--hairline);
+    background: var(--bg-surface);
+    color: var(--ink-primary);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ir-mobile-sheet-body {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding-top: 14px;
+  }
+  .ir-ms-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .ir-ms-lbl {
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--ink-secondary);
+  }
+  .ir-seg--sheet {
+    min-width: 176px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 3px;
+  }
+  .ir-seg--sheet button {
+    min-height: 36px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  .ir-ms-print-btn {
+    margin-top: 6px;
+    appearance: none;
+    width: 100%;
+    min-height: 44px;
+    border-radius: 12px;
+    border: 1px solid var(--hairline-gold);
+    background: var(--bg-surface);
+    color: var(--ink-primary);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  :root.ir-sheet-open body {
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 440px) {
+  .ir-tb-ver {
+    display: none;
+  }
+  .ir-tb-brand {
+    padding: 5px 9px;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+  }
+  .ir-tb-mobile-menu span {
+    display: none;
+  }
+  .ir-tb-mobile-menu {
+    padding: 0 10px;
+  }
+}
+
+/* ============================================================================
+ * Native Mobile IR Version (100% Single-DOM Auto-Synced with Desktop IR)
+ * Activated automatically <= 820px or manually via PC/Mobile layout switcher
+ * ============================================================================ */
+:root[data-layout='mobile'] .ir-deck-viewport {
+  justify-content: flex-start;
+  padding: 62px 12px 76px;
+  min-height: 100dvh;
+}
+
+:root[data-layout='mobile'][data-view='scroll'] .ir-deck-viewport {
+  padding-top: 62px;
+  padding-bottom: 36px;
+}
+
+:root[data-layout='mobile'] .ir-stage {
+  gap: 16px;
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+:root[data-layout='mobile'] .ir-slide-slot {
+  width: 100%;
+  height: auto;
+}
+
+:root[data-layout='mobile'] .ir-slide {
+  width: 100%;
+  height: auto;
+  min-height: calc(100dvh - 140px);
+  transform: none;
+  overflow: visible;
+  padding: 20px 16px 18px;
+  border-radius: 16px;
+  gap: 14px;
+  justify-content: flex-start;
+}
+
+:root[data-layout='mobile'] .ir-slide::before {
+  left: 16px;
+  right: 16px;
+}
+
+:root[data-layout='mobile'] .s-head {
+  padding-bottom: 10px;
+  gap: 8px;
+}
+
+:root[data-layout='mobile'] .s-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.11em;
+}
+
+:root[data-layout='mobile'] .s-title {
+  font-size: 21px;
+  line-height: 1.24;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+:root[data-layout='mobile'] .s-body {
+  flex: 1 0 auto;
+  overflow: visible;
+  gap: 12px;
+}
+
+:root[data-layout='mobile'] .s-body > *,
+:root[data-layout='mobile'] .s03-visual-top,
+:root[data-layout='mobile'] .s03-nodes--photo,
+:root[data-layout='mobile'] .s03-nodes--photo .s03-node,
+:root[data-layout='mobile'] .s03-nodes--photo .s03-node-thumb,
+:root[data-layout='mobile'] .s06-grid--full,
+:root[data-layout='mobile'] .s06-art,
+:root[data-layout='mobile'] .s12-card-shot,
+:root[data-layout='mobile'] .s14-specs-hero,
+:root[data-layout='mobile'] .s14-tiers-panel,
+:root[data-layout='mobile'] .s15-ch-shot,
+:root[data-layout='mobile'] .s16-proof-gallery,
+:root[data-layout='mobile'] .s17-ms-shot {
+  flex: none;
+  height: auto;
+}
+
+:root[data-layout='mobile'] .s-foot {
+  margin-top: auto;
+  padding-top: 10px;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 10px;
+}
+
+/* Mobile Slide 01 — Live 1:1 Official Site Mobile Hero Cover */
+:root[data-layout='mobile'] .s01-live-cover {
+  padding: 0;
+  overflow: hidden;
+  height: calc(100dvh - 138px);
+  min-height: 520px;
+  max-height: 760px;
+}
+:root[data-layout='mobile'] .s01-mirror-fallback {
+  padding: 24px 18px;
+}
+:root[data-layout='mobile'] .s01-mirror-title {
+  font-size: 25px;
+  line-height: 1.24;
+}
+:root[data-layout='mobile'] .s01-hero-logo {
+  height: 44px;
+}
+
+/* Mobile Slide 02 — 4-Part Agenda */
+:root[data-layout='mobile'] .s02-acts--visual {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s02-acts--visual .s02-act {
+  grid-template-columns: 1fr;
+  padding: 12px;
+  gap: 10px;
+}
+:root[data-layout='mobile'] .s02-acts--visual .s02-act-visual {
+  grid-row: auto;
+  aspect-ratio: 16 / 9;
+  height: auto;
+}
+:root[data-layout='mobile'] .s02-acts--visual .s02-item {
+  min-height: 40px;
+  padding: 8px 10px;
+}
+:root[data-layout='mobile'] .s02-acts--visual .s02-label {
+  font-size: 12.5px;
+}
+
+/* Mobile Slide 03 — Executive Summary */
+:root[data-layout='mobile'] .s03-visual-top {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s03-hero-shot {
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+:root[data-layout='mobile'] .s03-kpi-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+:root[data-layout='mobile'] .s03-kpi-tile {
+  padding: 12px;
+}
+:root[data-layout='mobile'] .s03-kpi-val {
+  font-size: 20px;
+}
+:root[data-layout='mobile'] .s03-kpi-lbl {
+  font-size: 11px;
+}
+:root[data-layout='mobile'] .s03-nodes--photo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+:root[data-layout='mobile'] .s03-nodes--photo .s03-node {
+  padding: 10px;
+  gap: 6px;
+}
+:root[data-layout='mobile'] .s03-nodes--photo .s03-node--resale {
+  grid-column: 1 / -1;
+}
+:root[data-layout='mobile'] .s03-nodes--photo .s03-node-thumb {
+  width: 100%;
+  height: 92px;
+  min-height: 92px;
+  aspect-ratio: auto;
+}
+:root[data-layout='mobile'] .s03-nodes--photo .s03-node--resale .s03-node-thumb {
+  height: 112px;
+  min-height: 112px;
+}
+
+/* Mobile Slide 04 — Key Painpoints */
+:root[data-layout='mobile'] .s04-chain {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 5px 7px;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+:root[data-layout='mobile'] .s04-grid {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+:root[data-layout='mobile'] .s04-card {
+  padding: 13px 14px;
+  gap: 8px;
+}
+:root[data-layout='mobile'] .s04-card-title {
+  font-size: 13.5px;
+}
+:root[data-layout='mobile'] .s04-card-mid {
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s04-stat {
+  font-size: 23px;
+}
+:root[data-layout='mobile'] .s04-sub,
+:root[data-layout='mobile'] .s04-cause {
+  font-size: 11.5px;
+}
+
+/* Mobile Slide 05 — 1-App Unified Solution */
+:root[data-layout='mobile'] .s05-visual-stage {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+:root[data-layout='mobile'] .s05-showcase-left {
+  min-height: 242px;
+  padding-bottom: 16px;
+}
+:root[data-layout='mobile'] .s05-site-big {
+  width: 86%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+:root[data-layout='mobile'] .s05-phone-big {
+  width: 108px;
+  height: 220px;
+  right: 0;
+  bottom: 0;
+  border-radius: 20px;
+  padding: 4px;
+}
+:root[data-layout='mobile'] .s05-phone-big .device-screen {
+  border-radius: 16px;
+}
+:root[data-layout='mobile'] .s05-phone-big .device-island {
+  width: 28px;
+  height: 5px;
+}
+:root[data-layout='mobile'] .s05-pairs {
+  gap: 8px;
+}
+:root[data-layout='mobile'] .s05-pair {
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 10px 12px;
+}
+:root[data-layout='mobile'] .s05-pair-arrow {
+  display: none;
+}
+:root[data-layout='mobile'] .s05-pair-before,
+:root[data-layout='mobile'] .s05-pair-after {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.35;
+}
+:root[data-layout='mobile'] .s05-pair-before {
+  font-size: 11px;
+  text-decoration: line-through;
+  opacity: 0.72;
+}
+:root[data-layout='mobile'] .s05-pair-after {
+  font-size: 13px;
+}
+
+/* Mobile Slide 06 — 6 Everyday Use Cases */
+:root[data-layout='mobile'] .s06-grid--full {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s06-art {
+  aspect-ratio: 16 / 10;
+  height: auto;
+}
+:root[data-layout='mobile'] .s06-cap {
+  padding: 10px 12px;
+}
+:root[data-layout='mobile'] .s06-cap-meta {
+  white-space: normal;
+}
+
+/* Mobile Slide 07 — 5 Live Production App Screens (Crisp Horizontal Snap Gallery) */
+:root[data-layout='mobile'] .s07-grid--5 {
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  gap: 12px;
+  padding: 2px 2px 10px;
+  -webkit-overflow-scrolling: touch;
+}
+:root[data-layout='mobile'] .s07-grid--5 .s07-col {
+  flex: 0 0 214px;
+  scroll-snap-align: start;
+}
+:root[data-layout='mobile'] .s07-grid--5 .s07-phone {
+  width: 214px;
+  max-width: 214px;
+}
+:root[data-layout='mobile'] .s07-grid--5 .s07-cap-title {
+  white-space: normal;
+  font-size: 12.5px;
+}
+
+/* Mobile Slide 08 — Core Tech & Single Explained 96% Reduction */
+:root[data-layout='mobile'] .s08-visual-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s08-hero-frame {
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+:root[data-layout='mobile'] .s08-mini-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+:root[data-layout='mobile'] .s08-mini-kpi {
+  padding: 10px 8px;
+}
+:root[data-layout='mobile'] .s08-mini-val {
+  font-size: 15.5px;
+}
+:root[data-layout='mobile'] .s08-mini-lbl {
+  white-space: normal;
+  overflow: visible;
+  font-size: 10px;
+  line-height: 1.25;
+}
+:root[data-layout='mobile'] .s08-cutout-card {
+  padding: 14px;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s08-garments--lg {
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s08-garments--lg .s08-thumb-box,
+:root[data-layout='mobile'] .s08-garments--lg .s08-thumb {
+  width: 104px;
+  height: 104px;
+}
+:root[data-layout='mobile'] .s08-garments--lg .s08-after-stack img {
+  height: 44px;
+}
+:root[data-layout='mobile'] .s08-bar-meta {
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+/* Mobile Slide 09 — 4-Stage Privacy & Security */
+:root[data-layout='mobile'] .s09-visual-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s09-browser {
+  aspect-ratio: 16 / 10;
+  height: auto;
+}
+:root[data-layout='mobile'] .s09-kpi-strip {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+:root[data-layout='mobile'] .s09-kpi-sub {
+  white-space: normal;
+  overflow: visible;
+}
+:root[data-layout='mobile'] .s09-visual-grid > .s09-card-stack {
+  height: auto;
+  gap: 10px;
+}
+:root[data-layout='mobile'] .s09-shield-shot img {
+  height: auto;
+  object-fit: contain;
+}
+
+/* Mobile Slide 10 — Global Market Size */
+:root[data-layout='mobile'] .s10-evidence-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s10-src-title {
+  white-space: normal;
+  overflow: visible;
+  font-size: 12.5px;
+}
+:root[data-layout='mobile'] .s10-src-shot {
+  aspect-ratio: 16 / 10;
+  height: auto;
+}
+:root[data-layout='mobile'] .s10-bottom-links {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+/* Mobile Slide 11 — Competitive Landscape */
+:root[data-layout='mobile'] .s11-visual-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s11-hero-mannequin {
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+:root[data-layout='mobile'] .s11-map-compact {
+  height: auto;
+  padding: 12px;
+}
+:root[data-layout='mobile'] .s11-right-col .s11-matrix-card {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px;
+}
+:root[data-layout='mobile'] .s11-right-col .s11-table {
+  min-width: 340px;
+}
+:root[data-layout='mobile'] .s11-right-col .s11-table td {
+  font-size: 11px;
+  padding: 7px 5px;
+}
+
+/* Mobile Slide 12 — Business Model 1 (4 Revenue Streams) */
+:root[data-layout='mobile'] .s12-gallery {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s12-card-shot {
+  aspect-ratio: 16 / 10;
+  height: auto;
+}
+
+/* Mobile Slide 13 — Business Model 2 (Retention Loop & Cost Shield) */
+:root[data-layout='mobile'] .s13-grid--visual {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s13-loop-big {
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+:root[data-layout='mobile'] .s13-cost-bars {
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+:root[data-layout='mobile'] .s13-cost-bars > .mono {
+  display: none;
+}
+:root[data-layout='mobile'] .s13-margin-compact {
+  padding: 14px;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s13-margin-big {
+  font-size: 32px;
+}
+
+/* Mobile Slide 14 — Traction & 6-Tier Architecture */
+:root[data-layout='mobile'] .s14-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s14-browser,
+:root[data-layout='mobile'] .s14-specs-hero {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 16 / 10;
+}
+:root[data-layout='mobile'] .s14-proofs {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+:root[data-layout='mobile'] .s14-proof-sub {
+  white-space: normal;
+  overflow: visible;
+}
+:root[data-layout='mobile'] .s14-tiers-panel .s14-tier {
+  grid-template-columns: 1fr;
+  gap: 3px;
+  padding: 8px 10px;
+}
+
+/* Mobile Slide 15 — Growth Strategy & 18-Month Roadmap */
+:root[data-layout='mobile'] .s15-phases {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+:root[data-layout='mobile'] .s15-channel-gallery {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s15-ch-shot {
+  aspect-ratio: 16 / 10;
+  height: auto;
+}
+
+/* Mobile Slide 16 — Team & 2027 Security Roadmap */
+:root[data-layout='mobile'] .s16-proof-gallery {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 0;
+}
+:root[data-layout='mobile'] .s16-proof-tile {
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+:root[data-layout='mobile'] .s16-team-row {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+:root[data-layout='mobile'] .s16-shields--compact {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+/* Mobile Slide 17 — Funding Ask */
+:root[data-layout='mobile'] .s17-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s17-anchors {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+:root[data-layout='mobile'] .s17-milestones {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+:root[data-layout='mobile'] .s17-ms-shot {
+  aspect-ratio: 16 / 10;
+  height: auto;
+}
+
+/* Mobile Slide 18 — Closing Showcase */
+:root[data-layout='mobile'] .s18-grid {
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+:root[data-layout='mobile'] .s18-h1 {
+  font-size: 30px;
+}
+:root[data-layout='mobile'] .s18-device-stage {
+  height: auto;
+  min-height: 235px;
+  padding-bottom: 18px;
+}
+:root[data-layout='mobile'] .s18-browser--dual {
+  width: 90%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+:root[data-layout='mobile'] .s18-floating-phone {
+  width: 108px;
+  height: 220px;
+  right: 0;
+  bottom: 0;
+  border-radius: 20px;
+  padding: 4px;
+}
+:root[data-layout='mobile'] .s18-floating-phone .device-screen {
+  border-radius: 16px;
+}
+:root[data-layout='mobile'] .s18-floating-phone .device-island {
+  width: 28px;
+  height: 5px;
+}
+
+/* Desktop preview of Mobile IR (when user switches to Mobile on > 820px screen) */
+@media (min-width: 821px) {
+  :root[data-layout='mobile'] .ir-deck-viewport {
+    padding: 72px 24px 40px;
+  }
+  :root[data-layout='mobile'] .ir-stage {
+    max-width: 430px;
+  }
+  :root[data-layout='mobile'] .ir-slide {
+    min-height: 680px;
+    border-color: var(--hairline-strong);
+    box-shadow: var(--device-shadow);
+  }
+  :root[data-layout='mobile'] .s01-live-cover {
+    height: 700px;
+  }
+}
 
 /* ============================================================================
  * Print / PDF Export Mode
  * ============================================================================ */
 @media print {
   .ir-toolbar,
-  .ir-progress-track {
+  .ir-progress-track,
+  .ir-mobile-bottom-nav,
+  .ir-mobile-sheet,
+  .s01-live-iframe {
     display: none !important;
+  }
+  .s01-live-cover.is-live-ready .s01-mirror-fallback {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
   }
   html, body {
     background: var(--bg-canvas) !important;
@@ -3311,6 +5210,7 @@ html, body {
   }
   .ir-stage {
     gap: 0 !important;
+    max-width: none !important;
   }
   .ir-slide-slot {
     display: block !important;
@@ -3320,6 +5220,9 @@ html, body {
     break-after: page;
   }
   .ir-slide {
+    width: var(--slide-w) !important;
+    height: var(--slide-h) !important;
+    min-height: 0 !important;
     transform: none !important;
     border-radius: 0 !important;
     border: 0 !important;

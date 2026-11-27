@@ -303,13 +303,15 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
     titleLead: ko.hero.titleLead,
     titleAccent: ko.hero.titleAccent,
     subtitle: ko.hero.subtitle,
+    secondaryCta: ko.hero.secondaryCta,
     tocCover: `01 · 표지 — ${ko.hero.titleLead} · ${siteMeta.logoMark}`,
-    tocAgendaItem: `표지 · ${ko.hero.titleLead}`,
+    tocAgendaItem: ko.hero.titleLead,
     en: {
       kicker: en.hero.kicker,
       titleLead: en.hero.titleLead,
       titleAccent: en.hero.titleAccent,
       subtitle: en.hero.subtitle,
+      secondaryCta: en.hero.secondaryCta,
     },
   };
 
@@ -352,6 +354,7 @@ function buildBindingsMap(snapshot) {
     'hero.kicker': { text: snapshot.hero.kicker },
     'hero.titleLead': { text: snapshot.hero.titleLead },
     'hero.subtitle': { text: snapshot.hero.subtitle },
+    'hero.secondaryCta': { text: snapshot.hero.secondaryCta },
     'hero.tocCover': { text: snapshot.hero.tocCover },
     'hero.tocAgendaItem': { text: snapshot.hero.tocAgendaItem },
 

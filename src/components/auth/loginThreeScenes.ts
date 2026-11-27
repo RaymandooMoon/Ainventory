@@ -1102,6 +1102,7 @@ export function createLoginThreeController(
     initialVariant: LoginThreeVariantId;
     reducedMotion: boolean;
     safeMode?: boolean;
+    initialExternalMarbleHidden?: boolean;
     onMarbleStep?: (snapshot: MarbleStepSnapshot) => void;
     onFloorBounce?: () => void;
     onOverlayRender?: (ctx: LoginThreeOverlayRenderContext) => boolean;
@@ -1421,7 +1422,7 @@ export function createLoginThreeController(
   // --- Animation & Physics State ---
   let viewportWidth = initialW;
   let viewportHeight = initialH;
-  let isExternalMarbleHidden = false;
+  let isExternalMarbleHidden = Boolean(options.initialExternalMarbleHidden);
   let overlayWasActive = false;
   let currentAspect = initialAspect;
   let currentThemeDark = options.initialDark ? 1 : 0;
@@ -1457,7 +1458,7 @@ export function createLoginThreeController(
   let marbleY = -0.28; // Rests gracefully in the open silk zone below the INVTRY logo
   let marbleVx = 0.0;
   let marbleVy = 0.0;
-  let marbleOpacity = 1.0;
+  let marbleOpacity = isExternalMarbleHidden ? 0.0 : 1.0;
   // Second-order gravity sink spring: drops heavily into the silk crater on mount, deepens further at rest or finger press
   let marbleSink = reducedMotion ? 1.24 : 0.22;
   let marbleSinkVel = reducedMotion ? 0.0 : 4.25;
@@ -2698,11 +2699,12 @@ export function createLoginThreeController(
       if (isExternalMarbleHidden === hidden) return;
       isExternalMarbleHidden = hidden;
       if (hidden) {
+        marbleOpacity = 0;
         isPointerDown = false;
         isGrabbingMarble = false;
       }
       markPacerActivity(pacer, performance.now(), true);
-      if (reducedMotion && !isDisposed && !isContextLost && !isDocHidden && !isExternallyPaused) {
+      if (!isDisposed && !isContextLost && !isDocHidden && !isExternallyPaused) {
         safeRenderFrame(0.001);
       }
     },

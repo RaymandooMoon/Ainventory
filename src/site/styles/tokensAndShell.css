@@ -335,6 +335,13 @@ html[data-ios-safari='true'] .site-live-app-stage {
   pointer-events: none;
 }
 
+.site-root[data-embed-mode='ir-cover'] .site-shell {
+  justify-content: center;
+  padding-top: 0;
+  padding-bottom: 0;
+  gap: 0;
+}
+
 /* ==========================================================================
  * Official Dual-Theme One-Line "iNVTRY" Calligraphy Mark
  * ========================================================================== */
@@ -717,6 +724,7 @@ html[data-ios-safari='true'] .site-live-app-stage {
   letter-spacing: -0.036em;
   color: var(--ink-primary);
   text-wrap: balance;
+  word-break: keep-all;
 }
 
 .site-hero-title--brand {
@@ -737,6 +745,10 @@ html[data-ios-safari='true'] .site-live-app-stage {
   width: clamp(190px, 24vw, 310px);
 }
 
+.site-hero-title-line {
+  display: inline;
+}
+
 .site-hero-title-sheen {
   background: linear-gradient(180deg, #ffffff 0%, #dcdce4 100%);
   -webkit-background-clip: text;
@@ -749,6 +761,22 @@ html[data-ios-safari='true'] .site-live-app-stage {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+.site-hero-title-highlight {
+  background: linear-gradient(180deg, #fae8be 0%, #dfb874 52%, #bc8f49 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.site-root[data-site-theme='light'] .site-hero-title-highlight {
+  background: linear-gradient(180deg, #ad7f32 0%, #7f591e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .site-hero-accent {

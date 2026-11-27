@@ -13,17 +13,30 @@
     ratio: 'ainvtry_ir_ratio',
   };
 
+  const MOBILE_BREAKPOINT = 820;
   const root = document.documentElement;
   const slots = Array.from(document.querySelectorAll('.ir-slide-slot'));
   const totalSlides = slots.length;
   const printStyleEl = document.getElementById('ir-dynamic-page-style');
   const counterEl = document.getElementById('ir-slide-counter');
+  const mobileCounterEl = document.getElementById('ir-mobile-counter');
   const jumpSelect = document.getElementById('ir-slide-jump');
   const prevBtn = document.getElementById('ir-btn-prev');
   const nextBtn = document.getElementById('ir-btn-next');
-  const printBtn = document.getElementById('ir-btn-print');
+  const mobilePrevBtn = document.getElementById('ir-mobile-prev');
+  const mobileNextBtn = document.getElementById('ir-mobile-next');
+  const mobileMenuBtn = document.getElementById('ir-mobile-menu-btn');
+  const mobileSheet = document.getElementById('ir-mobile-sheet');
+  const mobileSheetClose = document.getElementById('ir-mobile-sheet-close');
+  const mobileSheetBackdrop = document.getElementById('ir-mobile-sheet-backdrop');
   const progressBar = document.getElementById('ir-progress-bar');
   const siteBackLink = document.getElementById('ir-site-back');
+  const liveHeroFrame = document.getElementById('ir-live-hero-frame');
+  const liveHeroShell = document.getElementById('slide-01');
+  const isHttpRuntime =
+    window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  let liveHeroMounted = false;
+  let suppressLiveHeroPost = false;
 
   function safeStorageGet(key) {
     try {
@@ -88,6 +101,13 @@
   const initialTheme = resolveInitialTheme(params);
   const initialLang = resolveInitialLang(params);
   const initialView = params.get('view') === 'scroll' ? 'scroll' : 'deck';
+  const paramLayout = params.get('layout');
+  let layoutUserPinned = paramLayout === 'mobile' || paramLayout === 'desktop';
+  const initialLayout = layoutUserPinned
+    ? paramLayout
+    : window.innerWidth <= MOBILE_BREAKPOINT
+      ? 'mobile'
+      : 'desktop';
   const parsedSlide = Number.parseInt(params.get('slide') || '1', 10);
 
   let currentIndex = Number.isFinite(parsedSlide)
@@ -98,6 +118,7 @@
   let currentMood = initialMood;
   let currentLang = initialLang;
   let currentView = initialView;
+  let currentLayout = initialLayout;
 
   /* =========================================================================
    * Bilingual KO <-> EN Snapshot & Switcher (HTML + SVG <text> + Live Binds)
@@ -214,6 +235,9 @@
     nextParams.set('mood', currentMood);
     nextParams.set('ratio', currentRatio);
     nextParams.set('view', currentView);
+    if (layoutUserPinned) {
+      nextParams.set('layout', currentLayout);
+    }
     if (currentView === 'deck') {
       nextParams.set('slide', String(currentIndex + 1));
     }
@@ -222,18 +246,45 @@
   }
 
   function updateScale() {
+    if (currentLayout === 'mobile') {
+      root.style.setProperty('--deck-scale', '1');
+      return;
+    }
     const dims = RATIO_DIMENSIONS[currentRatio] || RATIO_DIMENSIONS['16-9'];
-    const padX = currentView === 'deck' ? 32 : 48;
-    const padY = currentView === 'deck' ? 80 : 0;
-    const maxW = Math.max(320, window.innerWidth - padX);
+    const isCompactViewport = window.innerWidth <= 1120;
+    const padX = currentView === 'deck' ? (isCompactViewport ? 16 : 32) : isCompactViewport ? 20 : 48;
+    const padY = currentView === 'deck' ? (isCompactViewport ? 124 : 80) : 0;
+    const maxW = Math.max(280, window.innerWidth - padX);
     const scaleX = maxW / dims.width;
 
     let scale = Math.min(1, scaleX);
     if (currentView === 'deck') {
-      const maxH = Math.max(240, window.innerHeight - padY);
+      const maxH = Math.max(220, window.innerHeight - padY);
       scale = Math.min(scaleX, maxH / dims.height);
     }
-    root.style.setProperty('--deck-scale', Math.max(0.25, scale).toFixed(4));
+    root.style.setProperty('--deck-scale', Math.max(0.22, scale).toFixed(4));
+  }
+
+  function applyLayout(layout, isManual = false) {
+    currentLayout = layout === 'mobile' ? 'mobile' : 'desktop';
+    if (isManual) layoutUserPinned = true;
+    root.setAttribute('data-layout', currentLayout);
+    document.querySelectorAll('[data-set-layout]').forEach((btn) => {
+      const active = btn.getAttribute('data-set-layout') === currentLayout;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    updateScale();
+    syncUrl();
+  }
+
+  function setMobileSheetOpen(open) {
+    if (!mobileSheet) return;
+    mobileSheet.hidden = !open;
+    root.classList.toggle('ir-sheet-open', open);
+    if (mobileMenuBtn) {
+      mobileMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
   }
 
   function applyLang(lang) {
@@ -269,6 +320,7 @@
     }
 
     syncMediaAssets();
+    syncLiveHeroFrame(false);
     syncUrl();
   }
 
@@ -298,6 +350,7 @@
       btn.classList.toggle('is-active', active);
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+    syncLiveHeroFrame(false);
     syncUrl();
   }
 
@@ -311,6 +364,7 @@
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
     syncMediaAssets();
+    syncLiveHeroFrame(false);
     syncUrl();
   }
 
@@ -361,8 +415,12 @@
     slots.forEach((slot, idx) => {
       slot.classList.toggle('is-current', idx === clamped);
     });
+    const counterLabel = `${String(clamped + 1).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
     if (counterEl) {
-      counterEl.textContent = `${String(clamped + 1).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+      counterEl.textContent = counterLabel;
+    }
+    if (mobileCounterEl) {
+      mobileCounterEl.textContent = counterLabel;
     }
     if (jumpSelect) {
       jumpSelect.value = String(clamped);
@@ -373,13 +431,98 @@
     }
     if (prevBtn) prevBtn.disabled = clamped === 0;
     if (nextBtn) nextBtn.disabled = clamped === totalSlides - 1;
+    if (mobilePrevBtn) mobilePrevBtn.disabled = clamped === 0;
+    if (mobileNextBtn) mobileNextBtn.disabled = clamped === totalSlides - 1;
     if (currentView === 'scroll' && scrollIfNeeded && slots[clamped]) {
-      slots[clamped].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      slots[clamped].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (currentView === 'deck' && currentLayout === 'mobile' && scrollIfNeeded) {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+    if (clamped === 0) {
+      syncLiveHeroFrame(true);
     }
     syncUrl();
   }
 
-  // Bind toolbar actions
+  function buildLiveHeroUrl() {
+    const q = new URLSearchParams();
+    q.set('embed', 'ir-cover');
+    q.set('lang', currentLang);
+    q.set('theme', currentTheme);
+    q.set('mood', currentMood);
+    return `/?${q.toString()}`;
+  }
+
+  function mountLiveHeroFrame() {
+    if (!liveHeroFrame || !isHttpRuntime || liveHeroMounted) return;
+    liveHeroMounted = true;
+    const markReady = () => {
+      if (liveHeroShell) liveHeroShell.classList.add('is-live-ready');
+      syncLiveHeroFrame(false);
+    };
+    liveHeroFrame.addEventListener('load', markReady, { once: true });
+    liveHeroFrame.setAttribute('src', buildLiveHeroUrl());
+  }
+
+  function syncLiveHeroFrame(resetHero) {
+    if (!liveHeroFrame || !liveHeroMounted || suppressLiveHeroPost || !isHttpRuntime) return;
+    try {
+      const win = liveHeroFrame.contentWindow;
+      if (!win) return;
+      win.postMessage(
+        {
+          type: 'invtry:ir-cover-sync',
+          lang: currentLang,
+          theme: currentTheme,
+          mood: currentMood,
+          resetHero: Boolean(resetHero),
+        },
+        window.location.origin
+      );
+    } catch {
+      // Ignore cross-origin or uninitialized iframe errors
+    }
+  }
+
+  if (isHttpRuntime) {
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'invtry:ir-cover-ready') {
+        if (liveHeroShell) liveHeroShell.classList.add('is-live-ready');
+        syncLiveHeroFrame(false);
+        return;
+      }
+      if (data.type === 'invtry:ir-cover-state') {
+        suppressLiveHeroPost = true;
+        if ((data.theme === 'dark' || data.theme === 'light') && data.theme !== currentTheme) {
+          commitTheme(data.theme);
+        }
+        if ((data.mood === 'luxury' || data.mood === 'aurora') && data.mood !== currentMood) {
+          applyMood(data.mood);
+        }
+        if ((data.lang === 'ko' || data.lang === 'en') && data.lang !== currentLang) {
+          applyLang(data.lang);
+        }
+        suppressLiveHeroPost = false;
+        return;
+      }
+      if (data.type === 'invtry:ir-cover-key') {
+        if (data.key === 'ArrowRight' || data.key === 'PageDown') {
+          goToSlide(currentIndex + 1);
+        } else if (data.key === 'ArrowLeft' || data.key === 'PageUp') {
+          goToSlide(currentIndex - 1);
+        } else if (data.key === 'Home') {
+          goToSlide(0);
+        } else if (data.key === 'End') {
+          goToSlide(totalSlides - 1);
+        }
+      }
+    });
+  }
+
+  // Bind toolbar & mobile sheet actions (single synced state)
   document.querySelectorAll('[data-set-lang]').forEach((btn) => {
     btn.addEventListener('click', () => applyLang(btn.getAttribute('data-set-lang') || 'ko'));
   });
@@ -395,17 +538,32 @@
   document.querySelectorAll('[data-set-view]').forEach((btn) => {
     btn.addEventListener('click', () => applyView(btn.getAttribute('data-set-view') || 'deck'));
   });
+  document.querySelectorAll('[data-set-layout]').forEach((btn) => {
+    btn.addEventListener('click', () =>
+      applyLayout(btn.getAttribute('data-set-layout') || 'desktop', true)
+    );
+  });
+  document.querySelectorAll('[data-trigger-print]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setMobileSheetOpen(false);
+      window.print();
+    });
+  });
 
   if (prevBtn) prevBtn.addEventListener('click', () => goToSlide(currentIndex - 1));
   if (nextBtn) nextBtn.addEventListener('click', () => goToSlide(currentIndex + 1));
+  if (mobilePrevBtn) mobilePrevBtn.addEventListener('click', () => goToSlide(currentIndex - 1));
+  if (mobileNextBtn) mobileNextBtn.addEventListener('click', () => goToSlide(currentIndex + 1));
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener('click', () => setMobileSheetOpen(Boolean(mobileSheet && mobileSheet.hidden)));
+  }
+  if (mobileSheetClose) mobileSheetClose.addEventListener('click', () => setMobileSheetOpen(false));
+  if (mobileSheetBackdrop) mobileSheetBackdrop.addEventListener('click', () => setMobileSheetOpen(false));
   if (jumpSelect) {
     jumpSelect.addEventListener('change', (e) => {
       const idx = Number.parseInt(e.target.value, 10);
       if (Number.isFinite(idx)) goToSlide(idx);
     });
-  }
-  if (printBtn) {
-    printBtn.addEventListener('click', () => window.print());
   }
 
   // Clickable Table of Contents jump links
@@ -418,8 +576,12 @@
     });
   });
 
-  // Keyboard shortcuts (navigation + L lang, T theme, R ratio)
+  // Keyboard shortcuts (navigation + L lang, T theme, R ratio, Escape closes sheet)
   window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mobileSheet && !mobileSheet.hidden) {
+      setMobileSheetOpen(false);
+      return;
+    }
     if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && currentView === 'deck')) {
@@ -443,31 +605,43 @@
     }
   });
 
-  if (siteBackLink && window.location.protocol === 'file:') {
-    siteBackLink.hidden = true;
+  if (siteBackLink) {
+    if (window.location.protocol === 'file:') {
+      siteBackLink.hidden = true;
+    } else if (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1'
+    ) {
+      siteBackLink.setAttribute('href', '/?site=1');
+    }
   }
 
-  // Touch horizontal swipe navigation in deck mode
+  // Touch horizontal swipe navigation in deck mode (skips horizontal carousels/tables)
   const viewportEl = document.querySelector('.ir-deck-viewport');
   if (viewportEl) {
     let touchStartX = 0;
     let touchStartY = 0;
+    let touchInsideScrollable = false;
     viewportEl.addEventListener(
       'touchstart',
       (e) => {
         if (currentView !== 'deck' || e.touches.length !== 1) return;
         touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;
+        const targetEl = e.target instanceof Element ? e.target : null;
+        touchInsideScrollable = Boolean(
+          targetEl && targetEl.closest('.s07-grid--5, .s11-matrix-card')
+        );
       },
       { passive: true }
     );
     viewportEl.addEventListener(
       'touchend',
       (e) => {
-        if (currentView !== 'deck' || e.changedTouches.length !== 1) return;
+        if (currentView !== 'deck' || touchInsideScrollable || e.changedTouches.length !== 1) return;
         const dx = e.changedTouches[0].clientX - touchStartX;
         const dy = e.changedTouches[0].clientY - touchStartY;
-        if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        if (Math.abs(dx) >= 56 && Math.abs(dx) > Math.abs(dy) * 1.6) {
           goToSlide(dx < 0 ? currentIndex + 1 : currentIndex - 1);
         }
       },
@@ -475,13 +649,28 @@
     );
   }
 
-  window.addEventListener('resize', updateScale, { passive: true });
+  window.addEventListener(
+    'resize',
+    () => {
+      if (!layoutUserPinned) {
+        const autoLayout = window.innerWidth <= MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
+        if (autoLayout !== currentLayout) {
+          applyLayout(autoLayout, false);
+          return;
+        }
+      }
+      updateScale();
+    },
+    { passive: true }
+  );
 
   // Initialize state cleanly
+  applyLayout(currentLayout, layoutUserPinned);
   applyRatio(currentRatio);
   applyMood(currentMood);
   commitTheme(currentTheme);
   applyLang(currentLang);
   applyView(currentView);
   goToSlide(currentIndex, false);
+  mountLiveHeroFrame();
 })();
