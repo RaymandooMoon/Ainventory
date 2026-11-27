@@ -1741,7 +1741,7 @@ export function createWorkerHandler(fetchImpl = fetch) {
       }
 
       if (isInvestorDeckPath(url.pathname)) {
-        return handleProtectedIrRoute(request, url, env, { sha256Hex, verifyEdgeToken });
+        return handleProtectedIrRoute(request, url, env, { sha256Hex, verifyEdgeToken }, ctx);
       }
 
       if (isBlockedAiScraper(request.headers.get('user-agent'))) {

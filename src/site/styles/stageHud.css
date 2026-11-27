@@ -1900,6 +1900,13 @@ html[data-ios-safari='true'] .site-live-app-iframe.is-ready {
 
 .hud-ir-unlock-form {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.hud-ir-unlock-row {
+  display: flex;
   gap: 6px;
   align-items: center;
 }

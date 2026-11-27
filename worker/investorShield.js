@@ -365,7 +365,98 @@ const CONFIDENTIAL_INVESTOR_BRIEF = {
   },
 };
 
-async function notifyFounderInvestorAccess({ label, country, path }, env, fetchImpl, resolveSafeHttpsUrl, fetchWithTimeout) {
+function isGoogleLabel(label) {
+  return /\bgoogle\b/i.test(String(label || ''));
+}
+
+async function recordInvestorAccessLog(
+  { event, label, country, path, ipHash, userAgent, timestamp },
+  env
+) {
+  const safeLabel = String(label || 'Anonymous').slice(0, 64);
+  const safeCountry = String(country || 'Unknown').slice(0, 16);
+  const safePath = String(path || '/ir/').slice(0, 120);
+  const safeIpHash = String(ipHash || '').slice(0, 24);
+  const safeUa = String(userAgent || '').slice(0, 180);
+  const googleReviewer = isGoogleLabel(safeLabel);
+
+  const entry = {
+    event,
+    label: safeLabel,
+    googleReviewer,
+    country: safeCountry,
+    path: safePath,
+    ipHash: safeIpHash,
+    userAgent: safeUa,
+    timestamp,
+  };
+
+  if (event === 'investor.unlock_failed') {
+    console.warn(JSON.stringify(entry));
+  } else {
+    console.info(JSON.stringify(entry));
+  }
+
+  // Persist to Cloudflare D1 when bound
+  if (env?.NEWSLETTER_DB && typeof env.NEWSLETTER_DB.prepare === 'function') {
+    try {
+      await env.NEWSLETTER_DB.prepare(
+        `CREATE TABLE IF NOT EXISTS investor_access_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          event TEXT NOT NULL,
+          label TEXT NOT NULL,
+          google_reviewer INTEGER NOT NULL DEFAULT 0,
+          country TEXT NOT NULL,
+          path TEXT NOT NULL,
+          ip_hash TEXT NOT NULL,
+          user_agent TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        )`
+      ).run();
+      await env.NEWSLETTER_DB.prepare(
+        `INSERT INTO investor_access_logs (event, label, google_reviewer, country, path, ip_hash, user_agent, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+        .bind(
+          event,
+          safeLabel,
+          googleReviewer ? 1 : 0,
+          safeCountry,
+          safePath,
+          safeIpHash,
+          safeUa,
+          timestamp
+        )
+        .run();
+    } catch {
+      // Non-fatal: logging failure must never block IR access
+    }
+  }
+
+  // Persist rolling recent-100 list to Cloudflare KV when bound
+  if (
+    env?.NEWSLETTER_KV &&
+    typeof env.NEWSLETTER_KV.get === 'function' &&
+    typeof env.NEWSLETTER_KV.put === 'function'
+  ) {
+    try {
+      const raw = await env.NEWSLETTER_KV.get('ir_logs:recent');
+      const existing = raw ? JSON.parse(raw) : [];
+      const next = [entry, ...(Array.isArray(existing) ? existing : [])].slice(0, 100);
+      await env.NEWSLETTER_KV.put('ir_logs:recent', JSON.stringify(next));
+    } catch {
+      // Non-fatal
+    }
+  }
+}
+
+async function notifyFounderInvestorAccess(
+  { label, country, path, ipHash, userAgent },
+  env,
+  fetchImpl,
+  resolveSafeHttpsUrl,
+  fetchWithTimeout
+) {
   const resendKey = String(env?.RESEND_API_KEY || '').trim();
   const fromEmail = String(env?.RESEND_FROM_EMAIL || DEFAULT_FROM_EMAIL).trim() || DEFAULT_FROM_EMAIL;
   const notifyEmail =
@@ -373,12 +464,28 @@ async function notifyFounderInvestorAccess({ label, country, path }, env, fetchI
   const webhookUrl = resolveSafeHttpsUrl(env?.NEWSLETTER_WEBHOOK_URL);
   const webhookSecret = String(env?.NEWSLETTER_WEBHOOK_SECRET || '').trim();
 
-  const who = label || 'Passcode Verified';
+  const who = label || 'Passcode Verified (No label)';
+  const googleReviewer = isGoogleLabel(who);
   const region = country || 'Unknown';
   const timestamp = new Date().toISOString();
-  const text = `[iNVTRY IR Data Room] 열람 인증 완료 — ${who} (${region}) · ${path} · ${timestamp}`;
+  const prefix = googleReviewer ? '[GOOGLE REVIEWER] ' : '';
+  const text = `${prefix}[iNVTRY IR Data Room] 열람 인증 완료 — ${who} (${region}) · ${path} · ${timestamp}${userAgent ? ` · UA: ${String(userAgent).slice(0, 120)}` : ''}`;
 
-  const tasks = [];
+  const tasks = [
+    recordInvestorAccessLog(
+      {
+        event: 'investor.data_room_unlocked',
+        label: who,
+        country: region,
+        path,
+        ipHash,
+        userAgent,
+        timestamp,
+      },
+      env
+    ),
+  ];
+
   if (resendKey) {
     tasks.push(
       fetchWithTimeout(
@@ -393,7 +500,7 @@ async function notifyFounderInvestorAccess({ label, country, path }, env, fetchI
           body: JSON.stringify({
             from: fromEmail,
             to: [notifyEmail],
-            subject: `[iNVTRY IR Access] ${who} (${region})`,
+            subject: `${prefix}[iNVTRY IR Access] ${who} (${region})`,
             text,
           }),
         },
@@ -415,8 +522,10 @@ async function notifyFounderInvestorAccess({ label, country, path }, env, fetchI
           body: JSON.stringify({
             event: 'investor.data_room_unlocked',
             label: who,
+            googleReviewer,
             country: region,
             path,
+            ipHash,
             timestamp,
             text,
             content: text,
@@ -427,9 +536,7 @@ async function notifyFounderInvestorAccess({ label, country, path }, env, fetchI
     );
   }
 
-  if (tasks.length > 0) {
-    await Promise.allSettled(tasks);
-  }
+  await Promise.allSettled(tasks);
 }
 
 export function renderInvestorGateHtml({ lang = 'ko', theme = 'dark', configured = true }) {
@@ -459,8 +566,8 @@ export function renderInvestorGateHtml({ lang = 'ko', theme = 'dark', configured
     ? `<form id="ir-gate-form" novalidate>
         <label class="field-label" for="ir-passcode">${isEn ? 'Access Passcode' : '접근 코드'}</label>
         <input id="ir-passcode" name="passcode" type="password" autocomplete="one-time-code" required placeholder="${isEn ? 'Enter investor passcode' : '투자자 접근 코드를 입력하세요'}" />
-        <label class="field-label" for="ir-label">${isEn ? 'Name / Firm (optional)' : '성함 / 소속 (선택)'}</label>
-        <input id="ir-label" name="label" type="text" maxlength="64" autocomplete="organization" placeholder="${isEn ? 'e.g. Kim · Partner VC' : '예: 홍길동 · ○○벤처스'}" />
+        <label class="field-label" for="ir-label">${isEn ? 'Name / Organization (If Google employee, please enter "Google")' : '성함 / 소속 (Google 직원이면 "Google"이라고 입력해 주세요)'}</label>
+        <input id="ir-label" name="label" type="text" maxlength="64" autocomplete="organization" placeholder="${isEn ? 'e.g. Google, or Kim · Partner VC' : '예: Google 또는 홍길동 · ○○벤처스'}" />
         <p id="ir-gate-error" class="error-msg" role="alert" aria-live="polite"></p>
         <button id="ir-gate-submit" type="submit" class="btn-primary">${isEn ? 'Unlock Business Plan' : '사업계획서 열람하기'}</button>
       </form>`
@@ -753,9 +860,33 @@ export async function handleInvestorApiRoute(request, url, env, ctx, fetchImpl, 
       timingSafeEqual
     );
 
+    const country = String(request.headers.get('cf-ipcountry') || request.cf?.country || '').slice(
+      0,
+      16
+    );
+    const userAgent = String(request.headers.get('user-agent') || '').slice(0, 180);
+    const ipHash = (await sha256Hex(`ainvtry-ir-ip-v1:${clientIp}`)).slice(0, 16);
+
     if (!matched) {
       const fails = recordUnlockFailure(clientIp);
       const remaining = Math.max(0, IR_MAX_UNLOCK_FAILS - fails);
+      const failLogPromise = recordInvestorAccessLog(
+        {
+          event: 'investor.unlock_failed',
+          label: label || 'Unverified Attempt',
+          country,
+          path: accessPath,
+          ipHash,
+          userAgent,
+          timestamp: new Date().toISOString(),
+        },
+        env
+      );
+      if (ctx && typeof ctx.waitUntil === 'function') {
+        ctx.waitUntil(failLogPromise);
+      } else {
+        void failLogPromise;
+      }
       return buildJsonResponse(
         {
           ok: false,
@@ -783,12 +914,8 @@ export async function handleInvestorApiRoute(request, url, env, ctx, fetchImpl, 
       url.protocol === 'https:'
     );
 
-    const country = String(request.headers.get('cf-ipcountry') || request.cf?.country || '').slice(
-      0,
-      16
-    );
     const notifyPromise = notifyFounderInvestorAccess(
-      { label, country, path: accessPath },
+      { label, country, path: accessPath, ipHash, userAgent },
       env,
       fetchImpl,
       resolveSafeHttpsUrl,
@@ -844,6 +971,90 @@ export async function handleInvestorApiRoute(request, url, env, ctx, fetchImpl, 
     );
   }
 
+  if (url.pathname === '/api/investor/logs' && request.method === 'GET') {
+    const adminSecret = String(env?.IR_ADMIN_SECRET || env?.NEWSLETTER_SYNC_SECRET || '').trim();
+    if (!adminSecret) {
+      return buildJsonResponse(
+        { ok: false, code: 'LOGS_ADMIN_NOT_CONFIGURED', error: 'Admin secret is not configured.' },
+        503,
+        request,
+        env,
+        extraNoIndex
+      );
+    }
+    const authHeader = String(request.headers.get('authorization') || '');
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const supplied = bearer || String(request.headers.get('x-investor-admin-secret') || '').trim();
+    const matched = await verifyPasscodeConstantTime(
+      supplied,
+      adminSecret,
+      sha256Hex,
+      timingSafeEqual
+    );
+    if (!matched) {
+      return buildJsonResponse(
+        { ok: false, code: 'UNAUTHORIZED', error: 'Unauthorized' },
+        401,
+        request,
+        env,
+        extraNoIndex
+      );
+    }
+
+    const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') || 50) || 50));
+    if (env?.NEWSLETTER_DB && typeof env.NEWSLETTER_DB.prepare === 'function') {
+      try {
+        const res = await env.NEWSLETTER_DB.prepare(
+          `SELECT id, event, label, google_reviewer, country, path, ip_hash, user_agent, created_at
+           FROM investor_access_logs
+           ORDER BY id DESC
+           LIMIT ?`
+        )
+          .bind(limit)
+          .all();
+        return buildJsonResponse(
+          { ok: true, source: 'd1', logs: Array.isArray(res?.results) ? res.results : [] },
+          200,
+          request,
+          env,
+          extraNoIndex
+        );
+      } catch {
+        // Table may not exist yet before first access
+        return buildJsonResponse({ ok: true, source: 'd1', logs: [] }, 200, request, env, extraNoIndex);
+      }
+    }
+
+    if (env?.NEWSLETTER_KV && typeof env.NEWSLETTER_KV.get === 'function') {
+      try {
+        const raw = await env.NEWSLETTER_KV.get('ir_logs:recent');
+        const list = raw ? JSON.parse(raw) : [];
+        return buildJsonResponse(
+          { ok: true, source: 'kv', logs: Array.isArray(list) ? list.slice(0, limit) : [] },
+          200,
+          request,
+          env,
+          extraNoIndex
+        );
+      } catch {
+        return buildJsonResponse({ ok: true, source: 'kv', logs: [] }, 200, request, env, extraNoIndex);
+      }
+    }
+
+    return buildJsonResponse(
+      {
+        ok: true,
+        source: 'worker_logs_only',
+        logs: [],
+        note: 'Bind NEWSLETTER_DB or NEWSLETTER_KV to query persisted logs via API; otherwise inspect Cloudflare Workers Observability logs.',
+      },
+      200,
+      request,
+      env,
+      extraNoIndex
+    );
+  }
+
   return buildJsonResponse(
     { ok: false, code: 'NOT_FOUND', error: 'Not Found' },
     404,
@@ -853,7 +1064,7 @@ export async function handleInvestorApiRoute(request, url, env, ctx, fetchImpl, 
   );
 }
 
-export async function handleProtectedIrRoute(request, url, env, cryptoDeps) {
+export async function handleProtectedIrRoute(request, url, env, cryptoDeps, ctx) {
   if (isBlockedAiScraper(request.headers.get('user-agent'))) {
     return buildForbiddenScraperResponse();
   }
@@ -903,6 +1114,38 @@ export async function handleProtectedIrRoute(request, url, env, cryptoDeps) {
         },
       }
     );
+  }
+
+  const isHtmlDoc =
+    url.pathname === '/ir' ||
+    url.pathname === '/ir/' ||
+    url.pathname === '/ir/index.html';
+  if (isHtmlDoc && typeof cryptoDeps?.sha256Hex === 'function') {
+    const clientIp = String(request.headers.get('cf-connecting-ip') || 'edge').slice(0, 64);
+    const country = String(request.headers.get('cf-ipcountry') || request.cf?.country || '').slice(0, 16);
+    const userAgent = String(request.headers.get('user-agent') || '').slice(0, 180);
+    const viewLogPromise = cryptoDeps
+      .sha256Hex(`ainvtry-ir-ip-v1:${clientIp}`)
+      .then((hash) =>
+        recordInvestorAccessLog(
+          {
+            event: 'investor.data_room_viewed',
+            label: session.label || 'Authenticated Session',
+            country,
+            path: url.pathname,
+            ipHash: hash.slice(0, 16),
+            userAgent,
+            timestamp: new Date().toISOString(),
+          },
+          env
+        )
+      )
+      .catch(() => {});
+    if (ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(viewLogPromise);
+    } else {
+      void viewLogPromise;
+    }
   }
 
   if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') {

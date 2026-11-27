@@ -57,10 +57,10 @@
     "unitSuites": 46,
     "apiSuites": 10,
     "e2eSuites": 5,
-    "caseCount": 416,
+    "caseCount": 417,
     "roundedPlus": "410+",
-    "summaryShort": "61개 묶음 · 416개 검증 통과",
-    "summaryLine": "자동 품질 검증 61개 묶음(416개 항목) · 웹·앱"
+    "summaryShort": "61개 묶음 · 417개 검증 통과",
+    "summaryLine": "자동 품질 검증 61개 묶음(417개 항목) · 웹·앱"
   },
   "garment": {
     "beforeBytes": 582332,

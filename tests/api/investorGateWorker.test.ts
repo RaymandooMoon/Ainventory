@@ -346,4 +346,109 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
     assert.equal(logoutRes.status, 200);
     assert.match(logoutRes.headers.get('Set-Cookie') || '', /Max-Age=0/);
   });
+
+  it('prompts Google employees to enter "Google", records KV access logs, and protects /api/investor/logs', async () => {
+    const assets = createFakeAssets();
+    const browserUa =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36';
+    const kvStore = new Map<string, string>();
+    const mockKv = {
+      async get(key: string) {
+        return kvStore.has(key) ? kvStore.get(key)! : null;
+      },
+      async put(key: string, value: string) {
+        kvStore.set(key, value);
+      },
+    };
+    const passcode = ['google', 'ir', 'gate', '2026'].join('-');
+    const adminSecret = 'super-secret-admin-log-key';
+    const worker = createWorkerHandler(async () => new Response('ok', { status: 200 }));
+    const collector = createWaitUntilCollector();
+    const env = {
+      ASSETS: assets,
+      IR_ACCESS_PASSCODE: passcode,
+      IR_ADMIN_SECRET: adminSecret,
+      NEWSLETTER_KV: mockKv,
+    };
+
+    // 1. Gate HTML includes Google instruction
+    const gateRes = await worker.fetch(
+      new Request('https://www.ainvtry.com/ir/?lang=ko', {
+        headers: { 'User-Agent': browserUa, Accept: 'text/html' },
+      }),
+      env,
+      collector.ctx
+    );
+    assert.equal(gateRes.status, 401);
+    const gateHtml = await gateRes.text();
+    assert.match(gateHtml, /Google 직원이면/);
+
+    // 2. Unlock as Google reviewer
+    const unlockRes = await worker.fetch(
+      new Request('https://www.ainvtry.com/api/investor/unlock', {
+        method: 'POST',
+        headers: {
+          'User-Agent': browserUa,
+          Origin: 'https://www.ainvtry.com',
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '198.51.100.77',
+          'CF-IPCountry': 'US',
+        },
+        body: JSON.stringify({ passcode, label: 'Google', path: '/ir/' }),
+      }),
+      env,
+      collector.ctx
+    );
+    assert.equal(unlockRes.status, 200);
+    await collector.flush();
+    const setCookie = unlockRes.headers.get('Set-Cookie') || '';
+    const cookiePair = setCookie.split(';')[0];
+
+    // 3. View /ir/ so view event is also logged
+    const irRes = await worker.fetch(
+      new Request('https://www.ainvtry.com/ir/', {
+        headers: { 'User-Agent': browserUa, Cookie: cookiePair, 'CF-IPCountry': 'US' },
+      }),
+      env,
+      collector.ctx
+    );
+    assert.equal(irRes.status, 200);
+    await collector.flush();
+
+    // 4. /api/investor/logs rejects unauthenticated requests
+    const unauthLogs = await worker.fetch(
+      new Request('https://www.ainvtry.com/api/investor/logs', {
+        headers: { 'User-Agent': browserUa },
+      }),
+      env,
+      collector.ctx
+    );
+    assert.equal(unauthLogs.status, 401);
+
+    // 5. /api/investor/logs returns recorded events when authorized
+    const authLogs = await worker.fetch(
+      new Request('https://www.ainvtry.com/api/investor/logs?limit=10', {
+        headers: {
+          'User-Agent': browserUa,
+          Authorization: `Bearer ${adminSecret}`,
+        },
+      }),
+      env,
+      collector.ctx
+    );
+    assert.equal(authLogs.status, 200);
+    const body = (await authLogs.json()) as {
+      ok: boolean;
+      source: string;
+      logs: Array<{ event: string; label: string; googleReviewer: boolean; country: string }>;
+    };
+    assert.equal(body.ok, true);
+    assert.equal(body.source, 'kv');
+    assert.ok(body.logs.length >= 2);
+    assert.equal(body.logs[0].event, 'investor.data_room_viewed');
+    assert.equal(body.logs[0].label, 'Google');
+    assert.equal(body.logs[0].googleReviewer, true);
+    assert.equal(body.logs[1].event, 'investor.data_room_unlocked');
+    assert.equal(body.logs[1].googleReviewer, true);
+  });
 });

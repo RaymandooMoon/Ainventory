@@ -236,6 +236,7 @@ export function AboutStageHud({
   const [selectedFaqId, setSelectedFaqId] = useState<string>(copy.vision.faqs[0]?.id ?? '');
   const [investorBrief, setInvestorBrief] = useState<InvestorBriefData | null>(null);
   const [investorPasscode, setInvestorPasscode] = useState<string>('');
+  const [investorLabel, setInvestorLabel] = useState<string>('');
   const [investorUnlockBusy, setInvestorUnlockBusy] = useState<boolean>(false);
   const [investorUnlockError, setInvestorUnlockError] = useState<string>('');
   const [investorGateConfigured, setInvestorGateConfigured] = useState<boolean>(true);
@@ -308,12 +309,17 @@ export function AboutStageHud({
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passcode: trimmed, path: '/about/business-model' }),
+        body: JSON.stringify({
+          passcode: trimmed,
+          label: investorLabel.trim(),
+          path: '/about/business-model',
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (res.ok && data.ok) {
         triggerHaptic('selection');
         setInvestorPasscode('');
+        setInvestorLabel('');
         await loadInvestorBrief(lang);
       } else {
         setInvestorUnlockError(
@@ -828,28 +834,49 @@ export function AboutStageHud({
                 noValidate
               >
                 <input
-                  type="password"
+                  type="text"
                   className="hud-ir-unlock-input"
-                  value={investorPasscode}
-                  onChange={(e) => setInvestorPasscode(e.target.value)}
-                  placeholder={isKo ? '투자자 접근 코드 입력' : 'Enter investor passcode'}
-                  aria-label={isKo ? '투자자 접근 코드' : 'Investor access passcode'}
-                  autoComplete="one-time-code"
+                  value={investorLabel}
+                  onChange={(e) => setInvestorLabel(e.target.value)}
+                  maxLength={64}
+                  placeholder={
+                    isKo
+                      ? '성함 / 소속 (Google 직원이면 "Google" 입력)'
+                      : 'Name / Org (If Google, enter "Google")'
+                  }
+                  aria-label={
+                    isKo
+                      ? '성함 또는 소속 (Google 직원이면 Google 입력)'
+                      : 'Name or Organization (Enter Google if Google employee)'
+                  }
+                  autoComplete="organization"
                   disabled={investorUnlockBusy}
                 />
-                <button
-                  type="submit"
-                  className="hud-ir-unlock-btn"
-                  disabled={investorUnlockBusy}
-                >
-                  {investorUnlockBusy
-                    ? isKo
-                      ? '확인 중…'
-                      : 'Checking…'
-                    : isKo
-                      ? '열람'
-                      : 'Unlock'}
-                </button>
+                <div className="hud-ir-unlock-row">
+                  <input
+                    type="password"
+                    className="hud-ir-unlock-input"
+                    value={investorPasscode}
+                    onChange={(e) => setInvestorPasscode(e.target.value)}
+                    placeholder={isKo ? '투자자 접근 코드 입력' : 'Enter investor passcode'}
+                    aria-label={isKo ? '투자자 접근 코드' : 'Investor access passcode'}
+                    autoComplete="one-time-code"
+                    disabled={investorUnlockBusy}
+                  />
+                  <button
+                    type="submit"
+                    className="hud-ir-unlock-btn"
+                    disabled={investorUnlockBusy}
+                  >
+                    {investorUnlockBusy
+                      ? isKo
+                        ? '확인 중…'
+                        : 'Checking…'
+                      : isKo
+                        ? '열람'
+                        : 'Unlock'}
+                  </button>
+                </div>
               </form>
             )}
 
