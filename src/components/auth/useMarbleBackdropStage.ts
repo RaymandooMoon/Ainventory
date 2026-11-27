@@ -461,27 +461,37 @@ export function useMarbleBackdropStage(
       if (disposed || !createControllerFn) return;
 
       const initialOpts = optionsRef.current;
-      const controller = createControllerFn(canvas, {
-        initialDark: initialDarkRef.current,
-        initialStage: initialStageRef.current,
-        initialVariant: initialVariantRef.current,
-        reducedMotion,
-        onMarbleStep: handleMarbleStep,
-        onFloorBounce: floorRailSelector ? handleFloorBounce : undefined,
-        onOverlayRender: initialOpts.onOverlayRender
-          ? (ctx) => optionsRef.current.onOverlayRender?.(ctx) ?? false
-          : undefined,
-        onOverlayResize: initialOpts.onOverlayResize
-          ? (w, h, renderer, isSoftwareGl) =>
-              optionsRef.current.onOverlayResize?.(w, h, renderer, isSoftwareGl)
-          : undefined,
-        onOverlayDispose: initialOpts.onOverlayDispose
-          ? () => optionsRef.current.onOverlayDispose?.()
-          : undefined,
-        onOverlayContextRestored: initialOpts.onOverlayContextRestored
-          ? (renderer) => optionsRef.current.onOverlayContextRestored?.(renderer)
-          : undefined,
-      });
+      let controller: LoginThreeController | null = null;
+      try {
+        controller = createControllerFn(canvas, {
+          initialDark: initialDarkRef.current,
+          initialStage: initialStageRef.current,
+          initialVariant: initialVariantRef.current,
+          reducedMotion,
+          onMarbleStep: handleMarbleStep,
+          onFloorBounce: floorRailSelector ? handleFloorBounce : undefined,
+          onOverlayRender: initialOpts.onOverlayRender
+            ? (ctx) => optionsRef.current.onOverlayRender?.(ctx) ?? false
+            : undefined,
+          onOverlayResize: initialOpts.onOverlayResize
+            ? (w, h, renderer, isSoftwareGl) =>
+                optionsRef.current.onOverlayResize?.(w, h, renderer, isSoftwareGl)
+            : undefined,
+          onOverlayDispose: initialOpts.onOverlayDispose
+            ? () => optionsRef.current.onOverlayDispose?.()
+            : undefined,
+          onOverlayContextRestored: initialOpts.onOverlayContextRestored
+            ? (renderer) => optionsRef.current.onOverlayContextRestored?.(renderer)
+            : undefined,
+          onContextLostChange: (lost) => {
+            if (!disposed) {
+              setWebglFallback(lost);
+            }
+          },
+        });
+      } catch {
+        controller = null;
+      }
 
       if (!controller) {
         setWebglFallback(true);
@@ -494,6 +504,7 @@ export function useMarbleBackdropStage(
         return;
       }
 
+      setWebglFallback(false);
       controllerRef.current = controller;
       controller.setTheme(optionsRef.current.isDark, true);
       controller.setStage(stageModeRef.current);
@@ -846,10 +857,17 @@ export function useMarbleBackdropStage(
       typeof window.DeviceMotionEvent !== 'undefined'
         ? (window.DeviceMotionEvent as unknown as DeviceSensorConstructorWithPermission)
         : null;
-    const hasAnySensorApi = Boolean(devOrientCtor || devMotionCtor);
+    const hasTouchMotionHardware =
+      isIosDevice ||
+      (typeof navigator !== 'undefined' &&
+        (navigator.maxTouchPoints ?? 0) > 0 &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches);
+    const hasAnySensorApi = hasTouchMotionHardware && Boolean(devOrientCtor || devMotionCtor);
     const requiresIosPermission =
-      typeof devOrientCtor?.requestPermission === 'function' ||
-      typeof devMotionCtor?.requestPermission === 'function';
+      hasTouchMotionHardware &&
+      (typeof devOrientCtor?.requestPermission === 'function' ||
+        typeof devMotionCtor?.requestPermission === 'function');
     let gyroStatus: MarbleGyroStatus = !hasAnySensorApi
       ? 'unsupported'
       : requiresIosPermission

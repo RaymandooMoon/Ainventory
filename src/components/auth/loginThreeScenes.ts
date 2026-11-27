@@ -1119,6 +1119,7 @@ export function createLoginThreeController(
     ) => void;
     onOverlayDispose?: () => void;
     onOverlayContextRestored?: (renderer: THREE.WebGLRenderer) => void;
+    onContextLostChange?: (lost: boolean) => void;
   }
 ): LoginThreeController | null {
   const {
@@ -1128,6 +1129,7 @@ export function createLoginThreeController(
     onOverlayResize,
     onOverlayDispose,
     onOverlayContextRestored,
+    onContextLostChange,
   } = options;
   let reducedMotion = Boolean(options.reducedMotion);
   const isIosSafari = isIosSafariRuntime();
@@ -1141,8 +1143,26 @@ export function createLoginThreeController(
       preserveDrawingBuffer: false,
     });
   } catch {
+    // Fallback for Windows Hybrid GPU / MSAA driver rejection
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: false,
+        alpha: false,
+        powerPreference: 'default',
+        preserveDrawingBuffer: false,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  const initialGl = renderer.getContext();
+  if (!initialGl || initialGl.isContextLost()) {
+    renderer.dispose();
     return null;
   }
+  canvas.style.opacity = '';
 
   const isSoftwareGl = isSoftwareWebGLRenderer(renderer);
   const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 2.0 : 1.75;
@@ -2187,6 +2207,8 @@ export function createLoginThreeController(
   const onContextLost = (e: Event) => {
     e.preventDefault();
     isContextLost = true;
+    canvas.style.opacity = '0';
+    onContextLostChange?.(true);
     syncLoopLifecycle();
   };
   const onContextRestored = () => {
@@ -2198,6 +2220,8 @@ export function createLoginThreeController(
     resetPacerOnResume(pacer, lastNow);
     onOverlayContextRestored?.(renderer);
     safeRenderFrame(0.016);
+    canvas.style.opacity = '';
+    onContextLostChange?.(false);
     syncLoopLifecycle();
   };
   canvas.addEventListener('webglcontextlost', onContextLost, false);
@@ -2291,6 +2315,11 @@ export function createLoginThreeController(
 
   resize(initialW, initialH);
   safeRenderFrame(0.016);
+  if (renderer.getContext()?.isContextLost() || lastRenderError) {
+    isContextLost = Boolean(renderer.getContext()?.isContextLost());
+    canvas.style.opacity = '0';
+    onContextLostChange?.(true);
+  }
   syncLoopLifecycle();
 
   return {
@@ -2713,6 +2742,7 @@ export function createLoginThreeController(
       stopLoop();
       canvas.removeEventListener('webglcontextlost', onContextLost);
       canvas.removeEventListener('webglcontextrestored', onContextRestored);
+      canvas.style.opacity = '';
       document.removeEventListener('visibilitychange', onVisibilityChange);
       onOverlayDispose?.();
 

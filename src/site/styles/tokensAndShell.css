@@ -276,6 +276,11 @@ html[data-ios-safari='true'] .site-live-app-stage {
   touch-action: none;
 }
 
+.site-marble-stage.is-webgl-fallback .site-marble-canvas {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .site-marble-veil {
   position: absolute;
   inset: 0;

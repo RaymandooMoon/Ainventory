@@ -392,5 +392,53 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
       'site/public/_headers must explicitly permit accelerometer and gyroscope sensors'
     );
   });
+
+  it('hardens desktop WebGL boot with 2-tier fallback, hides lost-context white canvas, guards boot exceptions, and suppresses Tilt Gyro CTA on desktop browsers', () => {
+    const scenesSrc = readRepoFile('src/components/auth/loginThreeScenes.ts');
+    const hookSrc = readRepoFile('src/components/auth/useMarbleBackdropStage.ts');
+    const tokensCss = readRepoFile('src/site/styles/tokensAndShell.css');
+    const loginCss = readRepoFile('src/components/auth/loginAtelier.css');
+
+    // 1. 2-tier WebGLRenderer creation fallback (high-performance MSAA -> default non-MSAA) + immediate context-loss check
+    assert.ok(
+      scenesSrc.includes('antialias: false') && scenesSrc.includes("powerPreference: 'default'"),
+      'loginThreeScenes must retry WebGLRenderer with antialias: false & powerPreference: default on desktop GPU failure'
+    );
+    assert.ok(
+      scenesSrc.includes('initialGl.isContextLost()'),
+      'loginThreeScenes must reject an immediately lost WebGL context and trigger clean fallback'
+    );
+
+    // 2. Context-loss white-screen prevention & auto-recovery callback
+    assert.ok(
+      scenesSrc.includes('onContextLostChange?: (lost: boolean) => void') &&
+        scenesSrc.includes("canvas.style.opacity = '0'") &&
+        scenesSrc.includes('onContextLostChange?.(true)') &&
+        scenesSrc.includes('onContextLostChange?.(false)'),
+      'webglcontextlost must immediately hide opaque white canvas and notify fallback state until restored'
+    );
+    assert.match(
+      tokensCss,
+      /\.site-marble-stage\.is-webgl-fallback\s+\.site-marble-canvas\s*\{[^}]*opacity:\s*0/
+    );
+    assert.match(
+      loginCss,
+      /\.atelier-backdrop-stage\.is-webgl-fallback\s+canvas\s*\{[^}]*opacity:\s*0/
+    );
+
+    // 3. Boot exception try/catch guard & onContextLostChange wiring in useMarbleBackdropStage
+    assert.ok(
+      hookSrc.includes('onContextLostChange: (lost)') &&
+        hookSrc.includes('try {\n        controller = createControllerFn('),
+      'useMarbleBackdropStage must wrap createControllerFn in try/catch and wire onContextLostChange to webglFallback'
+    );
+
+    // 4. Desktop Chrome/Edge must not falsely display iOS Enable Tilt Gyro button
+    assert.ok(
+      hookSrc.includes('hasTouchMotionHardware') &&
+        hookSrc.includes('const requiresIosPermission =\n      hasTouchMotionHardware &&'),
+      'requiresIosPermission must require mobile/touch motion hardware so desktop Chrome does not show Enable Tilt Gyro'
+    );
+  });
 });
 

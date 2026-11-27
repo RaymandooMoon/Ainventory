@@ -172,6 +172,11 @@
 }
 
 /* Graceful Dual-Theme CSS Fallback when WebGL context is unavailable */
+.atelier-backdrop-stage.is-webgl-fallback canvas {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .atelier-backdrop-stage.is-webgl-fallback {
   background:
     radial-gradient(ellipse 85% 65% at 50% 30%, rgba(255, 255, 255, 0.92), transparent 72%),
