@@ -1120,6 +1120,7 @@ export function createLoginThreeController(
     onOverlayDispose?: () => void;
     onOverlayContextRestored?: (renderer: THREE.WebGLRenderer) => void;
     onContextLostChange?: (lost: boolean) => void;
+    onBootDiagnostics?: (reason: string) => void;
   }
 ): LoginThreeController | null {
   const {
@@ -1130,35 +1131,44 @@ export function createLoginThreeController(
     onOverlayDispose,
     onOverlayContextRestored,
     onContextLostChange,
+    onBootDiagnostics,
   } = options;
   let reducedMotion = Boolean(options.reducedMotion);
   const isIosSafari = isIosSafariRuntime();
   let renderer: THREE.WebGLRenderer;
   try {
+    // Use `powerPreference: 'default'` across desktop & mobile so Windows Optimus/hybrid-GPU Chrome
+    // never triggers a discrete GPU switch / TDR context loss during initial WebGL2 context creation.
     renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
       alpha: false,
-      powerPreference: isIosSafari ? 'default' : 'high-performance',
+      powerPreference: 'default',
+      failIfMajorPerformanceCaveat: false,
       preserveDrawingBuffer: false,
     });
-  } catch {
-    // Fallback for Windows Hybrid GPU / MSAA driver rejection
+  } catch (err1) {
+    // Fallback for MSAA / driver rejection
     try {
       renderer = new THREE.WebGLRenderer({
         canvas,
         antialias: false,
         alpha: false,
         powerPreference: 'default',
+        failIfMajorPerformanceCaveat: false,
         preserveDrawingBuffer: false,
       });
-    } catch {
+    } catch (err2) {
+      const msg1 = err1 instanceof Error ? err1.message : String(err1);
+      const msg2 = err2 instanceof Error ? err2.message : String(err2);
+      onBootDiagnostics?.(`webgl2_init_failed:${msg2 || msg1}`);
       return null;
     }
   }
 
   const initialGl = renderer.getContext();
   if (!initialGl || initialGl.isContextLost()) {
+    onBootDiagnostics?.(initialGl ? 'context_lost_on_init' : 'gl_context_null');
     renderer.dispose();
     return null;
   }
@@ -2318,6 +2328,9 @@ export function createLoginThreeController(
   if (renderer.getContext()?.isContextLost() || lastRenderError) {
     isContextLost = Boolean(renderer.getContext()?.isContextLost());
     canvas.style.opacity = '0';
+    onBootDiagnostics?.(
+      lastRenderError ? `initial_render_error:${lastRenderError}` : 'context_lost_after_first_frame'
+    );
     onContextLostChange?.(true);
   }
   syncLoopLifecycle();

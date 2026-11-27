@@ -43,6 +43,7 @@ export interface Site3dDiagnosticsSnapshot {
   readonly activeStage: StageId;
   readonly effectiveThreeStage: StageId;
   readonly webglFallback: boolean;
+  readonly webglBootReason: string | null;
   readonly rigActive: boolean;
   readonly stageTouchStarts: number;
   readonly stageDrags: number;
@@ -725,7 +726,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     []
   );
 
-  const { stageRef, canvasRef, webglFallback } = useMarbleBackdropStage({
+  const { stageRef, canvasRef, webglFallback, webglBootReason } = useMarbleBackdropStage({
     isDark,
     stage: 'intro',
     paused: activeStage === 'studio',
@@ -1064,6 +1065,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       activeStage: rawActiveStageRef.current,
       effectiveThreeStage: activeStageRef.current,
       webglFallback,
+      webglBootReason,
       rigActive: Boolean(rigRef.current),
       stageTouchStarts: stageInputCountersRef.current.touchStarts,
       stageDrags: stageInputCountersRef.current.drags,
@@ -1089,7 +1091,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       const inp = snap.input;
       const line1 = r
         ? `3D f:${r.committedFrames} (${r.fpsTier}/${r.detectedRefreshHz}Hz) dpr:${r.dpr} aa:${r.antialias ? 1 : 0} hf:${r.useHalfFloat ? 1 : 0} ${r.canvasW}x${r.canvasH}`
-        : `3D boot pending (fb:${snap.webglFallback ? 1 : 0})`;
+        : `3D boot fallback (fb:${snap.webglFallback ? 1 : 0}${snap.webglBootReason ? ` · ${snap.webglBootReason}` : ''})`;
       const line2 = r
         ? `stg:${snap.activeStage}/${snap.effectiveThreeStage} rm:${r.reducedMotion ? 1 : 0}${inp?.reducedMotionOverride ? '(ovr)' : ''} p:${r.paused ? 1 : 0} hid:${r.isDocHidden ? 1 : 0} lost:${r.isContextLost ? 1 : 0} gl:${r.glError}`
         : `stg:${snap.activeStage} vp:${snap.viewport} dpr:${snap.devicePixelRatio}`;
@@ -1111,7 +1113,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         delete window.__AINVTRY_3D_DIAG__;
       }
     };
-  }, [debug3dEnabled, webglFallback]);
+  }, [debug3dEnabled, webglFallback, webglBootReason]);
 
   return (
     <div

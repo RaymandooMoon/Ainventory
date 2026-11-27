@@ -110,6 +110,7 @@ export interface UseMarbleBackdropStageResult {
   readonly stageRef: React.RefObject<HTMLDivElement | null>;
   readonly canvasRef: React.RefObject<HTMLCanvasElement | null>;
   readonly webglFallback: boolean;
+  readonly webglBootReason: string | null;
 }
 
 interface CachedTarget {
@@ -162,6 +163,7 @@ export function useMarbleBackdropStage(
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controllerRef = useRef<LoginThreeController | null>(null);
   const [webglFallback, setWebglFallback] = useState(false);
+  const [webglBootReason, setWebglBootReason] = useState<string | null>(null);
 
   const optionsRef = useRef(options);
   const initialDarkRef = useRef(isDark);
@@ -450,8 +452,10 @@ export function useMarbleBackdropStage(
       try {
         const mod = await import('./loginThreeScenes.ts');
         createControllerFn = mod.createLoginThreeController;
-      } catch {
+      } catch (err) {
         if (!disposed) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setWebglBootReason(`module_import_error:${msg}`);
           setWebglFallback(true);
           optionsRef.current.onControllerReady?.(null);
         }
@@ -462,6 +466,8 @@ export function useMarbleBackdropStage(
 
       const initialOpts = optionsRef.current;
       let controller: LoginThreeController | null = null;
+      let initialContextLost = false;
+      let capturedBootReason: string | null = null;
       try {
         controller = createControllerFn(canvas, {
           initialDark: initialDarkRef.current,
@@ -484,16 +490,31 @@ export function useMarbleBackdropStage(
             ? (renderer) => optionsRef.current.onOverlayContextRestored?.(renderer)
             : undefined,
           onContextLostChange: (lost) => {
+            initialContextLost = lost;
             if (!disposed) {
               setWebglFallback(lost);
+              if (lost) {
+                setWebglBootReason((prev) => prev || 'webglcontextlost');
+              } else {
+                setWebglBootReason(null);
+              }
+            }
+          },
+          onBootDiagnostics: (reason) => {
+            capturedBootReason = reason;
+            if (!disposed) {
+              setWebglBootReason(reason);
             }
           },
         });
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        capturedBootReason = `controller_throw:${msg}`;
         controller = null;
       }
 
       if (!controller) {
+        setWebglBootReason(capturedBootReason || 'webgl2_unavailable');
         setWebglFallback(true);
         optionsRef.current.onControllerReady?.(null);
         return;
@@ -504,7 +525,10 @@ export function useMarbleBackdropStage(
         return;
       }
 
-      setWebglFallback(false);
+      setWebglFallback(initialContextLost);
+      if (!initialContextLost) {
+        setWebglBootReason(null);
+      }
       controllerRef.current = controller;
       controller.setTheme(optionsRef.current.isDark, true);
       controller.setStage(stageModeRef.current);
@@ -1203,5 +1227,5 @@ export function useMarbleBackdropStage(
     };
   }, [floorRailSelector]);
 
-  return { stageRef, canvasRef, webglFallback };
+  return { stageRef, canvasRef, webglFallback, webglBootReason };
 }

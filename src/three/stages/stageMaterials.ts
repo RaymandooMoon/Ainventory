@@ -222,52 +222,56 @@ export function createStudioEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture
     return createLightweightStudioCubeEnvMap();
   }
 
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envScene = new RoomEnvironment();
+  try {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envScene = new RoomEnvironment();
 
-  const softboxGeo = new THREE.PlaneGeometry(1, 1);
-  const keyMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0xfff1dc).multiplyScalar(2.2),
-    side: THREE.DoubleSide,
-  });
-  const rimMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0xdce6f8).multiplyScalar(1.85),
-    side: THREE.DoubleSide,
-  });
-  const overheadMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0xf9f5ec).multiplyScalar(1.6),
-    side: THREE.DoubleSide,
-  });
+    const softboxGeo = new THREE.PlaneGeometry(1, 1);
+    const keyMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0xfff1dc).multiplyScalar(2.2),
+      side: THREE.DoubleSide,
+    });
+    const rimMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0xdce6f8).multiplyScalar(1.85),
+      side: THREE.DoubleSide,
+    });
+    const overheadMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0xf9f5ec).multiplyScalar(1.6),
+      side: THREE.DoubleSide,
+    });
 
-  const keyBox = new THREE.Mesh(softboxGeo, keyMat);
-  keyBox.position.set(-5.2, 4.4, 4.6);
-  keyBox.scale.set(4.8, 3.2, 1);
-  keyBox.lookAt(0, 0, 0);
+    const keyBox = new THREE.Mesh(softboxGeo, keyMat);
+    keyBox.position.set(-5.2, 4.4, 4.6);
+    keyBox.scale.set(4.8, 3.2, 1);
+    keyBox.lookAt(0, 0, 0);
 
-  const rimStrip = new THREE.Mesh(softboxGeo, rimMat);
-  rimStrip.position.set(5.8, 2.2, -3.8);
-  rimStrip.scale.set(1.8, 6.2, 1);
-  rimStrip.lookAt(0, 0, 0);
+    const rimStrip = new THREE.Mesh(softboxGeo, rimMat);
+    rimStrip.position.set(5.8, 2.2, -3.8);
+    rimStrip.scale.set(1.8, 6.2, 1);
+    rimStrip.lookAt(0, 0, 0);
 
-  const overheadPanel = new THREE.Mesh(softboxGeo, overheadMat);
-  overheadPanel.position.set(0, 7.2, 0.8);
-  overheadPanel.scale.set(6.4, 2.8, 1);
-  overheadPanel.lookAt(0, 0, 0);
+    const overheadPanel = new THREE.Mesh(softboxGeo, overheadMat);
+    overheadPanel.position.set(0, 7.2, 0.8);
+    overheadPanel.scale.set(6.4, 2.8, 1);
+    overheadPanel.lookAt(0, 0, 0);
 
-  envScene.add(keyBox, rimStrip, overheadPanel);
+    envScene.add(keyBox, rimStrip, overheadPanel);
 
-  const renderTarget = pmrem.fromScene(envScene, 0.035);
-  const envTexture = renderTarget.texture;
-  ENV_RENDER_TARGETS.set(envTexture, renderTarget);
+    const renderTarget = pmrem.fromScene(envScene, 0.035);
+    const envTexture = renderTarget.texture;
+    ENV_RENDER_TARGETS.set(envTexture, renderTarget);
 
-  softboxGeo.dispose();
-  keyMat.dispose();
-  rimMat.dispose();
-  overheadMat.dispose();
-  envScene.dispose();
-  pmrem.dispose();
+    softboxGeo.dispose();
+    keyMat.dispose();
+    rimMat.dispose();
+    overheadMat.dispose();
+    envScene.dispose();
+    pmrem.dispose();
 
-  return envTexture;
+    return envTexture;
+  } catch {
+    return createLightweightStudioCubeEnvMap();
+  }
 }
 
 /**
