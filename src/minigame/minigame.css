@@ -1,0 +1,847 @@
+/* ==========================================================================
+ * Ainvtry MiniGame — APPLE BOX // NEON 3D ARCADE
+ * Vibrant Synthwave Neon Glass HUD · Tabular Numerals · 44px Hit Targets
+ * ========================================================================== */
+
+:root {
+  --mg-bg: #060410;
+  --mg-panel: rgba(14, 10, 34, 0.76);
+  --mg-panel-strong: rgba(18, 12, 42, 0.9);
+  --mg-border: rgba(114, 232, 255, 0.24);
+  --mg-border-strong: rgba(114, 232, 255, 0.48);
+  --mg-ink: #f8faff;
+  --mg-ink-muted: rgba(226, 234, 255, 0.72);
+  --mg-cyan: #00f5ff;
+  --mg-magenta: #ff2a85;
+  --mg-emerald: #39ff14;
+  --mg-gold: #ffd700;
+  --mg-ruby: #ff244c;
+  --mg-font:
+    'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+    'Segoe UI', system-ui, sans-serif;
+}
+
+.mg-shell {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  min-height: 520px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% 35%, #160c33 0%, var(--mg-bg) 72%);
+  color: var(--mg-ink);
+  font-family: var(--mg-font);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.mg-shell.is-embedded {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+}
+
+/* Fever Overdrive ambient perimeter pulse */
+.mg-shell.is-fever::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  box-shadow:
+    inset 0 0 42px rgba(255, 42, 133, 0.42),
+    inset 0 0 92px rgba(0, 245, 255, 0.22);
+  animation: mgFeverPulse 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes mgFeverPulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ==========================================================================
+ * Top Neon HUD Bar
+ * ========================================================================== */
+
+.mg-topbar {
+  position: relative;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 8px;
+  background: linear-gradient(180deg, rgba(6, 4, 16, 0.88) 0%, rgba(6, 4, 16, 0.32) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(114, 232, 255, 0.16);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.mg-brand-cluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mg-home-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--mg-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mg-ink);
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.12s ease;
+}
+
+.mg-home-link:hover {
+  background: rgba(0, 245, 255, 0.16);
+  border-color: var(--mg-cyan);
+}
+
+.mg-home-link:active {
+  transform: scale(0.96);
+}
+
+.mg-title-pill {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.mg-title-main {
+  font-size: 0.92rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  background: linear-gradient(90deg, #ffffff 0%, #6efaff 48%, #ff6ac2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mg-conn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--mg-ink-muted);
+}
+
+.mg-conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--mg-emerald);
+  box-shadow: 0 0 8px var(--mg-emerald);
+}
+
+.mg-conn-badge.is-offline .mg-conn-dot {
+  background: var(--mg-gold);
+  box-shadow: 0 0 10px var(--mg-gold);
+}
+
+.mg-conn-badge.is-poor .mg-conn-dot {
+  background: var(--mg-magenta);
+  box-shadow: 0 0 10px var(--mg-magenta);
+}
+
+/* Center Score & Timer Telemetry */
+.mg-hud-metrics {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mg-stat-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 14px;
+  background: var(--mg-panel);
+  border: 1px solid var(--mg-border);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+.mg-stat-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mg-ink-muted);
+}
+
+.mg-stat-value {
+  font-size: 1.24rem;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+}
+
+.mg-stat-chip.is-score .mg-stat-value {
+  color: #7ef9ff;
+  text-shadow: 0 0 14px rgba(0, 245, 255, 0.55);
+}
+
+.mg-stat-chip.is-timer {
+  min-width: 112px;
+  justify-content: center;
+}
+
+.mg-stat-chip.is-timer.is-urgent {
+  border-color: rgba(255, 42, 133, 0.85);
+  background: rgba(88, 12, 42, 0.82);
+  animation: mgUrgentPulse 0.55s ease-in-out infinite alternate;
+}
+
+.mg-stat-chip.is-timer.is-urgent .mg-stat-value {
+  color: #ff7ab6;
+  text-shadow: 0 0 14px rgba(255, 42, 133, 0.78);
+}
+
+@keyframes mgUrgentPulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.045);
+  }
+}
+
+.mg-sum-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 96px;
+  justify-content: center;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--mg-ink-muted);
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    transform 0.12s ease;
+}
+
+.mg-sum-pill.is-under {
+  border-color: var(--mg-cyan);
+  background: rgba(0, 245, 255, 0.16);
+  color: #b7fcff;
+}
+
+.mg-sum-pill.is-exact {
+  border-color: var(--mg-emerald);
+  background: rgba(57, 255, 20, 0.24);
+  color: #d6ffbe;
+  box-shadow: 0 0 18px rgba(57, 255, 20, 0.45);
+  transform: scale(1.06);
+}
+
+.mg-sum-pill.is-over {
+  border-color: var(--mg-magenta);
+  background: rgba(255, 42, 133, 0.22);
+  color: #ffc2dc;
+}
+
+.mg-combo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(135deg, rgba(255, 42, 133, 0.28), rgba(255, 215, 0, 0.26));
+  border: 1px solid rgba(255, 215, 0, 0.58);
+  color: #ffe885;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.55);
+}
+
+/* Right Action Toolbar */
+.mg-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mg-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid var(--mg-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mg-ink);
+  font-size: 0.76rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    transform 0.1s ease;
+}
+
+.mg-icon-btn:hover {
+  background: rgba(0, 245, 255, 0.16);
+  border-color: var(--mg-cyan);
+}
+
+.mg-icon-btn:active {
+  transform: scale(0.94);
+}
+
+.mg-icon-btn.is-active {
+  background: rgba(0, 245, 255, 0.22);
+  border-color: var(--mg-cyan);
+  color: #a6fbff;
+}
+
+.mg-icon-btn.is-soft {
+  background: rgba(224, 138, 140, 0.24);
+  border-color: rgba(242, 178, 180, 0.65);
+  color: #ffdce0;
+}
+
+.mg-icon-btn-text {
+  display: inline;
+}
+
+/* Neon Energy Progress Rail */
+.mg-energy-rail {
+  position: relative;
+  z-index: 11;
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.mg-energy-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff2a85 0%, #ffd700 45%, #00f5ff 80%, #39ff14 100%);
+  box-shadow: 0 0 14px rgba(0, 245, 255, 0.8);
+  transform-origin: left center;
+  transition: width 0.12s linear;
+}
+
+.mg-energy-fill.is-urgent {
+  background: linear-gradient(90deg, #ff1454 0%, #ff7a00 100%);
+  box-shadow: 0 0 16px rgba(255, 20, 84, 0.9);
+}
+
+/* ==========================================================================
+ * 3D Canvas Stage & Floating Score Callouts
+ * ========================================================================== */
+
+.mg-stage-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.mg-stage-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.mg-drag-tag {
+  position: absolute;
+  z-index: 15;
+  pointer-events: none;
+  transform: translate(-50%, -135%);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  border: 1.5px solid var(--mg-cyan);
+  background: rgba(8, 12, 34, 0.88);
+  color: #9bfbff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+.mg-drag-tag.is-exact {
+  border-color: var(--mg-emerald);
+  background: rgba(14, 52, 22, 0.94);
+  color: #c8ffb0;
+  box-shadow:
+    0 0 22px rgba(57, 255, 20, 0.65),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.mg-drag-tag.is-over {
+  border-color: var(--mg-magenta);
+  background: rgba(66, 10, 34, 0.92);
+  color: #ff9ec9;
+}
+
+.mg-popup-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 16;
+  overflow: hidden;
+}
+
+.mg-float-callout {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  animation: mgPopFloat 0.95s cubic-bezier(0.18, 0.88, 0.28, 1) forwards;
+}
+
+.mg-float-points {
+  font-size: 1.55rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  text-shadow:
+    0 0 12px rgba(57, 255, 20, 0.85),
+    0 2px 10px rgba(0, 0, 0, 0.75);
+}
+
+.mg-float-callout.is-golden .mg-float-points {
+  font-size: 1.85rem;
+  color: #ffe875;
+  text-shadow:
+    0 0 18px rgba(255, 215, 0, 0.95),
+    0 0 32px rgba(255, 136, 0, 0.75);
+}
+
+.mg-float-sub {
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(12, 8, 30, 0.85);
+  border: 1px solid rgba(0, 245, 255, 0.6);
+  color: #84faff;
+}
+
+.mg-float-callout.is-golden .mg-float-sub {
+  border-color: rgba(255, 215, 0, 0.85);
+  color: #ffe575;
+}
+
+@keyframes mgPopFloat {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -20%) scale(0.62);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -62%) scale(1.12);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -155%) scale(0.95);
+  }
+}
+
+.mg-renderer-pill {
+  position: absolute;
+  right: 12px;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  z-index: 10;
+  pointer-events: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(8, 6, 22, 0.64);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  color: rgba(226, 234, 255, 0.62);
+}
+
+.mg-deadlock-banner {
+  position: absolute;
+  left: 50%;
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 16px;
+  background: rgba(16, 10, 38, 0.94);
+  border: 1.5px solid rgba(255, 215, 0, 0.72);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.6),
+    0 0 24px rgba(255, 215, 0, 0.25);
+  color: #fff4be;
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.mg-deadlock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 245, 255, 0.52);
+  background: rgba(0, 245, 255, 0.16);
+  color: #b4fbff;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mg-deadlock-btn.is-primary {
+  border-color: transparent;
+  background: linear-gradient(95deg, #ff2a85, #ffd700);
+  color: #14081f;
+}
+
+/* ==========================================================================
+ * Title & Game Over Glass Overlays
+ * ========================================================================== */
+
+.mg-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(5, 3, 15, 0.56);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.mg-modal-card {
+  width: min(100%, 490px);
+  max-height: 92dvh;
+  overflow-y: auto;
+  border-radius: 24px;
+  padding: 26px 24px 24px;
+  background: linear-gradient(160deg, rgba(20, 13, 52, 0.92) 0%, rgba(10, 7, 26, 0.95) 100%);
+  border: 1px solid var(--mg-border-strong);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.65),
+    0 0 42px rgba(0, 245, 255, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mg-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  background: rgba(0, 245, 255, 0.14);
+  border: 1px solid rgba(0, 245, 255, 0.42);
+  color: #82faff;
+}
+
+.mg-hero-title {
+  margin: 0;
+  font-size: clamp(1.65rem, 4.4vw, 2.25rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  background: linear-gradient(95deg, #ffffff 0%, #86fbff 42%, #ff76c8 82%, #ffe066 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mg-hero-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--mg-ink-muted);
+}
+
+.mg-hero-desc strong {
+  color: #ffffff;
+}
+
+.mg-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mg-mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 13px 14px;
+  border-radius: 16px;
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--mg-ink);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    transform 0.12s ease;
+}
+
+.mg-mode-card:hover {
+  border-color: rgba(0, 245, 255, 0.55);
+  background: rgba(0, 245, 255, 0.09);
+}
+
+.mg-mode-card.is-selected {
+  border-color: var(--mg-cyan);
+  background: linear-gradient(145deg, rgba(0, 245, 255, 0.18), rgba(255, 42, 133, 0.14));
+  box-shadow: 0 0 22px rgba(0, 245, 255, 0.22);
+}
+
+.mg-mode-name {
+  font-size: 0.92rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mg-mode-sub {
+  font-size: 0.74rem;
+  line-height: 1.38;
+  color: var(--mg-ink-muted);
+}
+
+.mg-best-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mg-best-box {
+  padding: 10px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mg-best-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mg-ink-muted);
+}
+
+.mg-best-val {
+  font-size: 1.08rem;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+}
+
+.mg-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(95deg, #ff2a85 0%, #ff5e3a 42%, #ffd700 100%);
+  color: #14081f;
+  font-size: 1.02rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow:
+    0 10px 28px rgba(255, 42, 133, 0.42),
+    0 0 20px rgba(255, 215, 0, 0.35);
+  transition:
+    transform 0.14s ease,
+    filter 0.14s ease;
+}
+
+.mg-cta-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.mg-cta-primary:active {
+  transform: scale(0.98);
+}
+
+.mg-cta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mg-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--mg-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mg-ink);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.mg-cta-secondary:hover {
+  background: rgba(0, 245, 255, 0.14);
+  border-color: var(--mg-cyan);
+}
+
+.mg-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.mg-rank-badge {
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 950;
+  background: linear-gradient(135deg, #ffd700 0%, #ff2a85 55%, #00f5ff 100%);
+  color: #0e0620;
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.55);
+  flex-shrink: 0;
+}
+
+.mg-new-best-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 215, 0, 0.2);
+  border: 1px solid rgba(255, 215, 0, 0.72);
+  color: #ffe875;
+  font-size: 0.74rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+}
+
+.mg-shortcuts-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  color: rgba(226, 234, 255, 0.55);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .mg-topbar {
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 6px;
+    gap: 6px;
+  }
+  .mg-icon-btn-text {
+    display: none;
+  }
+  .mg-title-pill {
+    display: none;
+  }
+  .mg-stat-chip {
+    padding: 5px 10px;
+  }
+  .mg-stat-value {
+    font-size: 1.05rem;
+  }
+  .mg-sum-pill {
+    min-width: 78px;
+    font-size: 0.8rem;
+    padding: 5px 10px;
+  }
+  .mg-modal-card {
+    padding: 20px 18px;
+  }
+  .mg-mode-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-shell.is-fever::after,
+  .mg-stat-chip.is-timer.is-urgent {
+    animation: none;
+  }
+}

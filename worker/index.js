@@ -1754,8 +1754,16 @@ export function createWorkerHandler(fetchImpl = fetch) {
       }
 
       if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') {
-        const assetRes = await env.ASSETS.fetch(request);
-        if (isJsBundle || url.pathname === '/' || url.pathname === '/index.html') {
+        const isMinigameEntry =
+          url.pathname === '/minigame' ||
+          url.pathname === '/minigame/' ||
+          url.pathname === '/minigame/index.html';
+        const assetRequest =
+          url.pathname === '/minigame' || url.pathname === '/minigame/'
+            ? new Request(new URL(`/minigame/index.html${url.search}`, url.origin), request)
+            : request;
+        const assetRes = await env.ASSETS.fetch(assetRequest);
+        if (isJsBundle || isMinigameEntry || url.pathname === '/' || url.pathname === '/index.html') {
           const headers = new Headers(assetRes.headers);
           headers.set(
             'X-Robots-Tag',

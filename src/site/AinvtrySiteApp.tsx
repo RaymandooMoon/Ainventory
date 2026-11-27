@@ -5,6 +5,7 @@ import {
   BarChart3,
   ChevronsUpDown,
   Compass,
+  Gamepad2,
   Globe,
   Home,
   Mail,
@@ -32,10 +33,17 @@ import {
   safeSetPointerCapture,
 } from '../utils/iosSafariCompat.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import {
+  registerOfflineMinigameServiceWorker,
+  resolveMinigamePath,
+  subscribeConnectionHealth,
+  type ConnectionHealth,
+} from '../utils/offlineGameBridge.ts';
 import { scheduleAfterFirstPaint } from '../utils/resourcePriority.ts';
 import LiveAppStageOverlay from './LiveAppStageOverlay.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteNewsletterModal from './SiteNewsletterModal.tsx';
+import SiteOfflineGameModal from './SiteOfflineGameModal.tsx';
 import {
   readStoredNewsletterSubscription,
   syncOfflineNewsletterSubscription,
@@ -192,6 +200,37 @@ export default function AinvtrySiteApp() {
   const [newsletterOpen, setNewsletterOpen] = useState(false);
   const [newsletterLinkNotice, setNewsletterLinkNotice] = useState('');
   const [newsletterLinkError, setNewsletterLinkError] = useState('');
+  const [connectionHealth, setConnectionHealth] = useState<ConnectionHealth>('online');
+  const [offlineModalOpen, setOfflineModalOpen] = useState(false);
+  const [offlineGameInlineOpen, setOfflineGameInlineOpen] = useState(false);
+  const offlineDismissedRef = useRef(false);
+  const offlineInlineOpenRef = useRef(false);
+
+  useEffect(() => {
+    offlineInlineOpenRef.current = offlineGameInlineOpen;
+  }, [offlineGameInlineOpen]);
+
+  useEffect(() => {
+    const cancelSw = scheduleAfterFirstPaint(() => {
+      void registerOfflineMinigameServiceWorker();
+      // Pre-warm the lightweight minigame module in memory while online
+      // so tapping "Play Apple Box Now" in the offline auto-popup works instantaneously!
+      void import('../minigame/FruitBoxGamePage.tsx').catch(() => {});
+    });
+    const unsubHealth = subscribeConnectionHealth((nextHealth) => {
+      setConnectionHealth(nextHealth);
+      if (nextHealth === 'online') {
+        offlineDismissedRef.current = false;
+        setOfflineModalOpen(false);
+      } else if (!offlineDismissedRef.current && !offlineInlineOpenRef.current) {
+        setOfflineModalOpen(true);
+      }
+    });
+    return () => {
+      cancelSw();
+      unsubHealth();
+    };
+  }, []);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const activeStageRef = useRef<StageId>(activeStage);
@@ -340,6 +379,8 @@ export default function AinvtrySiteApp() {
         legalDoc === null &&
         !analyticsOpen &&
         !newsletterOpen &&
+        !offlineModalOpen &&
+        !offlineGameInlineOpen &&
         activeStageRef.current !== 'hero'
       ) {
         e.preventDefault();
@@ -358,7 +399,14 @@ export default function AinvtrySiteApp() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [analyticsOpen, legalDoc, newsletterOpen, stageTracker]);
+  }, [
+    analyticsOpen,
+    legalDoc,
+    newsletterOpen,
+    offlineGameInlineOpen,
+    offlineModalOpen,
+    stageTracker,
+  ]);
 
   // Clean up one-shot gold ripple burst & home callout timers on unmount
   useEffect(() => {
@@ -1166,6 +1214,24 @@ export default function AinvtrySiteApp() {
                     {lang === 'ko' ? '약관' : 'Terms'}
                   </span>
                 </button>
+                <a
+                  href={resolveMinigamePath()}
+                  data-no-marble="true"
+                  className="site-bottombar-link site-bottombar-minigame"
+                  aria-label={
+                    lang === 'ko'
+                      ? '오프라인 3D 사과게임 미니게임 열기'
+                      : 'Open offline 3D Apple Box minigame'
+                  }
+                >
+                  <Gamepad2 size={13} aria-hidden="true" />
+                  <span className="site-bottombar-link-full">
+                    {lang === 'ko' ? '사과게임' : 'Minigame'}
+                  </span>
+                  <span className="site-bottombar-link-short" aria-hidden="true">
+                    {lang === 'ko' ? '게임' : 'Game'}
+                  </span>
+                </a>
               </div>
 
               <div className="site-bottombar-right">
@@ -1253,6 +1319,27 @@ export default function AinvtrySiteApp() {
       />
 
       <SiteLegalModal doc={legalDoc} copy={copy.legal} onClose={handleCloseLegal} />
+
+      <SiteOfflineGameModal
+        isOpen={offlineModalOpen}
+        isPlayingInline={offlineGameInlineOpen}
+        health={connectionHealth}
+        lang={lang}
+        onPlayInline={() => {
+          triggerHaptic('selection');
+          offlineDismissedRef.current = true;
+          setOfflineModalOpen(false);
+          setOfflineGameInlineOpen(true);
+        }}
+        onExitInline={() => {
+          triggerHaptic('selection');
+          setOfflineGameInlineOpen(false);
+        }}
+        onDismiss={() => {
+          offlineDismissedRef.current = true;
+          setOfflineModalOpen(false);
+        }}
+      />
     </div>
   );
 }

@@ -1,8 +1,12 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
+import { isMinigamePathname } from './minigame/fruitBoxEngine.ts'
 import { applyIosSafariDocumentFlag } from './utils/iosSafariCompat.ts'
+import { registerOfflineMinigameServiceWorker } from './utils/offlineGameBridge.ts'
 import './index.css'
 import App from './App.jsx'
+
+const FruitBoxGamePage = lazy(() => import('./minigame/FruitBoxGamePage.tsx'))
 
 applyIosSafariDocumentFlag()
 
@@ -19,11 +23,30 @@ if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'))
     }
   }
+  if (!window.Capacitor?.isNativePlatform?.()) {
+    window.addEventListener(
+      'load',
+      () => {
+        void registerOfflineMinigameServiceWorker()
+      },
+      { once: true }
+    )
+  }
 }
+
+const isMiniGameRoute =
+  typeof window !== 'undefined' && isMinigamePathname(window.location.pathname)
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    {isMiniGameRoute ? (
+      <Suspense fallback={<div style={{ minHeight: '100dvh', background: '#060410' }} />}>
+        <FruitBoxGamePage />
+      </Suspense>
+    ) : (
+      <App />
+    )}
   </StrictMode>,
 )
+
 

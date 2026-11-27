@@ -66,6 +66,8 @@ function rootPublicAssetFallbackPlugin(): Plugin {
         const [pathname, search] = req.url.split('?');
         if (pathname === '/ir' || pathname === '/ir/') {
           req.url = `/ir/index.html${search ? `?${search}` : ''}`;
+        } else if (pathname === '/minigame' || pathname === '/minigame/') {
+          req.url = `/minigame/index.html${search ? `?${search}` : ''}`;
         }
       }
       next();
@@ -138,7 +140,7 @@ export default defineConfig(({ mode }) => {
       rootPublicAssetFallbackPlugin(),
     ],
     optimizeDeps: {
-      entries: ['site/index.html', 'site/app.html'],
+      entries: ['site/index.html', 'site/app.html', 'site/minigame/index.html'],
       include: [
         'react',
         'react-dom',
@@ -182,6 +184,7 @@ export default defineConfig(({ mode }) => {
         input: {
           main: path.resolve(rootDir, 'index.html'),
           app: path.resolve(rootDir, 'app.html'),
+          minigame: path.resolve(rootDir, 'minigame/index.html'),
         },
         output: {
           manualChunks(id: string): string | undefined {

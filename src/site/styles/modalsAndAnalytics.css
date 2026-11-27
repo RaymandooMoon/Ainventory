@@ -959,3 +959,184 @@
   color: var(--ink-tertiary);
   font-weight: 540;
 }
+
+/* --------------------------------------------------------------------------
+ * Offline / Weak-Connection Minigame Auto-Popup Modal
+ * -------------------------------------------------------------------------- */
+
+.site-bottombar-minigame {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.site-offline-backdrop {
+  z-index: 200;
+  background: rgba(5, 4, 12, 0.8);
+  animation: none;
+}
+
+.site-root[data-site-theme='light'] .site-offline-backdrop {
+  background: rgba(20, 18, 14, 0.62);
+}
+
+.site-offline-card {
+  width: min(100%, 460px);
+  background: #0e0e16;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.site-root[data-site-theme='light'] .site-offline-card {
+  background: #faf8f4;
+}
+
+.site-offline-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 42, 133, 0.14);
+  border: 1px solid rgba(255, 42, 133, 0.42);
+  color: #ff69a8;
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.site-root[data-site-theme='light'] .site-offline-kicker {
+  background: rgba(190, 24, 93, 0.1);
+  border-color: rgba(190, 24, 93, 0.32);
+  color: #be185d;
+}
+
+.site-offline-hero-banner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 18px 18px 16px;
+  background: linear-gradient(135deg, #0b0622 0%, #1d0c3d 55%, #091834 100%);
+  border: 1px solid rgba(0, 245, 255, 0.36);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+  color: #ffffff;
+}
+
+.site-offline-hero-glow {
+  position: absolute;
+  inset: -40%;
+  background:
+    radial-gradient(circle at 24% 30%, rgba(0, 245, 255, 0.35), transparent 48%),
+    radial-gradient(circle at 78% 70%, rgba(255, 42, 133, 0.38), transparent 52%);
+  pointer-events: none;
+}
+
+.site-offline-hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.site-offline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #82faff;
+}
+
+.site-offline-hero-content strong {
+  font-size: 1.18rem;
+  font-weight: 860;
+  letter-spacing: -0.02em;
+}
+
+.site-offline-hero-content > span:last-child {
+  font-size: 0.78rem;
+  color: rgba(235, 242, 255, 0.8);
+}
+
+.site-offline-copy {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.56;
+  color: var(--ink-secondary);
+}
+
+.site-offline-loading {
+  margin: 0;
+  padding: 18px 0;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--ink-primary);
+}
+
+.site-offline-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.site-offline-play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(95deg, #ff2a85 0%, #ff5e3a 45%, #ffd700 100%);
+  color: #14081f;
+  font-family: inherit;
+  font-size: 0.94rem;
+  font-weight: 850;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(255, 42, 133, 0.34);
+  transition: transform 0.14s ease, filter 0.14s ease;
+}
+
+.site-offline-play-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.site-offline-play-btn:active {
+  transform: scale(0.98);
+}
+
+.site-offline-route-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline-strong);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: 0.84rem;
+  font-weight: 680;
+  text-decoration: none;
+  transition: background-color 0.16s ease;
+}
+
+.site-offline-route-btn:hover {
+  background: var(--bg-elevated);
+}
+
