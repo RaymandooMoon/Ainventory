@@ -17,9 +17,9 @@ test.describe('Neon Arcade 3D Apple Box (/minigame)', () => {
     const playBtn = page.getByTestId('mg-play-btn');
     await expect(playBtn).toBeVisible();
 
-    // Switch mode to Neon Fever and back to Classic
-    await page.getByRole('radio', { name: /네온 피버 3D/ }).click();
-    await page.getByRole('radio', { name: /클래식 17×10/ }).click();
+    // Switch mode to Fever and back to Classic
+    await page.getByRole('radio', { name: /피버 3D/ }).click();
+    await page.getByRole('radio', { name: /클래식/ }).click();
 
     await playBtn.click();
     await expect(playBtn).toBeHidden();

@@ -768,12 +768,12 @@ export default function FruitBoxGamePage({
 
   const connLabel =
     connectionHealth === 'offline'
-      ? 'OFFLINE · 로컬 플레이 중'
+      ? 'OFFLINE'
       : connectionHealth === 'poor'
-        ? 'LOW SIGNAL · 오프라인 캐시 대기'
+        ? 'LOW SIGNAL'
         : swReady
-          ? 'OFFLINE READY · SW CACHED'
-          : 'NEON 3D ARCADE';
+          ? 'OFFLINE READY'
+          : '3D';
 
   // Avoid nested aria-modal="true" dialogs when Title/GameOver modal is shown inside embedded mode
   const shellActsAsDialog = Boolean(onExit) && phase === 'playing';
@@ -984,48 +984,42 @@ export default function FruitBoxGamePage({
         {/* Classic Mode Zero-Moves Notification Banner */}
         {noMoreMoves && phase === 'playing' && (
           <div className="mg-deadlock-banner" role="alert">
-            <span>더 이상 합이 10이 되는 조합이 없습니다!</span>
+            <span>남은 조합 없음</span>
             <button
               type="button"
               className="mg-deadlock-btn is-primary"
               onClick={() => finishGame(gameStateRef.current, false)}
             >
-              점수 기록 &amp; 종료
+              종료
             </button>
             <button
               type="button"
               className="mg-deadlock-btn"
               onClick={() => startNewGame()}
             >
-              새 판 시작
+              새 판
             </button>
           </div>
         )}
 
         <div className="mg-renderer-pill" aria-hidden="true">
-          {rendererKind === 'three' ? 'THREE.JS WEBGL2 · 60FPS' : 'CANVAS 2D FALLBACK'} ·{' '}
-          {gameState.cols}×{gameState.rows} · BEST {activeBest}
+          {rendererKind === 'three' ? '3D' : '2D'} · {gameState.cols}×{gameState.rows} · BEST{' '}
+          {activeBest}
         </div>
       </main>
 
       {/* Start / Title Overlay */}
       {phase === 'title' && (
         <div className="mg-overlay-backdrop" role="dialog" aria-modal="true" aria-labelledby="mg-title-h1">
-          <div className="mg-modal-card">
-            <span className="mg-kicker">
-              <Sparkles size={13} aria-hidden="true" />
-              <span>OFFLINE NEON ARCADE · FRUIT BOX 3D</span>
-            </span>
-
-            <h1 id="mg-title-h1" className="mg-hero-title">
-              사과게임 // NEON 3D
-            </h1>
-
-            <p className="mg-hero-desc">
-              드래그 박스로 사과의 숫자 합이 정확히 <strong>10</strong>이 되게 묶어 터뜨리세요!
-              제한시간 <strong>120초</strong> 동안 3D 과즙 스플래시와 콤보 피버로 최고 기록에
-              도전하세요. 인터넷이 끊겨도 브라우저에서 100% 작동합니다.
-            </p>
+          <div className="mg-modal-card mg-modal-card--compact">
+            <div className="mg-title-head">
+              <h1 id="mg-title-h1" className="mg-hero-title">
+                사과게임 3D
+              </h1>
+              <p className="mg-hero-desc">
+                드래그로 합 <strong>10</strong> 만들기 · <strong>120초</strong>
+              </p>
+            </div>
 
             <div className="mg-mode-grid" role="radiogroup" aria-label="게임 모드 선택">
               <button
@@ -1037,11 +1031,9 @@ export default function FruitBoxGamePage({
               >
                 <span className="mg-mode-name">
                   <Trophy size={15} aria-hidden="true" />
-                  <span>클래식 17×10</span>
+                  <span>클래식</span>
                 </span>
-                <span className="mg-mode-sub">
-                  원본 후르츠박스 규칙 · 170개 사과 · 사과당 +1점 · 올클리어 타임어택
-                </span>
+                <span className="mg-mode-sub">17×10 · 원본 규칙</span>
               </button>
 
               <button
@@ -1053,25 +1045,23 @@ export default function FruitBoxGamePage({
               >
                 <span className="mg-mode-name">
                   <Zap size={15} aria-hidden="true" />
-                  <span>네온 피버 3D</span>
+                  <span>피버 3D</span>
                 </span>
-                <span className="mg-mode-sub">
-                  골든 애플(+4) · 콤보 배수(최대 ×3) · 막히면 자동으로 새 판 리필
-                </span>
+                <span className="mg-mode-sub">골든 +4 · 콤보 ×3</span>
               </button>
             </div>
 
             <div className="mg-best-strip">
               <div className="mg-best-box">
-                <span className="mg-best-label">CLASSIC BEST</span>
+                <span className="mg-best-label">CLASSIC</span>
                 <span className="mg-best-val">{records.classicBest}</span>
               </div>
               <div className="mg-best-box">
-                <span className="mg-best-label">FEVER BEST</span>
+                <span className="mg-best-label">FEVER</span>
                 <span className="mg-best-val">{records.feverBest}</span>
               </div>
               <div className="mg-best-box">
-                <span className="mg-best-label">MAX COMBO</span>
+                <span className="mg-best-label">COMBO</span>
                 <span className="mg-best-val">{records.bestCombo}×</span>
               </div>
             </div>
@@ -1084,12 +1074,8 @@ export default function FruitBoxGamePage({
               onClick={() => startNewGame()}
             >
               <Play size={18} fill="currentColor" aria-hidden="true" />
-              <span>게임 시작 (120초)</span>
+              <span>PLAY</span>
             </button>
-
-            <p className="mg-shortcuts-hint">
-              단축키: Space 시작 · R 리셋 · H 힌트 · M 음소거 · 터치/마우스 드래그 지원
-            </p>
           </div>
         </div>
       )}
@@ -1097,21 +1083,20 @@ export default function FruitBoxGamePage({
       {/* Game Over / All Clear Result Overlay */}
       {phase === 'gameover' && (
         <div className="mg-overlay-backdrop" role="dialog" aria-modal="true" aria-labelledby="mg-result-h2">
-          <div className="mg-modal-card">
+          <div className="mg-modal-card mg-modal-card--compact">
             <div className="mg-result-header">
               <div>
                 {isNewBest && (
                   <span className="mg-new-best-chip">
                     <Sparkles size={12} aria-hidden="true" />
-                    <span>NEW HIGH SCORE!</span>
+                    <span>NEW BEST</span>
                   </span>
                 )}
                 <h2 id="mg-result-h2" className="mg-hero-title" style={{ marginTop: isNewBest ? 6 : 0 }}>
-                  {isAllClearResult ? 'PERFECT ALL CLEAR!' : 'TIME UP!'}
+                  {isAllClearResult ? 'ALL CLEAR!' : `${gameState.score}점`}
                 </h2>
                 <p className="mg-hero-desc">
-                  {gameState.mode === 'classic' ? '클래식 17×10' : '네온 피버 3D'} · 최종 점수{' '}
-                  <strong>{gameState.score}점</strong>
+                  {gameState.mode === 'classic' ? '클래식' : '피버 3D'}
                 </p>
               </div>
               <div className="mg-rank-badge" aria-label={`등급 ${rank}`}>
@@ -1121,16 +1106,16 @@ export default function FruitBoxGamePage({
 
             <div className="mg-best-strip">
               <div className="mg-best-box">
-                <span className="mg-best-label">POPPED APPLES</span>
+                <span className="mg-best-label">APPLES</span>
                 <span className="mg-best-val">{gameState.clearedCount}</span>
               </div>
               <div className="mg-best-box">
-                <span className="mg-best-label">MAX COMBO</span>
+                <span className="mg-best-label">COMBO</span>
                 <span className="mg-best-val">{gameState.maxCombo}×</span>
               </div>
               <div className="mg-best-box">
                 <span className="mg-best-label">
-                  {gameState.clearTimeMs !== null ? 'CLEAR TIME' : 'BEST RECORD'}
+                  {gameState.clearTimeMs !== null ? 'TIME' : 'BEST'}
                 </span>
                 <span className="mg-best-val">
                   {gameState.clearTimeMs !== null
@@ -1150,7 +1135,7 @@ export default function FruitBoxGamePage({
               onClick={() => startNewGame()}
             >
               <RotateCcw size={18} aria-hidden="true" />
-              <span>다시 도전하기</span>
+              <span>다시하기</span>
             </button>
 
             <div className="mg-cta-row">
@@ -1164,17 +1149,17 @@ export default function FruitBoxGamePage({
                 }}
               >
                 <Zap size={15} aria-hidden="true" />
-                <span>{gameState.mode === 'classic' ? '네온 피버 도전' : '클래식 17×10 도전'}</span>
+                <span>{gameState.mode === 'classic' ? '피버 3D' : '클래식'}</span>
               </button>
               {onExit ? (
                 <button type="button" className="mg-cta-secondary" onClick={onExit}>
                   <ArrowLeft size={15} aria-hidden="true" />
-                  <span>사이트로 돌아가기</span>
+                  <span>닫기</span>
                 </button>
               ) : (
                 <a href="/" className="mg-cta-secondary">
                   <ArrowLeft size={15} aria-hidden="true" />
-                  <span>Ainvtry 메인</span>
+                  <span>메인</span>
                 </a>
               )}
             </div>

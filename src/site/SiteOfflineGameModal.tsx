@@ -97,16 +97,11 @@ export default function SiteOfflineGameModal({
   const title =
     lang === 'ko'
       ? isOffline
-        ? '인터넷 연결이 끊겼습니다'
-        : '네트워크 연결이 불안정합니다'
+        ? '오프라인 상태'
+        : '연결 불안정'
       : isOffline
-        ? 'You Are Offline'
-        : 'Weak Network Detected';
-
-  const subtitle =
-    lang === 'ko'
-      ? '연결이 복구되는 동안 브라우저에서 100% 오프라인으로 돌아가는 3D 네온 사과게임(Fruit Box)을 즐겨보세요.'
-      : 'While your connection recovers, play our offline-ready Three.js Neon 3D Apple Box right in your browser.';
+        ? 'Offline'
+        : 'Weak Signal';
 
   return (
     <div
@@ -127,9 +122,7 @@ export default function SiteOfflineGameModal({
           <div>
             <p className="site-offline-kicker">
               <WifiOff size={13} aria-hidden="true" />
-              <span>
-                {isOffline ? 'OFFLINE ARCADE MODE' : 'LOW SIGNAL · OFFLINE READY'}
-              </span>
+              <span>{isOffline ? 'OFFLINE' : 'LOW SIGNAL'}</span>
             </p>
             <h2 id="site-offline-game-title" className="site-modal-title">
               {title}
@@ -140,7 +133,7 @@ export default function SiteOfflineGameModal({
             type="button"
             className="site-modal-close"
             onClick={onDismiss}
-            aria-label={lang === 'ko' ? '팝업 닫기' : 'Close popup'}
+            aria-label={lang === 'ko' ? '닫기' : 'Close'}
           >
             <X size={18} aria-hidden="true" />
           </button>
@@ -152,18 +145,11 @@ export default function SiteOfflineGameModal({
             <div className="site-offline-hero-content">
               <span className="site-offline-badge">
                 <Gamepad2 size={14} />
-                <span>APPLE BOX // NEON 3D</span>
+                <span>사과게임 3D</span>
               </span>
-              <strong>{lang === 'ko' ? '합이 10이 되게 드래그!' : 'Drag to Make 10!'}</strong>
-              <span>
-                {lang === 'ko'
-                  ? 'Three.js 과즙 파티클 · 콤보 피버 · 120초 타임어택'
-                  : 'Three.js Juice Splash · Combo Fever · 120s Time Attack'}
-              </span>
+              <strong>{lang === 'ko' ? '드래그로 합 10 만들기' : 'Drag to Make 10'}</strong>
             </div>
           </div>
-
-          <p className="site-offline-copy">{subtitle}</p>
 
           <div className="site-offline-actions">
             <button
@@ -174,11 +160,11 @@ export default function SiteOfflineGameModal({
               onClick={onPlayInline}
             >
               <Play size={16} fill="currentColor" aria-hidden="true" />
-              <span>{lang === 'ko' ? '지금 바로 사과게임 플레이' : 'Play Apple Box Now'}</span>
+              <span>{lang === 'ko' ? '바로 플레이' : 'Play Now'}</span>
             </button>
 
             <a href={minigameHref} className="site-offline-route-btn">
-              <span>{lang === 'ko' ? '/minigame 전용 페이지 열기' : 'Open /minigame Page'}</span>
+              <span>/minigame</span>
               <ArrowUpRight size={15} aria-hidden="true" />
             </a>
           </div>
