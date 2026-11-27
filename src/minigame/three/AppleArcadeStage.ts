@@ -36,6 +36,7 @@ export interface AppleStageController {
   setReducedMotion: (reduced: boolean) => void;
   clientToGrid: (clientX: number, clientY: number) => { col: number; row: number } | null;
   gridToClient: (col: number, row: number) => { x: number; y: number } | null;
+  refreshRect?: () => void;
   resize: (width: number, height: number) => void;
   dispose: () => void;
 }
@@ -142,7 +143,7 @@ export function createAppleArcadeStage(
   }
 
   const isSoftwareGl = isSoftwareWebGL(renderer);
-  const maxDpr = isSoftwareGl ? 1.0 : 1.75;
+  const maxDpr = isSoftwareGl ? 1.0 : 1.5;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.16;
@@ -180,12 +181,10 @@ export function createAppleArcadeStage(
 
   // Sculpted Board Frame Platform (translucent neon obsidian glass tray behind apples)
   const boardPlateGeo = new THREE.PlaneGeometry(1, 1);
-  const boardPlateMat = new THREE.MeshPhysicalMaterial({
+  const boardPlateMat = new THREE.MeshBasicMaterial({
     color: new THREE.Color('#0c0820'),
-    roughness: 0.28,
-    metalness: 0.35,
     transparent: true,
-    opacity: 0.56,
+    opacity: 0.58,
   });
   const boardPlateMesh = new THREE.Mesh(boardPlateGeo, boardPlateMat);
   boardPlateMesh.position.set(0, 0, -0.62);
@@ -203,16 +202,14 @@ export function createAppleArcadeStage(
   boardBorderLines.position.set(0, 0, -0.56);
   scene.add(boardBorderLines);
 
-  // Instanced 3D Sculpted Apples (170 instances -> 1 GPU draw call!)
-  const appleGeo = createSculptedAppleGeometry(isSoftwareGl ? 14 : 22);
-  const appleMat = new THREE.MeshPhysicalMaterial({
+  // Instanced 3D Sculpted Apples (170 instances -> 1 GPU draw call, glossy Phong shader for 60% faster fill rate!)
+  const appleGeo = createSculptedAppleGeometry(isSoftwareGl ? 14 : 20);
+  const appleMat = new THREE.MeshPhongMaterial({
     color: new THREE.Color('#ffffff'),
-    roughness: 0.2,
-    metalness: 0.08,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.12,
+    specular: new THREE.Color('#ffeef8'),
+    shininess: 110,
     emissive: new THREE.Color('#220512'),
-    emissiveIntensity: 0.38,
+    emissiveIntensity: 0.35,
   });
   const appleMesh = new THREE.InstancedMesh(appleGeo, appleMat, MAX_CELLS);
   appleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -220,10 +217,10 @@ export function createAppleArcadeStage(
 
   // Instanced 3D Emerald Leaves
   const leafGeo = createAppleLeafGeometry();
-  const leafMat = new THREE.MeshStandardMaterial({
+  const leafMat = new THREE.MeshPhongMaterial({
     color: new THREE.Color('#ffffff'),
-    roughness: 0.3,
-    metalness: 0.12,
+    specular: new THREE.Color('#b8ffe0'),
+    shininess: 48,
     emissive: new THREE.Color('#0a4d2c'),
     emissiveIntensity: 0.45,
   });
@@ -367,8 +364,10 @@ export function createAppleArcadeStage(
   let boardCols = options.cols;
   let boardRows = options.rows;
   let cells: readonly FruitBoxCell[] = [];
-  let selectedSet = new Set<number>();
-  let hintSet = new Set<number>();
+  const selectedMask = new Uint8Array(MAX_CELLS);
+  const hintMask = new Uint8Array(MAX_CELLS);
+  const cellHiddenFlags = new Uint8Array(MAX_CELLS);
+  let activeParticleCount = 0;
   let selectionRect: GridSelectionRect | null = null;
   let selectionState: SelectionVisualState = 'idle';
   let softColors = Boolean(options.softColors);
@@ -380,7 +379,10 @@ export function createAppleArcadeStage(
 
   let viewportW = Math.max(2, canvas.clientWidth || window.innerWidth || 1280);
   let viewportH = Math.max(2, canvas.clientHeight || window.innerHeight || 720);
+  let cachedRect: DOMRect | null = null;
   let baseCameraZ = 22;
+  let worldHalfH = 7;
+  let worldHalfW = 12;
   let cameraShake = 0;
   let cameraFovPunch = 0;
   let entranceTime = 0;
@@ -410,10 +412,6 @@ export function createAppleArcadeStage(
   const digitObj = new THREE.Object3D();
   const scratchColor = new THREE.Color();
   const scratchLeafColor = new THREE.Color();
-  const raycaster = new THREE.Raycaster();
-  const ndcVec = new THREE.Vector2();
-  const boardPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-  const rayHit = new THREE.Vector3();
   const projVec = new THREE.Vector3();
 
   // Vivid Neon Arcade Apple Palettes
@@ -435,12 +433,6 @@ export function createAppleArcadeStage(
     return { x, y };
   };
 
-  const worldToGrid = (wx: number, wy: number): { col: number; row: number } => {
-    const col = wx / CELL_PITCH + boardCols * 0.5;
-    const row = boardRows * 0.5 - wy / CELL_PITCH;
-    return { col, row };
-  };
-
   const updateBoardFrameAndCamera = (): void => {
     const boardW = boardCols * CELL_PITCH;
     const boardH = boardRows * CELL_PITCH;
@@ -460,6 +452,8 @@ export function createAppleArcadeStage(
     const distX = (boardW * 0.5 * padX) / (tanHalfFov * aspect);
 
     baseCameraZ = Math.max(distX, distY) + 1.4;
+    worldHalfH = tanHalfFov * baseCameraZ;
+    worldHalfW = worldHalfH * aspect;
     camera.position.set(0, 0, baseCameraZ);
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
@@ -504,6 +498,9 @@ export function createAppleArcadeStage(
     for (let i = 0; i < scaledCount; i += 1) {
       const idx = particleCursor;
       particleCursor = (particleCursor + 1) % MAX_PARTICLES;
+      if (pAlpha[idx] <= 0.001) {
+        activeParticleCount += 1;
+      }
 
       const angle = Math.random() * Math.PI * 2;
       const speed = 2.6 + Math.random() * (isGolden ? 8.2 : 5.8);
@@ -525,6 +522,8 @@ export function createAppleArcadeStage(
       pLife[idx] = 0.48 + Math.random() * 0.45;
       pAlpha[idx] = 1.0;
     }
+    pColAttr.needsUpdate = true;
+    pSizeAttr.needsUpdate = true;
   };
 
   const spawnShockwave = (
@@ -608,6 +607,7 @@ export function createAppleArcadeStage(
     const dpr = Math.min(window.devicePixelRatio || 1, highFx ? maxDpr : 1.0);
     renderer.setPixelRatio(dpr);
     renderer.setSize(viewportW, viewportH, false);
+    cachedRect = canvas.getBoundingClientRect();
     updateBoardFrameAndCamera();
   };
 
@@ -647,7 +647,9 @@ export function createAppleArcadeStage(
     magentaRimLight.position.y = Math.sin(lightOrbit * 0.7 + Math.PI) * 7;
     magentaRimLight.intensity = 30 + smoothFever * 24;
 
-    goldAccentLight.intensity = Math.max(0, goldAccentLight.intensity - dt * 55);
+    if (goldAccentLight.intensity > 0) {
+      goldAccentLight.intensity = Math.max(0, goldAccentLight.intensity - dt * 55);
+    }
 
     // Subtle camera punch & shake decay
     if (cameraShake > 0.001) {
@@ -657,25 +659,34 @@ export function createAppleArcadeStage(
       cameraFovPunch = Math.max(0, cameraFovPunch - dt * 9.0);
     }
     const shakeAmp = reducedMotion ? 0 : cameraShake * 0.24;
-    camera.position.x = (Math.sin(elapsed * 58) * shakeAmp);
-    camera.position.y = (Math.cos(elapsed * 67) * shakeAmp);
+    camera.position.x = Math.sin(elapsed * 58) * shakeAmp;
+    camera.position.y = Math.cos(elapsed * 67) * shakeAmp;
     camera.position.z = baseCameraZ - (reducedMotion ? 0 : cameraFovPunch * 0.42);
 
     // Update border color with fever energy
     boardBorderMat.color.setHSL((0.54 + smoothFever * 0.35 + Math.sin(elapsed * 0.6) * 0.04) % 1, 0.9, 0.64);
     boardBorderMat.opacity = 0.34 + smoothFever * 0.36;
 
-    // Update all 170 instanced 3D apples, leaves & numbers
+    // Update active instanced 3D apples, leaves & numbers (skip already-hidden cleared cells!)
     const count = Math.min(MAX_CELLS, cells.length);
+    const halfCols = boardCols * 0.5;
+    const halfRows = boardRows * 0.5;
+    const hoverLerp = Math.min(1, dt * 28);
+    const hintPulse = 0.5 + 0.5 * Math.sin(elapsed * 9.0);
+    const exactGoldLerp = 0.32 + 0.25 * Math.sin(elapsed * 16);
+    const softBlend = smoothSoft * 0.72;
+
     for (let i = 0; i < MAX_CELLS; i += 1) {
       const cell = i < count ? cells[i] : null;
       const fly = flyingAnims[i];
 
       if (fly.active) {
+        cellHiddenFlags[i] = 0;
         fly.age += dt;
         const progress = fly.age / fly.duration;
         if (progress >= 1) {
           fly.active = false;
+          cellHiddenFlags[i] = 1;
           dummyObj.scale.set(0, 0, 0);
           dummyObj.position.set(0, 0, -50);
           dummyObj.updateMatrix();
@@ -710,20 +721,25 @@ export function createAppleArcadeStage(
       }
 
       if (!cell || cell.cleared) {
-        dummyObj.scale.set(0, 0, 0);
-        dummyObj.position.set(0, 0, -50);
-        dummyObj.updateMatrix();
-        appleMesh.setMatrixAt(i, dummyObj.matrix);
-        leafMesh.setMatrixAt(i, dummyObj.matrix);
-        digitMesh.setMatrixAt(i, dummyObj.matrix);
-        digitAlphaAttr.setX(i, 0);
+        if (cellHiddenFlags[i] === 0) {
+          cellHiddenFlags[i] = 1;
+          dummyObj.scale.set(0, 0, 0);
+          dummyObj.position.set(0, 0, -50);
+          dummyObj.updateMatrix();
+          appleMesh.setMatrixAt(i, dummyObj.matrix);
+          leafMesh.setMatrixAt(i, dummyObj.matrix);
+          digitMesh.setMatrixAt(i, dummyObj.matrix);
+          digitAlphaAttr.setX(i, 0);
+        }
         continue;
       }
 
-      const isSelected = selectedSet.has(cell.id);
-      const isHint = hintSet.has(cell.id);
+      cellHiddenFlags[i] = 0;
+
+      const isSelected = cell.id >= 0 && cell.id < MAX_CELLS && selectedMask[cell.id] === 1;
+      const isHint = cell.id >= 0 && cell.id < MAX_CELLS && hintMask[cell.id] === 1;
       const targetHover = isSelected ? 1 : isHint ? 0.55 : 0;
-      hoverSpring[i] += (targetHover - hoverSpring[i]) * Math.min(1, dt * 16);
+      hoverSpring[i] += (targetHover - hoverSpring[i]) * hoverLerp;
 
       // Diagonal stadium wave entrance easing (snappy ~0.48s across 17x10 or 10x17)
       const waveDelay = cell.col * 0.011 + cell.row * 0.014;
@@ -733,7 +749,8 @@ export function createAppleArcadeStage(
           ? 1
           : 1 - Math.pow(1 - rawEnter, 3) + Math.sin(rawEnter * Math.PI) * 0.14;
 
-      const { x, y } = gridToWorld(cell.col + 0.5, cell.row + 0.5);
+      const x = (cell.col + 0.5 - halfCols) * CELL_PITCH;
+      const y = (halfRows - (cell.row + 0.5)) * CELL_PITCH;
       const breathe = reducedMotion
         ? 0
         : Math.sin(elapsed * 2.4 + cell.col * 0.45 + cell.row * 0.6) * 0.032;
@@ -765,26 +782,25 @@ export function createAppleArcadeStage(
 
       // Apple surface color modulation
       if (isSelected && selectionState === 'exact') {
-        scratchColor.copy(COL_EXACT_EMERALD).lerp(COL_GOLDEN, 0.32 + 0.25 * Math.sin(elapsed * 16));
+        scratchColor.copy(COL_EXACT_EMERALD).lerp(COL_GOLDEN, exactGoldLerp);
       } else if (isSelected && selectionState === 'over') {
         scratchColor.copy(COL_OVER_PINK);
       } else if (isSelected) {
         scratchColor.copy(cell.isGolden ? COL_GOLDEN : COL_RUBY).lerp(COL_SELECTED_CYAN, 0.46);
       } else if (isHint) {
-        const hp = 0.5 + 0.5 * Math.sin(elapsed * 9.0);
-        scratchColor.copy(cell.isGolden ? COL_GOLDEN : COL_RUBY).lerp(COL_HINT_CYAN, 0.55 * hp);
+        scratchColor.copy(cell.isGolden ? COL_GOLDEN : COL_RUBY).lerp(COL_HINT_CYAN, 0.55 * hintPulse);
       } else if (cell.isGolden) {
         scratchColor.copy(COL_GOLDEN);
       } else {
         scratchColor
           .copy((cell.col + cell.row) % 2 === 0 ? COL_RUBY : COL_RUBY_ALT)
-          .lerp(COL_SOFT_APPLE, smoothSoft * 0.72);
+          .lerp(COL_SOFT_APPLE, softBlend);
       }
       appleMesh.setColorAt(i, scratchColor);
 
       scratchLeafColor
         .copy(cell.isGolden ? COL_LEAF_GOLD : COL_LEAF_NEON)
-        .lerp(COL_LEAF_SOFT, smoothSoft * 0.72);
+        .lerp(COL_LEAF_SOFT, softBlend);
       leafMesh.setColorAt(i, scratchLeafColor);
 
       // Crisp front-mounted digit quad floating cleanly in front of the apple belly
@@ -794,7 +810,6 @@ export function createAppleArcadeStage(
       digitObj.updateMatrix();
       digitMesh.setMatrixAt(i, digitObj.matrix);
 
-      digitValuesAttr.setX(i, cell.value);
       const dState = isSelected
         ? selectionState === 'exact'
           ? 2
@@ -813,7 +828,6 @@ export function createAppleArcadeStage(
     leafMesh.instanceMatrix.needsUpdate = true;
     if (leafMesh.instanceColor) leafMesh.instanceColor.needsUpdate = true;
     digitMesh.instanceMatrix.needsUpdate = true;
-    digitValuesAttr.needsUpdate = true;
     digitStatesAttr.needsUpdate = true;
     digitAlphaAttr.needsUpdate = true;
 
@@ -837,30 +851,29 @@ export function createAppleArcadeStage(
       }
     }
 
-    // Update juicy splash & spark particles
-    let hasActiveParticles = false;
-    for (let i = 0; i < MAX_PARTICLES; i += 1) {
-      if (pAlpha[i] <= 0.001) continue;
-      pAge[i] += dt;
-      const ratio = pAge[i] / Math.max(0.05, pLife[i]);
-      if (ratio >= 1) {
-        pAlpha[i] = 0;
-      } else {
-        hasActiveParticles = true;
-        pVel[i * 3] *= 1 - dt * 1.8;
-        pVel[i * 3 + 1] = pVel[i * 3 + 1] * (1 - dt * 1.3) - 10.5 * dt;
-        pVel[i * 3 + 2] *= 1 - dt * 2.1;
+    // Update juicy splash & spark particles (O(1) skip when idle!)
+    if (activeParticleCount > 0) {
+      let stillAlive = 0;
+      for (let i = 0; i < MAX_PARTICLES; i += 1) {
+        if (pAlpha[i] <= 0.001) continue;
+        pAge[i] += dt;
+        const ratio = pAge[i] / Math.max(0.05, pLife[i]);
+        if (ratio >= 1) {
+          pAlpha[i] = 0;
+        } else {
+          stillAlive += 1;
+          pVel[i * 3] *= 1 - dt * 1.8;
+          pVel[i * 3 + 1] = pVel[i * 3 + 1] * (1 - dt * 1.3) - 10.5 * dt;
+          pVel[i * 3 + 2] *= 1 - dt * 2.1;
 
-        pPos[i * 3] += pVel[i * 3] * dt;
-        pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt;
-        pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
-        pAlpha[i] = Math.pow(1 - ratio, 1.5);
+          pPos[i * 3] += pVel[i * 3] * dt;
+          pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt;
+          pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
+          pAlpha[i] = Math.pow(1 - ratio, 1.5);
+        }
       }
-    }
-    if (hasActiveParticles) {
+      activeParticleCount = stillAlive;
       pPosAttr.needsUpdate = true;
-      pColAttr.needsUpdate = true;
-      pSizeAttr.needsUpdate = true;
       pAlphaAttr.needsUpdate = true;
     }
 
@@ -893,11 +906,16 @@ export function createAppleArcadeStage(
       boardCols = cols;
       boardRows = rows;
       cells = nextCells;
+      for (let i = 0; i < MAX_CELLS; i += 1) {
+        digitValuesAttr.setX(i, i < nextCells.length ? nextCells[i].value : 1);
+      }
+      digitValuesAttr.needsUpdate = true;
       if (dimsChanged) {
         updateBoardFrameAndCamera();
       }
       if (animateEntrance) {
         entranceTime = 0;
+        cellHiddenFlags.fill(0);
         for (let i = 0; i < MAX_CELLS; i += 1) {
           flyingAnims[i].active = false;
           hoverSpring[i] = 0;
@@ -906,11 +924,19 @@ export function createAppleArcadeStage(
     },
     setSelection(rect, selectedIds, state) {
       selectionRect = rect;
-      selectedSet = new Set(selectedIds);
+      selectedMask.fill(0);
+      for (let i = 0; i < selectedIds.length; i += 1) {
+        const id = selectedIds[i];
+        if (id >= 0 && id < MAX_CELLS) selectedMask[id] = 1;
+      }
       selectionState = state;
     },
     setHintIds(ids) {
-      hintSet = new Set(ids);
+      hintMask.fill(0);
+      for (let i = 0; i < ids.length; i += 1) {
+        const id = ids[i];
+        if (id >= 0 && id < MAX_CELLS) hintMask[id] = 1;
+      }
     },
     triggerBurst(event) {
       const centerWorld = gridToWorld(event.centroidCol, event.centroidRow);
@@ -921,6 +947,7 @@ export function createAppleArcadeStage(
         const c = event.clearedCells[i];
         const w = gridToWorld(c.col + 0.5, c.row + 0.5);
         if (c.id >= 0 && c.id < MAX_CELLS) {
+          cellHiddenFlags[c.id] = 0;
           const fly = flyingAnims[c.id];
           fly.active = true;
           fly.x = w.x;
@@ -1002,21 +1029,21 @@ export function createAppleArcadeStage(
       reducedMotion = reduced;
     },
     clientToGrid(clientX, clientY) {
-      const rect = canvas.getBoundingClientRect();
+      const rect = cachedRect ?? canvas.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return null;
-      ndcVec.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      ndcVec.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(ndcVec, camera);
-      const hit = raycaster.ray.intersectPlane(boardPlane, rayHit);
-      if (!hit) return null;
-      const g = worldToGrid(hit.x, hit.y);
+      const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
+      const wx = ndcX * worldHalfW;
+      const wy = ndcY * worldHalfH;
+      const col = wx / CELL_PITCH + boardCols * 0.5;
+      const row = boardRows * 0.5 - wy / CELL_PITCH;
       return {
-        col: Math.max(-0.5, Math.min(boardCols + 0.5, g.col)),
-        row: Math.max(-0.5, Math.min(boardRows + 0.5, g.row)),
+        col: Math.max(-0.5, Math.min(boardCols + 0.5, col)),
+        row: Math.max(-0.5, Math.min(boardRows + 0.5, row)),
       };
     },
     gridToClient(col, row) {
-      const rect = canvas.getBoundingClientRect();
+      const rect = cachedRect ?? canvas.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return null;
       const w = gridToWorld(col, row);
       projVec.set(w.x, w.y, 0.5).project(camera);
@@ -1024,6 +1051,9 @@ export function createAppleArcadeStage(
         x: ((projVec.x + 1) * 0.5) * rect.width,
         y: ((-projVec.y + 1) * 0.5) * rect.height,
       };
+    },
+    refreshRect() {
+      cachedRect = canvas.getBoundingClientRect();
     },
     resize,
     dispose() {

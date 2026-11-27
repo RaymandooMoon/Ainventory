@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Flame,
@@ -116,9 +116,7 @@ export default function FruitBoxGamePage({
     });
     return autoStart ? { ...initial, startedAtMs: Date.now() } : initial;
   });
-  const [remainingSec, setRemainingSec] = useState<number>(CLASSIC_DURATION_SEC);
-  const [activeEval, setActiveEval] = useState<SelectionEvaluation | null>(null);
-  const [dragTagPos, setDragTagPos] = useState<{ x: number; y: number } | null>(null);
+  const [isUrgent, setIsUrgent] = useState(false);
   const [callouts, setCallouts] = useState<readonly FloatingCallout[]>([]);
 
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
@@ -126,6 +124,10 @@ export default function FruitBoxGamePage({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageCtrlRef = useRef<AppleStageController | null>(null);
   const audioRef = useRef<ArcadeAudioController | null>(null);
+  const timerTextRef = useRef<HTMLSpanElement | null>(null);
+  const energyFillRef = useRef<HTMLDivElement | null>(null);
+  const sumPillRef = useRef<HTMLDivElement | null>(null);
+  const dragTagRef = useRef<HTMLDivElement | null>(null);
   const prefsRef = useRef<FruitBoxPreferences>(prefs);
   const gameStateRef = useRef<FruitBoxGameState>(gameState);
   const phaseRef = useRef<GamePhase>(phase);
@@ -141,13 +143,42 @@ export default function FruitBoxGamePage({
     lastSum: number;
   } | null>(null);
   const timerStartRef = useRef<number | null>(autoStart ? performance.now() : null);
+  const lastTimerSecRef = useRef<number>(CLASSIC_DURATION_SEC);
   const lastCountdownSecRef = useRef<number>(CLASSIC_DURATION_SEC);
+  const isUrgentRef = useRef<boolean>(false);
   const calloutSeqRef = useRef<number>(1);
   const calloutTimersRef = useRef<Set<number>>(new Set());
   const hintTimerRef = useRef<number | null>(null);
   const prevFocusRef = useRef<HTMLElement | null>(null);
   const playBtnRef = useRef<HTMLButtonElement | null>(null);
   const replayBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const resetDragHud = useCallback(() => {
+    const sumEl = sumPillRef.current;
+    if (sumEl) {
+      sumEl.className = 'mg-sum-pill';
+      sumEl.textContent = 'DRAG = 10';
+    }
+    const tagEl = dragTagRef.current;
+    if (tagEl) {
+      tagEl.style.display = 'none';
+    }
+  }, []);
+
+  // Synchronously seed imperative HUD DOM nodes before first paint (zero React renders during drag/timer!)
+  useLayoutEffect(() => {
+    if (timerTextRef.current) {
+      timerTextRef.current.textContent = formatTimerDisplay(CLASSIC_DURATION_SEC);
+    }
+    if (energyFillRef.current) {
+      energyFillRef.current.style.transform = 'scaleX(1)';
+    }
+    if (dragTagRef.current) {
+      dragTagRef.current.className = 'mg-drag-tag';
+      dragTagRef.current.style.display = 'none';
+    }
+    resetDragHud();
+  }, [resetDragHud]);
 
   useEffect(() => {
     prefsRef.current = prefs;
@@ -262,69 +293,83 @@ export default function FruitBoxGamePage({
     []
   );
 
-  const finishGame = useCallback((finalState: FruitBoxGameState, isAllClear: boolean) => {
-    phaseRef.current = 'gameover';
-    setPhase('gameover');
-    setIsAllClearResult(isAllClear);
-    setNoMoreMoves(false);
-    setActiveEval(null);
-    setDragTagPos(null);
-    dragRef.current = null;
-    stageCtrlRef.current?.setSelection(null, [], 'idle');
-    stageCtrlRef.current?.setHintIds([]);
-    audioRef.current?.stopBgm();
-    audioRef.current?.playGameOver(isAllClear);
-    triggerMiniHaptic(isAllClear ? 'success' : 'light');
+  const finishGame = useCallback(
+    (finalState: FruitBoxGameState, isAllClear: boolean) => {
+      phaseRef.current = 'gameover';
+      setPhase('gameover');
+      setIsAllClearResult(isAllClear);
+      setNoMoreMoves(false);
+      isUrgentRef.current = false;
+      setIsUrgent(false);
+      resetDragHud();
+      dragRef.current = null;
+      stageCtrlRef.current?.setSelection(null, [], 'idle');
+      stageCtrlRef.current?.setHintIds([]);
+      audioRef.current?.stopBgm();
+      audioRef.current?.playGameOver(isAllClear);
+      triggerMiniHaptic(isAllClear ? 'success' : 'light');
 
-    const { records: nextRecords, isNewBest: newRecord } = saveGameResultToRecords({
-      mode: finalState.mode,
-      score: finalState.score,
-      clearedCount: finalState.clearedCount,
-      maxCombo: finalState.maxCombo,
-      clearTimeMs: finalState.clearTimeMs,
-    });
-    setRecords(nextRecords);
-    setIsNewBest(newRecord);
-  }, []);
+      const { records: nextRecords, isNewBest: newRecord } = saveGameResultToRecords({
+        mode: finalState.mode,
+        score: finalState.score,
+        clearedCount: finalState.clearedCount,
+        maxCombo: finalState.maxCombo,
+        clearTimeMs: finalState.clearTimeMs,
+      });
+      setRecords(nextRecords);
+      setIsNewBest(newRecord);
+    },
+    [resetDragHud]
+  );
 
-  const startNewGame = useCallback((targetMode?: FruitBoxMode) => {
-    const mode = targetMode ?? prefsRef.current.mode;
-    const wrap = stageWrapRef.current;
-    const orientation = detectOrientation(wrap?.clientWidth, wrap?.clientHeight);
-    const fresh = createFruitBoxGame({
-      mode,
-      orientation,
-      durationSec: CLASSIC_DURATION_SEC,
-    });
-    const startedState: FruitBoxGameState = {
-      ...fresh,
-      startedAtMs: Date.now(),
-    };
-    gameStateRef.current = startedState;
-    setGameState(startedState);
-    setRemainingSec(CLASSIC_DURATION_SEC);
-    setActiveEval(null);
-    setDragTagPos(null);
-    setIsNewBest(false);
-    setIsAllClearResult(false);
-    setNoMoreMoves(false);
-    dragRef.current = null;
-    timerStartRef.current = performance.now();
-    lastCountdownSecRef.current = CLASSIC_DURATION_SEC;
+  const startNewGame = useCallback(
+    (targetMode?: FruitBoxMode) => {
+      const mode = targetMode ?? prefsRef.current.mode;
+      const wrap = stageWrapRef.current;
+      const orientation = detectOrientation(wrap?.clientWidth, wrap?.clientHeight);
+      const fresh = createFruitBoxGame({
+        mode,
+        orientation,
+        durationSec: CLASSIC_DURATION_SEC,
+      });
+      const startedState: FruitBoxGameState = {
+        ...fresh,
+        startedAtMs: Date.now(),
+      };
+      gameStateRef.current = startedState;
+      setGameState(startedState);
+      lastTimerSecRef.current = CLASSIC_DURATION_SEC;
+      isUrgentRef.current = false;
+      setIsUrgent(false);
+      if (timerTextRef.current) {
+        timerTextRef.current.textContent = formatTimerDisplay(CLASSIC_DURATION_SEC);
+      }
+      if (energyFillRef.current) {
+        energyFillRef.current.style.transform = 'scaleX(1)';
+      }
+      resetDragHud();
+      setIsNewBest(false);
+      setIsAllClearResult(false);
+      setNoMoreMoves(false);
+      dragRef.current = null;
+      timerStartRef.current = performance.now();
+      lastCountdownSecRef.current = CLASSIC_DURATION_SEC;
 
-    stageCtrlRef.current?.syncBoard(startedState.cells, startedState.cols, startedState.rows, true);
-    stageCtrlRef.current?.setSelection(null, [], 'idle');
-    stageCtrlRef.current?.setHintIds([]);
-    stageCtrlRef.current?.setFeverLevel(0);
+      stageCtrlRef.current?.syncBoard(startedState.cells, startedState.cols, startedState.rows, true);
+      stageCtrlRef.current?.setSelection(null, [], 'idle');
+      stageCtrlRef.current?.setHintIds([]);
+      stageCtrlRef.current?.setFeverLevel(0);
 
-    audioRef.current?.unlock();
-    audioRef.current?.setIntensity(0);
-    audioRef.current?.startBgm();
-    triggerMiniHaptic('selection');
+      audioRef.current?.unlock();
+      audioRef.current?.setIntensity(0);
+      audioRef.current?.startBgm();
+      triggerMiniHaptic('selection');
 
-    phaseRef.current = 'playing';
-    setPhase('playing');
-  }, []);
+      phaseRef.current = 'playing';
+      setPhase('playing');
+    },
+    [resetDragHud]
+  );
 
   const switchVisualStyle = useCallback((nextStyle: FruitBoxVisualStyle) => {
     setPrefs((prev) => {
@@ -380,6 +425,7 @@ export default function FruitBoxGamePage({
     if (!ctrl) return undefined;
 
     stageCtrlRef.current = ctrl;
+    stageWrapRectRef.current = wrap.getBoundingClientRect();
     ctrl.resize(wrap.clientWidth, wrap.clientHeight);
     ctrl.syncBoard(
       gameStateRef.current.cells,
@@ -393,6 +439,7 @@ export default function FruitBoxGamePage({
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         if (width <= 4 || height <= 4) continue;
+        stageWrapRectRef.current = wrap.getBoundingClientRect();
         stageCtrlRef.current?.resize(width, height);
         // Adapt board orientation cleanly while on title screen when device rotates
         if (phaseRef.current === 'title') {
@@ -437,7 +484,7 @@ export default function FruitBoxGamePage({
     return () => mq.removeEventListener?.('change', onChange);
   }, []);
 
-  // High-precision 120s countdown loop (drift-free via performance.now)
+  // High-precision 120s countdown loop (zero React re-renders: direct GPU scaleX + 1Hz text update)
   useEffect(() => {
     if (phase !== 'playing') return undefined;
     if (timerStartRef.current === null) {
@@ -449,10 +496,28 @@ export default function FruitBoxGamePage({
       if (phaseRef.current !== 'playing') return;
       const start = timerStartRef.current ?? performance.now();
       const elapsedSec = (performance.now() - start) / 1000;
-      const left = Math.max(0, gameStateRef.current.durationSec - elapsedSec);
-      setRemainingSec(left);
+      const duration = Math.max(1, gameStateRef.current.durationSec);
+      const left = Math.max(0, duration - elapsedSec);
+      const ratio = Math.max(0, Math.min(1, left / duration));
+
+      if (energyFillRef.current) {
+        energyFillRef.current.style.transform = `scaleX(${ratio.toFixed(4)})`;
+      }
 
       const ceilSec = Math.ceil(left);
+      if (ceilSec !== lastTimerSecRef.current) {
+        lastTimerSecRef.current = ceilSec;
+        if (timerTextRef.current) {
+          timerTextRef.current.textContent = formatTimerDisplay(ceilSec);
+        }
+      }
+
+      const nextUrgent = left <= 15 && left > 0;
+      if (nextUrgent !== isUrgentRef.current) {
+        isUrgentRef.current = nextUrgent;
+        setIsUrgent(nextUrgent);
+      }
+
       if (ceilSec <= 10 && ceilSec > 0 && ceilSec < lastCountdownSecRef.current) {
         lastCountdownSecRef.current = ceilSec;
         audioRef.current?.playCountdownTick(ceilSec);
@@ -463,6 +528,12 @@ export default function FruitBoxGamePage({
       audioRef.current?.setIntensity(intensity);
 
       if (left <= 0) {
+        if (timerTextRef.current) {
+          timerTextRef.current.textContent = '00:00';
+        }
+        if (energyFillRef.current) {
+          energyFillRef.current.style.transform = 'scaleX(0)';
+        }
         finishGame(gameStateRef.current, false);
         return;
       }
@@ -549,14 +620,16 @@ export default function FruitBoxGamePage({
   const commitDragRelease = useCallback(
     (dragSnapshot: NonNullable<typeof dragRef.current>, endClientX?: number, endClientY?: number) => {
       const stage = stageCtrlRef.current;
-      stage?.setSelection(null, [], 'idle');
-      setActiveEval(null);
-      setDragTagPos(null);
+      resetDragHud();
 
-      if (phaseRef.current !== 'playing') return;
+      if (phaseRef.current !== 'playing') {
+        stage?.setSelection(null, [], 'idle');
+        return;
+      }
 
       const result = applyClearSelection(gameStateRef.current, dragSnapshot.currentRect, Date.now());
       if (!result.cleared) {
+        stage?.setSelection(null, [], 'idle');
         const dragDist =
           endClientX !== undefined && endClientY !== undefined
             ? Math.hypot(endClientX - dragSnapshot.startClientX, endClientY - dragSnapshot.startClientY)
@@ -586,6 +659,8 @@ export default function FruitBoxGamePage({
         result.state.rows,
         result.boardRefilled
       );
+      // Clear selection after syncBoard so Original 2D paints cleared cells + pop burst in one synchronous frame
+      stage?.setSelection(null, [], 'idle');
       stage?.setFeverLevel(result.state.feverMeter);
 
       audioRef.current?.playClearPop(
@@ -623,7 +698,7 @@ export default function FruitBoxGamePage({
         finishGame(result.state, true);
       }
     },
-    [finishGame, spawnFloatingCallout]
+    [finishGame, resetDragHud, spawnFloatingCallout]
   );
 
   // Guard against stuck selection boxes if pointer releases outside browser or window blurs
@@ -639,8 +714,7 @@ export default function FruitBoxGamePage({
       if (!drag) return;
       dragRef.current = null;
       stageCtrlRef.current?.setSelection(null, [], 'idle');
-      setActiveEval(null);
-      setDragTagPos(null);
+      resetDragHud();
     };
     window.addEventListener('pointerup', onGlobalRelease);
     window.addEventListener('pointercancel', onGlobalRelease);
@@ -650,7 +724,7 @@ export default function FruitBoxGamePage({
       window.removeEventListener('pointercancel', onGlobalRelease);
       window.removeEventListener('blur', onWindowBlur);
     };
-  }, [commitDragRelease]);
+  }, [commitDragRelease, resetDragHud]);
 
   const updateDragAtPointer = useCallback((clientX: number, clientY: number) => {
     const drag = dragRef.current;
@@ -669,9 +743,10 @@ export default function FruitBoxGamePage({
     };
     drag.currentRect = nextRect;
 
-    const evaluation = evaluateSelectionRect(gameStateRef.current.cells, nextRect);
+    const evaluation: SelectionEvaluation = evaluateSelectionRect(gameStateRef.current.cells, nextRect);
+    const count = evaluation.selectedIds.length;
     const visState: SelectionVisualState =
-      evaluation.selectedIds.length === 0
+      count === 0
         ? 'idle'
         : evaluation.isExactTen
           ? 'exact'
@@ -681,18 +756,49 @@ export default function FruitBoxGamePage({
 
     stage.setSelection(nextRect, evaluation.selectedIds, visState);
 
-    const wrapRect = stageWrapRectRef.current ?? wrap.getBoundingClientRect();
-    setDragTagPos({
-      x: Math.max(54, Math.min(wrapRect.width - 54, clientX - wrapRect.left)),
-      y: Math.max(54, Math.min(wrapRect.height - 24, clientY - wrapRect.top)),
-    });
+    const countOrSumChanged = count !== drag.lastCount || evaluation.sum !== drag.lastSum;
 
-    if (evaluation.selectedIds.length !== drag.lastCount || evaluation.sum !== drag.lastSum) {
-      drag.lastCount = evaluation.selectedIds.length;
+    // Direct GPU translate3d update on floating cursor tag (0 React renders during pointermove!)
+    const tagEl = dragTagRef.current;
+    if (tagEl) {
+      if (count > 0) {
+        const wrapRect = stageWrapRectRef.current ?? wrap.getBoundingClientRect();
+        const x = Math.max(54, Math.min(wrapRect.width - 54, clientX - wrapRect.left));
+        const y = Math.max(54, Math.min(wrapRect.height - 24, clientY - wrapRect.top));
+        tagEl.style.display = 'block';
+        tagEl.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -135%)`;
+        if (countOrSumChanged) {
+          tagEl.textContent = evaluation.isExactTen ? '10! POP!' : `${evaluation.sum}`;
+          tagEl.className = `mg-drag-tag${
+            evaluation.isExactTen ? ' is-exact' : evaluation.isOverTen ? ' is-over' : ''
+          }`;
+        }
+      } else if (countOrSumChanged) {
+        tagEl.style.display = 'none';
+      }
+    }
+
+    if (countOrSumChanged) {
+      drag.lastCount = count;
       drag.lastSum = evaluation.sum;
-      setActiveEval(evaluation);
-      if (evaluation.selectedIds.length > 0) {
-        audioRef.current?.playSelectTick(evaluation.selectedIds.length, evaluation.sum);
+
+      const sumEl = sumPillRef.current;
+      if (sumEl) {
+        if (count > 0) {
+          sumEl.className = `mg-sum-pill ${
+            evaluation.isExactTen ? 'is-exact' : evaluation.isOverTen ? 'is-over' : 'is-under'
+          }`;
+          sumEl.textContent = evaluation.isExactTen
+            ? `SUM ${evaluation.sum} ✓`
+            : `SUM ${evaluation.sum}`;
+        } else {
+          sumEl.className = 'mg-sum-pill';
+          sumEl.textContent = 'DRAG = 10';
+        }
+      }
+
+      if (count > 0) {
+        audioRef.current?.playSelectTick(count, evaluation.sum);
         if (evaluation.isExactTen) {
           triggerMiniHaptic('selection');
         }
@@ -714,10 +820,13 @@ export default function FruitBoxGamePage({
       if (prefsRef.current.bgmEnabled) {
         audioRef.current?.startBgm();
       }
+      // Refresh cached DOMRects once per gesture (0 layout flushes on pointermove)
+      stage.refreshRect?.();
+      stageWrapRectRef.current = wrap.getBoundingClientRect();
+
       const gridPt = stage.clientToGrid(e.clientX, e.clientY);
       if (!gridPt) return;
 
-      stageWrapRectRef.current = wrap.getBoundingClientRect();
       try {
         e.currentTarget.setPointerCapture(e.pointerId);
       } catch {
@@ -769,22 +878,11 @@ export default function FruitBoxGamePage({
     [commitDragRelease]
   );
 
-  const timerRatio = Math.max(0, Math.min(1, remainingSec / Math.max(1, gameState.durationSec)));
-  const isUrgent = phase === 'playing' && remainingSec <= 15;
   const activeBest = prefs.mode === 'classic' ? records.classicBest : records.feverBest;
   const rank = useMemo(
     () => computeArcadeRank(gameState.score, gameState.mode, isAllClearResult),
     [gameState.score, gameState.mode, isAllClearResult]
   );
-
-  const sumPillClass =
-    !activeEval || activeEval.selectedIds.length === 0
-      ? 'mg-sum-pill'
-      : activeEval.isExactTen
-        ? 'mg-sum-pill is-exact'
-        : activeEval.isOverTen
-          ? 'mg-sum-pill is-over'
-          : 'mg-sum-pill is-under';
 
   const connLabel =
     connectionHealth === 'offline'
@@ -862,22 +960,11 @@ export default function FruitBoxGamePage({
             </span>
           </div>
 
-          <div className={sumPillClass} data-testid="mg-sum-pill">
-            {activeEval && activeEval.selectedIds.length > 0 ? (
-              <>
-                <span>SUM {activeEval.sum}</span>
-                {activeEval.isExactTen && <span>✓</span>}
-              </>
-            ) : (
-              <span>DRAG = 10</span>
-            )}
-          </div>
+          <div ref={sumPillRef} data-testid="mg-sum-pill" />
 
           <div className={`mg-stat-chip is-timer ${isUrgent ? 'is-urgent' : ''}`}>
             <span className="mg-stat-label">TIME</span>
-            <span className="mg-stat-value" data-testid="mg-timer">
-              {formatTimerDisplay(remainingSec)}
-            </span>
+            <span ref={timerTextRef} className="mg-stat-value" data-testid="mg-timer" />
           </div>
 
           {gameState.combo >= 2 && phase === 'playing' && (
@@ -968,10 +1055,7 @@ export default function FruitBoxGamePage({
 
       {/* Energy Progress Bar */}
       <div className="mg-energy-rail" aria-hidden="true">
-        <div
-          className={`mg-energy-fill ${isUrgent ? 'is-urgent' : ''}`}
-          style={{ width: `${(timerRatio * 100).toFixed(2)}%` }}
-        />
+        <div ref={energyFillRef} className={`mg-energy-fill ${isUrgent ? 'is-urgent' : ''}`} />
       </div>
 
       {/* Interactive Apple Arena */}
@@ -990,17 +1074,8 @@ export default function FruitBoxGamePage({
           aria-label="사과게임 보드 — 마우스나 터치로 드래그해 합이 10인 사과를 묶으세요"
         />
 
-        {/* Floating live drag sum badge near cursor */}
-        {dragTagPos && activeEval && activeEval.selectedIds.length > 0 && (
-          <div
-            className={`mg-drag-tag ${
-              activeEval.isExactTen ? 'is-exact' : activeEval.isOverTen ? 'is-over' : ''
-            }`}
-            style={{ left: `${dragTagPos.x}px`, top: `${dragTagPos.y}px` }}
-          >
-            {activeEval.isExactTen ? '10! POP!' : `${activeEval.sum}`}
-          </div>
-        )}
+        {/* Floating live drag sum badge near cursor (imperatively positioned via GPU translate3d) */}
+        <div ref={dragTagRef} aria-hidden="true" />
 
         {/* Animated burst score popups */}
         <div className="mg-popup-layer" aria-hidden="true">

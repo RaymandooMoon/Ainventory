@@ -77,9 +77,7 @@
   justify-content: space-between;
   gap: 10px;
   padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 8px;
-  background: linear-gradient(180deg, rgba(6, 4, 16, 0.88) 0%, rgba(6, 4, 16, 0.32) 100%);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: linear-gradient(180deg, rgba(8, 5, 22, 0.96) 0%, rgba(8, 5, 22, 0.88) 100%);
   border-bottom: 1px solid rgba(114, 232, 255, 0.16);
   flex-shrink: 0;
   flex-wrap: wrap;
@@ -353,11 +351,12 @@
 }
 
 .mg-energy-fill {
+  width: 100%;
   height: 100%;
   background: linear-gradient(90deg, #ff2a85 0%, #ffd700 45%, #00f5ff 80%, #39ff14 100%);
   box-shadow: 0 0 14px rgba(0, 245, 255, 0.8);
   transform-origin: left center;
-  transition: width 0.12s linear;
+  will-change: transform;
 }
 
 .mg-energy-fill.is-urgent {
@@ -388,9 +387,12 @@
 
 .mg-drag-tag {
   position: absolute;
+  top: 0;
+  left: 0;
   z-index: 15;
   pointer-events: none;
-  transform: translate(-50%, -135%);
+  display: none;
+  will-change: transform;
   padding: 5px 12px;
   border-radius: 999px;
   font-size: 0.92rem;

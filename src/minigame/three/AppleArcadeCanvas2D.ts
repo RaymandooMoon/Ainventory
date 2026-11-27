@@ -43,8 +43,9 @@ export function createAppleArcadeCanvas2D(options: {
   let boardCols = options.cols;
   let boardRows = options.rows;
   let cells: readonly FruitBoxCell[] = [];
-  let selectedSet = new Set<number>();
-  let hintSet = new Set<number>();
+  const MAX_CELLS = 170;
+  const selectedMask = new Uint8Array(MAX_CELLS);
+  const hintMask = new Uint8Array(MAX_CELLS);
   let selectionRect: GridSelectionRect | null = null;
   let selectionState: SelectionVisualState = 'idle';
   let softColors = Boolean(options.softColors);
@@ -52,6 +53,7 @@ export function createAppleArcadeCanvas2D(options: {
 
   let viewportW = Math.max(2, canvas.clientWidth || 960);
   let viewportH = Math.max(2, canvas.clientHeight || 600);
+  let cachedRect: DOMRect | null = null;
   let boardX = 0;
   let boardY = 0;
   let cellSize = 40;
@@ -82,6 +84,7 @@ export function createAppleArcadeCanvas2D(options: {
     canvas.width = Math.floor(viewportW * dpr);
     canvas.height = Math.floor(viewportH * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cachedRect = canvas.getBoundingClientRect();
     computeLayout();
   };
 
@@ -134,8 +137,8 @@ export function createAppleArcadeCanvas2D(options: {
 
       const cx = boardX + (c.col + 0.5) * cellSize;
       const cy = boardY + (c.row + 0.5) * cellSize;
-      const isSelected = selectedSet.has(c.id);
-      const isHint = hintSet.has(c.id);
+      const isSelected = c.id >= 0 && c.id < MAX_CELLS && selectedMask[c.id] === 1;
+      const isHint = c.id >= 0 && c.id < MAX_CELLS && hintMask[c.id] === 1;
       const r = isSelected ? radius * 1.12 : radius;
 
       const fill = isSelected
@@ -267,11 +270,19 @@ export function createAppleArcadeCanvas2D(options: {
     },
     setSelection(rect, ids, state) {
       selectionRect = rect;
-      selectedSet = new Set(ids);
+      selectedMask.fill(0);
+      for (let i = 0; i < ids.length; i += 1) {
+        const id = ids[i];
+        if (id >= 0 && id < MAX_CELLS) selectedMask[id] = 1;
+      }
       selectionState = state;
     },
     setHintIds(ids) {
-      hintSet = new Set(ids);
+      hintMask.fill(0);
+      for (let i = 0; i < ids.length; i += 1) {
+        const id = ids[i];
+        if (id >= 0 && id < MAX_CELLS) hintMask[id] = 1;
+      }
     },
     triggerBurst(event: AppleStageBurstEvent) {
       const cx = boardX + event.centroidCol * cellSize;
@@ -321,7 +332,7 @@ export function createAppleArcadeCanvas2D(options: {
       // No-op in 2D fallback
     },
     clientToGrid(clientX, clientY) {
-      const rect = canvas.getBoundingClientRect();
+      const rect = cachedRect ?? canvas.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0 || cellSize <= 0) return null;
       const localX = clientX - rect.left;
       const localY = clientY - rect.top;
@@ -335,6 +346,9 @@ export function createAppleArcadeCanvas2D(options: {
         x: boardX + col * cellSize,
         y: boardY + row * cellSize,
       };
+    },
+    refreshRect() {
+      cachedRect = canvas.getBoundingClientRect();
     },
     resize,
     dispose() {
