@@ -9,8 +9,11 @@ export interface FruitBoxRecords {
   readonly gamesPlayed: number;
 }
 
+export type FruitBoxVisualStyle = 'neon3d' | 'original2d';
+
 export interface FruitBoxPreferences {
   readonly mode: FruitBoxMode;
+  readonly visualStyle: FruitBoxVisualStyle;
   readonly sfxEnabled: boolean;
   readonly bgmEnabled: boolean;
   readonly softColors: boolean;
@@ -31,6 +34,7 @@ export const DEFAULT_FRUITBOX_RECORDS: FruitBoxRecords = {
 
 export const DEFAULT_FRUITBOX_PREFS: FruitBoxPreferences = {
   mode: 'classic',
+  visualStyle: 'neon3d',
   sfxEnabled: true,
   bgmEnabled: true,
   softColors: false,
@@ -120,6 +124,7 @@ export function readFruitBoxPreferences(): FruitBoxPreferences {
   if (!parsed) return DEFAULT_FRUITBOX_PREFS;
   return {
     mode: parsed.mode === 'fever' ? 'fever' : 'classic',
+    visualStyle: parsed.visualStyle === 'original2d' ? 'original2d' : 'neon3d',
     sfxEnabled: typeof parsed.sfxEnabled === 'boolean' ? parsed.sfxEnabled : true,
     bgmEnabled: typeof parsed.bgmEnabled === 'boolean' ? parsed.bgmEnabled : true,
     softColors: typeof parsed.softColors === 'boolean' ? parsed.softColors : false,

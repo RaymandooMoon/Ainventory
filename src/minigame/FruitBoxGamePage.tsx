@@ -42,6 +42,7 @@ import {
   writeFruitBoxPreferences,
   type FruitBoxPreferences,
   type FruitBoxRecords,
+  type FruitBoxVisualStyle,
 } from './fruitBoxStorage.ts';
 import { createAppleArcadeCanvas2D } from './three/AppleArcadeCanvas2D.ts';
 import {
@@ -49,6 +50,7 @@ import {
   type AppleStageController,
   type SelectionVisualState,
 } from './three/AppleArcadeStage.ts';
+import { createOriginalFruitBox2D } from './three/OriginalFruitBox2D.ts';
 import './minigame.css';
 
 type GamePhase = 'title' | 'playing' | 'gameover';
@@ -324,14 +326,31 @@ export default function FruitBoxGamePage({
     setPhase('playing');
   }, []);
 
-  // Mount Three.js WebGL stage or freshly-keyed 2D Canvas fallback (fresh <canvas> guarantees getContext('2d') succeeds)
+  const switchVisualStyle = useCallback((nextStyle: FruitBoxVisualStyle) => {
+    setPrefs((prev) => {
+      if (prev.visualStyle === nextStyle) return prev;
+      return { ...prev, visualStyle: nextStyle };
+    });
+    // Always swap to a fresh <canvas> when crossing WebGL2 <-> 2D rendering contexts
+    setCanvasKey((k) => k + 1);
+    triggerMiniHaptic('selection');
+  }, []);
+
+  // Mount Three.js Neon 3D, Original 2D Fruit Box, or 2D fallback on a freshly-keyed <canvas>
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = stageWrapRef.current;
     if (!canvas || !wrap) return undefined;
 
     let ctrl: AppleStageController | null = null;
-    if (rendererKind === 'three') {
+    if (prefs.visualStyle === 'original2d') {
+      ctrl = createOriginalFruitBox2D({
+        canvas,
+        cols: gameStateRef.current.cols,
+        rows: gameStateRef.current.rows,
+        softColors: prefsRef.current.softColors,
+      });
+    } else if (rendererKind === 'three') {
       ctrl = createAppleArcadeStage({
         canvas,
         cols: gameStateRef.current.cols,
@@ -366,8 +385,9 @@ export default function FruitBoxGamePage({
       gameStateRef.current.cells,
       gameStateRef.current.cols,
       gameStateRef.current.rows,
-      true
+      phaseRef.current !== 'playing'
     );
+    ctrl.setReducedMotion(readReducedMotion());
 
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -399,7 +419,7 @@ export default function FruitBoxGamePage({
         stageCtrlRef.current = null;
       }
     };
-  }, [rendererKind, canvasKey]);
+  }, [prefs.visualStyle, rendererKind, canvasKey]);
 
   // Sync visual preferences & live prefers-reduced-motion changes
   useEffect(() => {
@@ -775,20 +795,22 @@ export default function FruitBoxGamePage({
           ? 'OFFLINE READY'
           : '3D';
 
+  const isOriginal2D = prefs.visualStyle === 'original2d';
+
   // Avoid nested aria-modal="true" dialogs when Title/GameOver modal is shown inside embedded mode
   const shellActsAsDialog = Boolean(onExit) && phase === 'playing';
 
   return (
     <div
       className={`mg-shell ${onExit ? 'is-embedded' : ''} ${
-        gameState.isFeverActive && phase === 'playing' ? 'is-fever' : ''
-      }`}
+        isOriginal2D ? 'is-original-2d' : ''
+      } ${gameState.isFeverActive && phase === 'playing' ? 'is-fever' : ''}`}
       role={shellActsAsDialog ? 'dialog' : undefined}
       aria-modal={shellActsAsDialog ? 'true' : undefined}
-      aria-label={shellActsAsDialog ? '3D 네온 사과게임 미니게임' : undefined}
+      aria-label={shellActsAsDialog ? '사과게임 미니게임' : undefined}
       data-testid="fruitbox-minigame-root"
     >
-      {/* Top Neon Glass HUD */}
+      {/* Top HUD */}
       <header className="mg-topbar">
         <div className="mg-brand-cluster">
           {onExit ? (
@@ -808,7 +830,9 @@ export default function FruitBoxGamePage({
             </a>
           )}
           <div className="mg-title-pill">
-            <span className="mg-title-main">APPLE BOX // 3D</span>
+            <span className="mg-title-main">
+              {isOriginal2D ? 'FRUIT BOX 2D' : 'APPLE BOX // 3D'}
+            </span>
             <span
               className={`mg-conn-badge ${
                 connectionHealth === 'offline'
@@ -868,6 +892,17 @@ export default function FruitBoxGamePage({
 
         {/* Right Controls */}
         <div className="mg-actions">
+          <button
+            type="button"
+            className={`mg-icon-btn ${isOriginal2D ? 'is-active' : ''}`}
+            onClick={() => switchVisualStyle(isOriginal2D ? 'neon3d' : 'original2d')}
+            title={isOriginal2D ? '3D 네온 전환' : '2D 원조 전환'}
+            aria-label={isOriginal2D ? '3D 네온 전환' : '2D 원조 전환'}
+            aria-pressed={isOriginal2D}
+          >
+            <span>{isOriginal2D ? '3D' : '2D'}</span>
+          </button>
+
           <button
             type="button"
             className="mg-icon-btn"
@@ -931,7 +966,7 @@ export default function FruitBoxGamePage({
         </div>
       </header>
 
-      {/* Neon Energy Progress Bar */}
+      {/* Energy Progress Bar */}
       <div className="mg-energy-rail" aria-hidden="true">
         <div
           className={`mg-energy-fill ${isUrgent ? 'is-urgent' : ''}`}
@@ -939,7 +974,7 @@ export default function FruitBoxGamePage({
         />
       </div>
 
-      {/* Interactive Three.js 3D Apple Arena */}
+      {/* Interactive Apple Arena */}
       <main
         ref={stageWrapRef}
         className="mg-stage-wrap"
@@ -952,7 +987,7 @@ export default function FruitBoxGamePage({
           key={canvasKey}
           ref={canvasRef}
           className="mg-stage-canvas"
-          aria-label="3D 사과게임 보드 — 마우스나 터치로 드래그해 합이 10인 사과를 묶으세요"
+          aria-label="사과게임 보드 — 마우스나 터치로 드래그해 합이 10인 사과를 묶으세요"
         />
 
         {/* Floating live drag sum badge near cursor */}
@@ -1003,8 +1038,8 @@ export default function FruitBoxGamePage({
         )}
 
         <div className="mg-renderer-pill" aria-hidden="true">
-          {rendererKind === 'three' ? '3D' : '2D'} · {gameState.cols}×{gameState.rows} · BEST{' '}
-          {activeBest}
+          {isOriginal2D ? '원조 2D' : rendererKind === 'three' ? '3D' : '2D'} · {gameState.cols}×
+          {gameState.rows} · BEST {activeBest}
         </div>
       </main>
 
@@ -1014,11 +1049,33 @@ export default function FruitBoxGamePage({
           <div className="mg-modal-card mg-modal-card--compact">
             <div className="mg-title-head">
               <h1 id="mg-title-h1" className="mg-hero-title">
-                사과게임 3D
+                {isOriginal2D ? '사과게임 2D' : '사과게임 3D'}
               </h1>
               <p className="mg-hero-desc">
                 드래그로 합 <strong>10</strong> 만들기 · <strong>120초</strong>
               </p>
+            </div>
+
+            <div className="mg-style-switch" role="radiogroup" aria-label="버전 선택">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={!isOriginal2D}
+                className={`mg-style-tab ${!isOriginal2D ? 'is-selected' : ''}`}
+                onClick={() => switchVisualStyle('neon3d')}
+              >
+                <Sparkles size={14} aria-hidden="true" />
+                <span>네온 3D</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={isOriginal2D}
+                className={`mg-style-tab ${isOriginal2D ? 'is-selected' : ''}`}
+                onClick={() => switchVisualStyle('original2d')}
+              >
+                <span>원조 2D</span>
+              </button>
             </div>
 
             <div className="mg-mode-grid" role="radiogroup" aria-label="게임 모드 선택">
@@ -1045,7 +1102,7 @@ export default function FruitBoxGamePage({
               >
                 <span className="mg-mode-name">
                   <Zap size={15} aria-hidden="true" />
-                  <span>피버 3D</span>
+                  <span>{isOriginal2D ? '피버' : '피버 3D'}</span>
                 </span>
                 <span className="mg-mode-sub">골든 +4 · 콤보 ×3</span>
               </button>
