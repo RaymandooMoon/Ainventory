@@ -53,14 +53,14 @@
     "clientEdge": "React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(0B) · IndexedDB"
   },
   "tests": {
-    "suiteCount": 60,
+    "suiteCount": 61,
     "unitSuites": 46,
-    "apiSuites": 9,
+    "apiSuites": 10,
     "e2eSuites": 5,
-    "caseCount": 409,
-    "roundedPlus": "400+",
-    "summaryShort": "60개 묶음 · 409개 검증 통과",
-    "summaryLine": "자동 품질 검증 60개 묶음(409개 항목) · 웹·앱"
+    "caseCount": 416,
+    "roundedPlus": "410+",
+    "summaryShort": "61개 묶음 · 416개 검증 통과",
+    "summaryLine": "자동 품질 검증 61개 묶음(416개 항목) · 웹·앱"
   },
   "garment": {
     "beforeBytes": 582332,

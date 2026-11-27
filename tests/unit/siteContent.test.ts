@@ -524,6 +524,71 @@ describe('ainvtry.com official site content & icon-first architecture contract',
     assert.equal(PRIVACY_SHIELD_TIER_MAP.vault.tierIndex, 4);
     assert.equal(PRIVACY_SHIELD_TIER_MAP.exif.tierIndex, 6);
   });
+
+  it('enforces Stage 1 AI-crawler blocking and Stage 4 public bundle business-secret hygiene', () => {
+    const publicDir = path.resolve(import.meta.dirname, '../../site/public');
+    const siteRoot = path.resolve(import.meta.dirname, '../../site');
+    const docsIrPath = path.resolve(import.meta.dirname, '../../docs/ir-deck/index.html');
+
+    // Stage 1: robots.txt blocks major AI bots & sensitive routes; sitemap.xml removed
+    assert.equal(
+      fs.existsSync(path.join(publicDir, 'sitemap.xml')),
+      false,
+      'Public sitemap.xml must be removed so AI scrapers cannot enumerate hidden routes'
+    );
+
+    const robots = fs.readFileSync(path.join(publicDir, 'robots.txt'), 'utf8');
+    for (const bot of ['GPTBot', 'ChatGPT-User', 'ClaudeBot', 'PerplexityBot', 'Google-Extended']) {
+      assert.ok(robots.includes(`User-agent: ${bot}`), `robots.txt must explicitly disallow ${bot}`);
+    }
+    assert.ok(robots.includes('Disallow: /ir/'), 'robots.txt must disallow /ir/');
+    assert.ok(robots.includes('Disallow: /assets/'), 'robots.txt must disallow /assets/');
+    assert.ok(!/Sitemap:/i.test(robots), 'robots.txt must not publish a Sitemap URL');
+
+    const headersRaw = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8');
+    assert.ok(headersRaw.includes('X-Robots-Tag: noai, noimageai'));
+    assert.ok(headersRaw.includes('/ir/*') && headersRaw.includes('X-Robots-Tag: noindex, nofollow, noarchive'));
+
+    const siteIndexHtml = fs.readFileSync(path.join(siteRoot, 'index.html'), 'utf8');
+    assert.ok(siteIndexHtml.includes('content="noai, noimageai"'));
+    assert.ok(!/Gemini/i.test(siteIndexHtml), 'site/index.html must not expose AI vendor name');
+
+    const docsIrHtml = fs.readFileSync(docsIrPath, 'utf8');
+    assert.ok(
+      docsIrHtml.includes('content="noindex, nofollow, noarchive, nosnippet, noai, noimageai"'),
+      'docs/ir-deck/index.html must include strict noindex/noai robots meta'
+    );
+
+    // Stage 4: Zero confidential pricing, take rates, profit margins, partner stores, or Gemini leakage in public copy
+    for (const lang of ['en', 'ko'] as const) {
+      const copy = SITE_COPY[lang];
+      const serialized = JSON.stringify(copy);
+      for (const secret of [
+        '6,900',
+        '6.9–9.9K',
+        '6.9~9.9K',
+        '5–12%',
+        '5~12%',
+        '3–8%',
+        '3~8%',
+        'Musinsa',
+        '무신사',
+        '29CM',
+        '2027 H2',
+        'Gemini',
+      ]) {
+        assert.ok(
+          !serialized.includes(secret),
+          `[${lang}] Public SITE_COPY must not expose confidential string "${secret}"`
+        );
+      }
+      assert.notEqual(
+        copy.vision.businessModel.marginValue,
+        '70%+',
+        `[${lang}] Public businessModel.marginValue must defer target margin to authenticated Investor Brief`
+      );
+    }
+  });
 });
 
 

@@ -176,6 +176,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: siteOutDir,
       emptyOutDir: true,
+      sourcemap: false,
       chunkSizeWarningLimit: 1200,
       rollupOptions: {
         input: {

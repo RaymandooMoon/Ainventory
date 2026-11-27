@@ -19,6 +19,20 @@
  *   verification succeeds via `ctx.waitUntil`.
  */
 
+import {
+  buildForbiddenScraperResponse,
+  buildRemovedSitemapResponse,
+  handleInvestorApiRoute,
+  handleProtectedIrRoute,
+  isAuthorizedBrowserBundleFetch,
+  isBlockedAiScraper,
+  isInvestorDeckPath,
+  isJsBundleAssetPath,
+  resetInvestorShieldForTests,
+} from './investorShield.js';
+
+export { isAuthorizedBrowserBundleFetch, isBlockedAiScraper };
+
 const DEFAULT_UPSTREAM_ORIGIN = 'https://ainventory-api.onrender.com';
 const DEFAULT_SITE_ORIGIN = 'https://ainvtry.com';
 const DEFAULT_FROM_EMAIL = 'iNVTRY <newsletter@ainvtry.com>';
@@ -55,6 +69,7 @@ export function resetWorkerRateLimitsForTests() {
   resendCooldowns.clear();
   edgeVerifyFails.clear();
   consumedEdgeNonces.clear();
+  resetInvestorShieldForTests();
 }
 
 export function normalizeEmail(raw) {
@@ -1660,9 +1675,26 @@ export function createWorkerHandler(fetchImpl = fetch) {
     async fetch(request, env = {}, ctx = null) {
       const url = new URL(request.url);
 
+      if (url.pathname === '/sitemap.xml' || url.pathname === '/sitemap_index.xml') {
+        return buildRemovedSitemapResponse();
+      }
+
       if (url.pathname.startsWith('/api/')) {
         if (request.method === 'OPTIONS') {
           return buildJsonResponse({}, 204, request, env);
+        }
+
+        if (url.pathname.startsWith('/api/investor/')) {
+          return handleInvestorApiRoute(request, url, env, ctx, fetchImpl, {
+            buildJsonResponse,
+            readJsonBody,
+            sha256Hex,
+            timingSafeEqual,
+            signEdgeToken,
+            verifyEdgeToken,
+            resolveSafeHttpsUrl,
+            fetchWithTimeout,
+          });
         }
 
         if (url.pathname === '/api/newsletter/health' && request.method === 'GET') {
@@ -1708,8 +1740,38 @@ export function createWorkerHandler(fetchImpl = fetch) {
         return proxyApiRequest(request, env, fetchImpl);
       }
 
+      if (isInvestorDeckPath(url.pathname)) {
+        return handleProtectedIrRoute(request, url, env, { sha256Hex, verifyEdgeToken });
+      }
+
+      if (isBlockedAiScraper(request.headers.get('user-agent'))) {
+        return buildForbiddenScraperResponse();
+      }
+
+      const isJsBundle = isJsBundleAssetPath(url.pathname);
+      if (isJsBundle && !isAuthorizedBrowserBundleFetch(request)) {
+        return buildForbiddenScraperResponse();
+      }
+
       if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') {
-        return env.ASSETS.fetch(request);
+        const assetRes = await env.ASSETS.fetch(request);
+        if (isJsBundle || url.pathname === '/' || url.pathname === '/index.html') {
+          const headers = new Headers(assetRes.headers);
+          headers.set(
+            'X-Robots-Tag',
+            isJsBundle ? 'noindex, noai, noimageai' : 'noai, noimageai'
+          );
+          headers.set(
+            'Vary',
+            isJsBundle ? 'User-Agent, Sec-Fetch-Site, Sec-Fetch-Dest, Referer' : 'User-Agent'
+          );
+          return new Response(assetRes.body, {
+            status: assetRes.status,
+            statusText: assetRes.statusText,
+            headers,
+          });
+        }
+        return assetRes;
       }
       return new Response('Not Found', { status: 404 });
     },

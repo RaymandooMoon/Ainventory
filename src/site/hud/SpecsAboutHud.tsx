@@ -1,27 +1,37 @@
-import { useEffect, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   FileText,
+  Lock,
   Maximize2,
   Minimize2,
   Pause,
   Play,
+  Unlock,
 } from 'lucide-react';
 import type { StageInteractionState } from '../../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
 import {
   SITE_IR_DECK_HREF,
   SITE_META,
+  type SiteBusinessModelSummary,
   type SiteCopy,
   type SiteLang,
   type SiteMood,
+  type SiteRevenuePillar,
   type SiteTheme,
 } from '../siteContent.ts';
 import { SiteIcon, type SiteIconKey } from '../SiteIcon.tsx';
 import { SiteNewsletterForm } from '../SiteNewsletterModal.tsx';
 import { HudSpotlightDeck, type HudSpotlightItem } from './HudSpotlightDeck.tsx';
+
+interface InvestorBriefData {
+  readonly revenueNote: string;
+  readonly revenuePillars: readonly SiteRevenuePillar[];
+  readonly businessModel: SiteBusinessModelSummary;
+}
 
 const PILLAR_ICONS: readonly SiteIconKey[] = [
   'imageMinus',
@@ -224,11 +234,116 @@ export function AboutStageHud({
     copy.vision.revenuePillars[0].id
   );
   const [selectedFaqId, setSelectedFaqId] = useState<string>(copy.vision.faqs[0]?.id ?? '');
+  const [investorBrief, setInvestorBrief] = useState<InvestorBriefData | null>(null);
+  const [investorPasscode, setInvestorPasscode] = useState<string>('');
+  const [investorUnlockBusy, setInvestorUnlockBusy] = useState<boolean>(false);
+  const [investorUnlockError, setInvestorUnlockError] = useState<string>('');
+  const [investorGateConfigured, setInvestorGateConfigured] = useState<boolean>(true);
   const journeyIdxRef = useRef<number>(interaction.aboutJourneyIndex);
+
+  const loadInvestorBrief = useCallback(async (targetLang: SiteLang): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/investor/brief?lang=${targetLang}`, {
+        credentials: 'same-origin',
+      });
+      if (!res.ok) return false;
+      const data = (await res.json()) as { ok?: boolean; brief?: InvestorBriefData };
+      if (data.ok && data.brief) {
+        setInvestorBrief(data.brief);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, []);
 
   useEffect(() => {
     journeyIdxRef.current = interaction.aboutJourneyIndex;
   }, [interaction.aboutJourneyIndex]);
+
+  useEffect(() => {
+    if (interaction.aboutSubtab !== 'founder') return undefined;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/investor/status', { credentials: 'same-origin' });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          ok?: boolean;
+          unlocked?: boolean;
+          configured?: boolean;
+        };
+        if (cancelled) return;
+        if (typeof data.configured === 'boolean') {
+          setInvestorGateConfigured(data.configured);
+        }
+        if (data.unlocked) {
+          await loadInvestorBrief(lang);
+        } else {
+          setInvestorBrief(null);
+        }
+      } catch {
+        // Static dev server without edge worker; keep public summary cleanly
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [interaction.aboutSubtab, lang, loadInvestorBrief]);
+
+  const handleInvestorUnlockSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setInvestorUnlockError('');
+    const trimmed = investorPasscode.trim();
+    if (!trimmed) {
+      setInvestorUnlockError(
+        lang === 'ko' ? '접근 코드를 입력해 주세요.' : 'Please enter your access passcode.'
+      );
+      return;
+    }
+    setInvestorUnlockBusy(true);
+    try {
+      const res = await fetch('/api/investor/unlock', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passcode: trimmed, path: '/about/business-model' }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (res.ok && data.ok) {
+        triggerHaptic('selection');
+        setInvestorPasscode('');
+        await loadInvestorBrief(lang);
+      } else {
+        setInvestorUnlockError(
+          data.error ||
+            (lang === 'ko'
+              ? '접근 코드가 일치하지 않습니다.'
+              : 'Invalid passcode. Please check and try again.')
+        );
+      }
+    } catch {
+      setInvestorUnlockError(
+        lang === 'ko'
+          ? '인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
+          : 'Unable to reach verification server. Please try again.'
+      );
+    } finally {
+      setInvestorUnlockBusy(false);
+    }
+  };
+
+  const handleInvestorLock = async () => {
+    triggerHaptic('selection');
+    setInvestorBrief(null);
+    setInvestorUnlockError('');
+    try {
+      await fetch('/api/investor/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch {
+      // Ignore network errors while clearing local view
+    }
+  };
 
   useEffect(() => {
     if (interaction.aboutSubtab !== 'journey' || !journeyAutoPlay) return undefined;
@@ -569,9 +684,17 @@ export function AboutStageHud({
     );
   }
 
-  // About Subtab 3: Detailed Business Model (4-Layer Revenue Engine + LTV Funnel + AI Cost Defense)
-  const bm = vision.businessModel;
-  const revenueItems: HudSpotlightItem[] = vision.revenuePillars.map((pillar) => ({
+  // About Subtab 3: Business Model (Public Overview + Authenticated Investor Data Room Brief)
+  const activeRevenueNote = investorBrief ? investorBrief.revenueNote : vision.revenueNote;
+  const activeRevenuePillars = investorBrief ? investorBrief.revenuePillars : vision.revenuePillars;
+  const bm = investorBrief ? investorBrief.businessModel : vision.businessModel;
+  const isKo = lang === 'ko';
+  const irDeckUrl = `${SITE_IR_DECK_HREF}?lang=${lang}&theme=${theme}&mood=${mood}`;
+  const passcodeMailto = `mailto:${SITE_META.contactEmail}?subject=${encodeURIComponent(
+    'iNVTRY Investor Data Room Access Request'
+  )}`;
+
+  const revenueItems: HudSpotlightItem[] = activeRevenuePillars.map((pillar) => ({
     id: pillar.id,
     icon: pillar.icon,
     title: pillar.title,
@@ -585,7 +708,7 @@ export function AboutStageHud({
       <header className="hud-about-section-head">
         <span className="hud-eyebrow">{bm.eyebrow}</span>
         <h2 className="hud-about-section-title">{bm.headline}</h2>
-        <p className="hud-sub-meta">{vision.revenueNote}</p>
+        <p className="hud-sub-meta">{activeRevenueNote}</p>
       </header>
 
       <HudSpotlightDeck
@@ -631,6 +754,119 @@ export function AboutStageHud({
 
         <p className="hud-bm-footnote">{bm.footnote}</p>
       </section>
+
+      <aside
+        className="hud-ir-unlock-card"
+        aria-label={isKo ? '투자자 전용 데이터룸 인증' : 'Investor Data Room Verification'}
+      >
+        <div className="hud-ir-unlock-head">
+          <span className="hud-ir-unlock-title">
+            {investorBrief ? (
+              <Unlock size={13} aria-hidden="true" />
+            ) : (
+              <Lock size={13} aria-hidden="true" />
+            )}
+            <span>INVESTOR DATA ROOM</span>
+          </span>
+          <span className="hud-gold-badge">
+            {investorBrief
+              ? isKo
+                ? '인증 완료'
+                : 'Unlocked'
+              : isKo
+                ? '투자자 전용'
+                : 'Private Brief'}
+          </span>
+        </div>
+
+        {investorBrief ? (
+          <>
+            <p className="hud-pain-detail">
+              {isKo
+                ? '상세 요금 · 수수료율 · 단위 경제성이 열렸습니다. 18장 사업계획서(/ir/)도 12시간 동안 바로 열람하실 수 있습니다.'
+                : 'Detailed pricing, take rates, and unit economics are unlocked. Your 12-hour session also unlocks the 18-slide Business Plan (/ir/).'}
+            </p>
+            <div className="hud-ir-unlock-actions">
+              <a
+                href={irDeckUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hud-founder-cta hud-founder-cta--secondary"
+              >
+                <FileText size={14} aria-hidden="true" />
+                <span>{vision.irDeckCta}</span>
+              </a>
+              <button
+                type="button"
+                className="hud-ir-unlock-btn hud-ir-unlock-btn--ghost"
+                onClick={() => {
+                  void handleInvestorLock();
+                }}
+              >
+                {isKo ? '잠그기' : 'Lock'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="hud-pain-detail">
+              {investorGateConfigured
+                ? isKo
+                  ? '전달받으신 투자자 접근 코드를 입력하면 상세 요금 · 수수료율 · 단위 경제성과 18장 사업계획서가 함께 열립니다.'
+                  : 'Enter your investor passcode to unlock detailed pricing, take rates, unit economics, and the 18-slide Business Plan.'
+                : isKo
+                  ? '상세 단위 경제성과 18장 사업계획서는 창업자 직접 초대를 통해서만 제공됩니다.'
+                  : 'Detailed unit economics and the 18-slide Business Plan are shared privately by founder invitation.'}
+            </p>
+
+            {investorGateConfigured && (
+              <form
+                className="hud-ir-unlock-form"
+                onSubmit={(e) => {
+                  void handleInvestorUnlockSubmit(e);
+                }}
+                noValidate
+              >
+                <input
+                  type="password"
+                  className="hud-ir-unlock-input"
+                  value={investorPasscode}
+                  onChange={(e) => setInvestorPasscode(e.target.value)}
+                  placeholder={isKo ? '투자자 접근 코드 입력' : 'Enter investor passcode'}
+                  aria-label={isKo ? '투자자 접근 코드' : 'Investor access passcode'}
+                  autoComplete="one-time-code"
+                  disabled={investorUnlockBusy}
+                />
+                <button
+                  type="submit"
+                  className="hud-ir-unlock-btn"
+                  disabled={investorUnlockBusy}
+                >
+                  {investorUnlockBusy
+                    ? isKo
+                      ? '확인 중…'
+                      : 'Checking…'
+                    : isKo
+                      ? '열람'
+                      : 'Unlock'}
+                </button>
+              </form>
+            )}
+
+            {investorUnlockError && (
+              <p className="hud-ir-unlock-error" role="alert" aria-live="polite">
+                {investorUnlockError}
+              </p>
+            )}
+
+            <div className="hud-ir-unlock-foot">
+              <a href={passcodeMailto} className="hud-ir-unlock-link">
+                {isKo ? '열람 코드 요청 (raymond@ainvtry.com)' : 'Request passcode (raymond@ainvtry.com)'}
+              </a>
+            </div>
+          </>
+        )}
+      </aside>
     </div>
   );
 }

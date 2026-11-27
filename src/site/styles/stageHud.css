@@ -1868,3 +1868,118 @@ html[data-ios-safari='true'] .site-live-app-iframe.is-ready {
 .hud-founder-cta:active {
   transform: scale(0.985);
 }
+
+/* Inline Investor Data Room Passcode Unlock Card (Business Model Subtab) */
+.hud-ir-unlock-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--accent-gold-hairline);
+  background: var(--bg-elevated);
+}
+
+.hud-ir-unlock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hud-ir-unlock-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-gold-ink);
+}
+
+.hud-ir-unlock-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.hud-ir-unlock-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline-strong);
+  background: var(--bg-sunken);
+  color: var(--ink-primary);
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.hud-ir-unlock-input:focus {
+  border-color: var(--accent-gold-ink);
+}
+
+.hud-ir-unlock-btn {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  background: var(--ctrl-active-bg);
+  color: var(--ctrl-active-fg);
+  font-size: 0.75rem;
+  font-weight: 660;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hud-ir-unlock-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.hud-ir-unlock-btn--ghost {
+  background: transparent;
+  color: var(--ink-secondary);
+  border-color: var(--hairline-strong);
+}
+
+.hud-ir-unlock-btn--ghost:hover {
+  color: var(--ink-primary);
+  border-color: var(--accent-gold-hairline);
+}
+
+.hud-ir-unlock-error {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #ef4444;
+}
+
+.hud-ir-unlock-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hud-ir-unlock-link {
+  font-size: 0.71rem;
+  font-weight: 600;
+  color: var(--accent-gold-ink);
+  text-decoration: none;
+}
+
+.hud-ir-unlock-link:hover {
+  text-decoration: underline;
+}
+
+.hud-ir-unlock-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+

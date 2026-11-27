@@ -4,12 +4,22 @@
   Content-Security-Policy: frame-ancestors 'self' https://ainvtry.com https://www.ainvtry.com
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), microphone=(), geolocation=(self), accelerometer=(self), gyroscope=(self)
+  X-Robots-Tag: noai, noimageai
 
 /app.html
   ! X-Frame-Options
   Content-Security-Policy: frame-ancestors 'self' https://ainvtry.com https://www.ainvtry.com
   Cache-Control: no-store, no-cache, must-revalidate
+  X-Robots-Tag: noindex, nofollow, noai, noimageai
+
+/ir
+  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noai, noimageai
+  Cache-Control: private, no-store, no-cache, must-revalidate
+
+/ir/*
+  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noai, noimageai
+  Cache-Control: private, no-store, no-cache, must-revalidate
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
-
+  X-Robots-Tag: noindex, noai, noimageai
