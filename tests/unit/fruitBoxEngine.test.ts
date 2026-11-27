@@ -226,7 +226,7 @@ describe('Fruit Box (사과게임) Core Engine', () => {
     assert.equal(evaluateConnectionHealth(true, null), 'online');
   });
 
-  it('routes /minigame and /minigame/ through Cloudflare Worker to /minigame/index.html while blocking AI scrapers', async () => {
+  it('routes /minigame and /minigame/ to /minigame/ without Cloudflare index.html 307 loops while blocking AI scrapers', async () => {
     const { createWorkerHandler, resetWorkerRateLimitsForTests } = await import('../../worker/index.js');
     resetWorkerRateLimitsForTests();
 
@@ -235,6 +235,10 @@ describe('Fruit Box (사과게임) Core Engine', () => {
       async fetch(request: Request): Promise<Response> {
         const url = new URL(request.url);
         requestedPaths.push(url.pathname);
+        // Simulate Cloudflare Static Assets auto-trailing-slash redirecting */index.html -> */
+        if (url.pathname === '/minigame/index.html') {
+          return new Response(null, { status: 307, headers: { Location: '/minigame/' } });
+        }
         return new Response('<html><body>APPLE BOX 3D</body></html>', {
           status: 200,
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -253,7 +257,7 @@ describe('Fruit Box (사과게임) Core Engine', () => {
     assert.equal(botRes.status, 403);
     assert.equal(requestedPaths.length, 0);
 
-    const browserRes = await worker.fetch(
+    const bareRes = await worker.fetch(
       new Request('https://ainvtry.com/minigame', {
         headers: {
           'User-Agent':
@@ -262,8 +266,20 @@ describe('Fruit Box (사과게임) Core Engine', () => {
       }),
       { ASSETS: fakeAssets }
     );
-    assert.equal(browserRes.status, 200);
-    assert.equal(requestedPaths[0], '/minigame/index.html');
-    assert.match(browserRes.headers.get('X-Robots-Tag') || '', /noai/i);
+    assert.equal(bareRes.status, 200);
+    assert.equal(requestedPaths[0], '/minigame/');
+    assert.match(bareRes.headers.get('X-Robots-Tag') || '', /noai/i);
+
+    const slashRes = await worker.fetch(
+      new Request('https://ainvtry.com/minigame/', {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/131.0.0.0 Safari/537.36',
+        },
+      }),
+      { ASSETS: fakeAssets }
+    );
+    assert.equal(slashRes.status, 200);
+    assert.equal(requestedPaths[1], '/minigame/');
   });
 });

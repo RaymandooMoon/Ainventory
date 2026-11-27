@@ -1758,9 +1758,12 @@ export function createWorkerHandler(fetchImpl = fetch) {
           url.pathname === '/minigame' ||
           url.pathname === '/minigame/' ||
           url.pathname === '/minigame/index.html';
+        // Cloudflare Static Assets (auto-trailing-slash) 307-redirects `/minigame/index.html`
+        // back to `/minigame/`. Request `/minigame/` directly so both `/minigame` and `/minigame/`
+        // return 200 OK with zero redirect loops.
         const assetRequest =
-          url.pathname === '/minigame' || url.pathname === '/minigame/'
-            ? new Request(new URL(`/minigame/index.html${url.search}`, url.origin), request)
+          url.pathname === '/minigame'
+            ? new Request(new URL(`/minigame/${url.search}`, url.origin), request)
             : request;
         const assetRes = await env.ASSETS.fetch(assetRequest);
         if (isJsBundle || isMinigameEntry || url.pathname === '/' || url.pathname === '/index.html') {
