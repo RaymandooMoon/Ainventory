@@ -72,7 +72,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     [stage]
   );
 
-  const { stageRef, canvasRef, webglFallback } = useMarbleBackdropStage({
+  const { stageRef, canvasRef, canvasKey, webglFallback } = useMarbleBackdropStage({
     isDark,
     stage,
     paused,
@@ -108,7 +108,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       data-motion-variant={motionVariant}
       aria-hidden="true"
     >
-      <canvas ref={canvasRef} className="atelier-silk-canvas" />
+      <canvas key={canvasKey} ref={canvasRef} className="atelier-silk-canvas" />
       <div className="atelier-dither-veil" />
 
       {/* Desktop Flank Curation Cards (Strictly hidden <1180px & hidden in Intro & Portal stages) */}

@@ -726,7 +726,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     []
   );
 
-  const { stageRef, canvasRef, webglFallback, webglBootReason } = useMarbleBackdropStage({
+  const { stageRef, canvasRef, canvasKey, webglFallback, webglBootReason } = useMarbleBackdropStage({
     isDark,
     stage: 'intro',
     paused: activeStage === 'studio',
@@ -1090,7 +1090,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       const r = snap.renderer;
       const inp = snap.input;
       const line1 = r
-        ? `3D f:${r.committedFrames} (${r.fpsTier}/${r.detectedRefreshHz}Hz) dpr:${r.dpr} aa:${r.antialias ? 1 : 0} hf:${r.useHalfFloat ? 1 : 0} ${r.canvasW}x${r.canvasH}`
+        ? `3D f:${r.committedFrames} (${r.fpsTier}/${r.detectedRefreshHz}Hz) dpr:${r.dpr} aa:${r.antialias ? 1 : 0} hf:${r.useHalfFloat ? 1 : 0} sm:${r.safeMode ? 1 : 0} ${r.canvasW}x${r.canvasH}`
         : `3D boot fallback (fb:${snap.webglFallback ? 1 : 0}${snap.webglBootReason ? ` · ${snap.webglBootReason}` : ''})`;
       const line2 = r
         ? `stg:${snap.activeStage}/${snap.effectiveThreeStage} rm:${r.reducedMotion ? 1 : 0}${inp?.reducedMotionOverride ? '(ovr)' : ''} p:${r.paused ? 1 : 0} hid:${r.isDocHidden ? 1 : 0} lost:${r.isContextLost ? 1 : 0} gl:${r.glError}`
@@ -1099,7 +1099,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         ? `t:${inp.touchStarts}/${inp.touchMoves} sT:${snap.stageTouchStarts}/${snap.stageDrags} gyro:${inp.gyroStatus}:${inp.gyroSource}(${inp.gyroEvents}) mP:${inp.modalPaused ? 1 : 0}`
         : `sT:${snap.stageTouchStarts}/${snap.stageDrags}`;
       const line4 = r
-        ? `m:(${r.marbleU},${r.marbleV}) v:${r.marbleSpeed} t:${r.elapsed}s${r.lastError ? ` ERR:${r.lastError}` : ''}`
+        ? `m:(${r.marbleU},${r.marbleV}) v:${r.marbleSpeed} t:${r.elapsed}s${r.glRenderer ? ` · ${r.glRenderer}` : ''}${r.lastError ? ` ERR:${r.lastError}` : ''}`
         : '';
       setDebugHudText(line4 ? `${line1}\n${line2}\n${line3}\n${line4}` : `${line1}\n${line2}\n${line3}`);
     };
@@ -1124,7 +1124,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       data-active-stage={activeStage}
       aria-hidden="true"
     >
-      <canvas ref={canvasRef} className="site-marble-canvas" />
+      <canvas key={canvasKey} ref={canvasRef} className="site-marble-canvas" />
       <div className="site-marble-veil" />
       {debug3dEnabled && debugHudText ? (
         <div className="site-3d-debug-hud" data-testid="site-3d-debug-hud">

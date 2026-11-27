@@ -160,8 +160,19 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
       'Render loop must isolate renderFrame exceptions and expose live diagnostics'
     );
     assert.ok(
-      scenesSrc.includes('const useHalfFloat = !isSoftwareGl && supportsHalfFloatRenderTarget(renderer);'),
-      'iOS Safari should use native Metal HalfFloat wave FBO instead of slow 12-loop analytic fallback'
+      scenesSrc.includes(
+        'const useHalfFloat = !safeMode && !isSoftwareGl && supportsHalfFloatRenderTarget(renderer);'
+      ),
+      'iOS Safari should use native Metal HalfFloat wave FBO while Zero-FBO Safe Mode skips HalfFloat probing'
+    );
+    assert.equal(
+      scenesSrc.includes('erfApprox('),
+      false,
+      'SILK_CLOTH_FRAG must not unroll heavy erfApprox calls inside loops (causes Windows ANGLE D3D11 FXC GPU timeout)'
+    );
+    assert.ok(
+      scenesSrc.includes('#ifdef USE_FLUID_FBO') && scenesSrc.includes('onEarlyContextLoss'),
+      'SILK_CLOTH_FRAG must conditionally compile FBO vs analytic ripples and support automatic Zero-FBO Safe Mode recovery'
     );
     assert.ok(
       scenesSrc.includes('uTrailBounds'),

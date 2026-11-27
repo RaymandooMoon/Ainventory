@@ -64,6 +64,7 @@ export interface LoginThreeDiagnostics {
   readonly isContextLost: boolean;
   readonly isSoftwareGl: boolean;
   readonly isIosSafari: boolean;
+  readonly safeMode: boolean;
   readonly useHalfFloat: boolean;
   readonly antialias: boolean;
   readonly dpr: number;
@@ -74,6 +75,7 @@ export interface LoginThreeDiagnostics {
   readonly marbleSpeed: number;
   readonly elapsed: number;
   readonly glError: number;
+  readonly glRenderer: string;
   readonly lastError: string | null;
 }
 
@@ -113,31 +115,35 @@ export interface LoginThreeController {
   dispose: () => void;
 }
 
-const TRAIL_NODE_COUNT = 26;
-const ANALYTIC_WAVE_COUNT = 12;
+const TRAIL_NODE_COUNT = 14;
+const ANALYTIC_WAVE_COUNT = 8;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-function isSoftwareWebGLRenderer(renderer: THREE.WebGLRenderer): boolean {
+function getUnmaskedRendererString(renderer: THREE.WebGLRenderer): string {
   try {
     const gl = renderer.getContext();
     const dbg = gl.getExtension('WEBGL_debug_renderer_info');
     if (dbg) {
-      const vendor = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '').toLowerCase();
-      if (
-        vendor.includes('swiftshader') ||
-        vendor.includes('llvmpipe') ||
-        vendor.includes('software')
-      ) {
-        return true;
-      }
+      const raw = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '').trim();
+      if (raw) return raw.slice(0, 56);
     }
+    const fallback = String(gl.getParameter(gl.RENDERER) || '').trim();
+    return fallback.slice(0, 56);
   } catch {
-    // ignore WebGL extension errors
+    return '';
   }
-  return false;
+}
+
+function isSoftwareWebGLRenderer(renderer: THREE.WebGLRenderer): boolean {
+  const vendor = getUnmaskedRendererString(renderer).toLowerCase();
+  return (
+    vendor.includes('swiftshader') ||
+    vendor.includes('llvmpipe') ||
+    vendor.includes('software')
+  );
 }
 
 function supportsHalfFloatRenderTarget(renderer: THREE.WebGLRenderer): boolean {
@@ -500,21 +506,15 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     return (2.0 + invR) * pow(sin2h, invR * 0.5) / 6.2831853;
   }
 
-  // High-precision smooth erf(x) (Abramowitz & Stegun 7.1.26)
-  float erfApprox(float x) {
-    float ax = abs(x);
-    float t = 1.0 / (1.0 + 0.3275911 * ax);
-    float poly =
-      ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t) + 0.254829592;
-    float y = 1.0 - poly * t * exp(-ax * ax);
-    return x < 0.0 ? -y : y;
-  }
-
-  // C-infinity Analytical Gaussian Line-Integral Wake behind the rolling marble
+  // Fast C-infinity Gaussian segment-distance wake behind the rolling marble
+  // Avoids expensive per-iteration erfApprox unrolling on Windows ANGLE/D3D11 FXC compilers
   void evalMarbleWake(vec2 suv, vec2 aspectScale, out float coreH, out float haloH, out vec2 grad) {
     coreH = 0.0;
     haloH = 0.0;
     grad = vec2(0.0);
+#ifdef SAFE_MODE
+    return;
+#else
     if (uTrailActive < 0.001 || uMarbleOpacity <= 0.01) return;
     if (
       suv.x < uTrailBounds.x ||
@@ -531,54 +531,36 @@ const SILK_CLOTH_FRAG = /* glsl */ `
 
     for (int i = 0; i < ${TRAIL_NODE_COUNT - 1}; i++) {
       vec4 a = uTrailPts[i];
-      if (a.w <= 0.001) break;
       vec4 b = uTrailPts[i + 1];
-
-      if (b.w <= 0.001) continue;
+      if (a.w <= 0.001 || b.w <= 0.001) continue;
       if (a.z >= 0.995 && b.z >= 0.995) continue;
 
       vec2 ba = (b.xy - a.xy) * aspectScale;
       float len2 = dot(ba, ba);
       if (len2 < 0.00000025 || len2 > 0.14) continue;
 
-      float segLen = sqrt(len2);
-      vec2 uDir = ba / segLen;
       vec2 pa = (suv - a.xy) * aspectScale;
-      vec2 pb = (suv - b.xy) * aspectScale;
-
-      float t0 = dot(pa, uDir);
-      vec2 dPerpVec = pa - uDir * t0;
-      float dPerp2 = dot(dPerpVec, dPerpVec);
+      float proj = clamp(dot(pa, ba) / len2, 0.0, 1.0);
+      vec2 dVec = pa - ba * proj;
+      float d2 = dot(dVec, dVec);
 
       float midAge = clamp(0.5 * (a.z + b.z), 0.0, 1.0);
       float midStr = 0.5 * (a.w + b.w);
       float lifeFade = pow(max(0.0001, 1.0 - midAge), 1.75);
-      float segWeight = lifeFade * midStr;
+      float segWeight = lifeFade * midStr * min(1.0, sqrt(len2) * 32.0);
 
       float coreR = mix(0.022, 0.044, midAge);
-      float invCoreR = 1.0 / coreR;
-      float invCoreR2 = invCoreR * invCoreR;
-
-      if (dPerp2 * invCoreR2 < 20.0) {
-        float perpExp = exp(-dPerp2 * invCoreR2);
-        float kCore = perpExp * 0.5 * (erfApprox((segLen - t0) * invCoreR) + erfApprox(t0 * invCoreR));
+      float invCoreR2 = 1.0 / (coreR * coreR);
+      if (d2 * invCoreR2 < 14.0) {
+        float kCore = exp(-d2 * invCoreR2);
         sumCore += kCore * segWeight;
-
-        float endA = exp(-dot(pa, pa) * invCoreR2);
-        float endB = exp(-dot(pb, pb) * invCoreR2);
-        vec2 kGrad =
-          (-2.0 * dPerpVec * invCoreR2) * kCore +
-          uDir * (0.56418958 * invCoreR * (endA - endB));
-        sumGrad += kGrad * segWeight;
+        sumGrad += (-2.0 * dVec * invCoreR2 * kCore) * segWeight;
       }
 
       float haloR = coreR * 2.1;
-      float invHaloR = 1.0 / haloR;
-      float invHaloR2 = invHaloR * invHaloR;
-      if (dPerp2 * invHaloR2 < 16.0) {
-        float haloPerpExp = exp(-dPerp2 * invHaloR2);
-        float kHalo = haloPerpExp * 0.5 * (erfApprox((segLen - t0) * invHaloR) + erfApprox(t0 * invHaloR));
-        sumHalo += kHalo * segWeight * 0.55;
+      float invHaloR2 = 1.0 / (haloR * haloR);
+      if (d2 * invHaloR2 < 12.0) {
+        sumHalo += exp(-d2 * invHaloR2) * segWeight * 0.52;
       }
     }
 
@@ -587,9 +569,11 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     coreH = (1.0 - satExp) * uTrailActive;
     haloH = (1.0 - exp(-1.10 * sumHalo)) * uTrailActive;
     grad = (satK * satExp * sumGrad * 0.0115) * uTrailActive;
+#endif
   }
 
-  // Zero-quantization analytical concentric ripples (eliminates 8-bit FBO border & static grain)
+#ifndef USE_FLUID_FBO
+  // Zero-quantization analytical concentric ripples (compiled ONLY when HalfFloat FBO is inactive)
   void evalAnalyticRipples(vec2 suv, vec2 aspectScale, out float h, out vec2 grad) {
     h = 0.0;
     grad = vec2(0.0);
@@ -624,6 +608,7 @@ const SILK_CLOTH_FRAG = /* glsl */ `
       }
     }
   }
+#endif
 
   void main() {
     vec2 suv = clamp(vScreenUv, 0.002, 0.998);
@@ -632,6 +617,7 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     // 1. Sample 2D Wave Equation FBO on HalfFloat GPUs, or analytical concentric ring waves otherwise
     float waveH = 0.0;
     vec2 rippleGrad = vec2(0.0);
+#ifdef USE_FLUID_FBO
     if (uUseFluidFbo > 0.5) {
       vec4 stC = decodeState(texture2D(uFluidTex, suv));
       vec4 stL = decodeState(texture2D(uFluidTex, clamp(suv - vec2(uFluidTexel.x * 1.65, 0.0), 0.0, 1.0)));
@@ -640,9 +626,12 @@ const SILK_CLOTH_FRAG = /* glsl */ `
       vec4 stU = decodeState(texture2D(uFluidTex, clamp(suv + vec2(0.0, uFluidTexel.y * 1.65), 0.0, 1.0)));
       waveH = stC.r;
       rippleGrad = vec2(stR.r - stL.r, stU.r - stD.r);
-    } else if (uAnalyticActive > 0.5) {
+    }
+#else
+    if (uAnalyticActive > 0.5) {
       evalAnalyticRipples(suv, aspectScale, waveH, rippleGrad);
     }
+#endif
 
     // 2. High-resolution per-pixel deep gravitational funnel right underneath & radiating around the marble
     //    Skipped completely when hero marble is hidden (02 Architecture / 03 Specs / 04 About).
@@ -973,6 +962,7 @@ const MARBLE_FRAG = /* glsl */ `
   uniform float uMarbleOpacity;
   uniform float uMarbleAurora; // 0.0 = Luxury Crystal, 1.0 = Aurora Prism Crystal
   uniform float uMarbleSink;
+  uniform float uSafeMode; // 1.0 = Zero-FBO translucent Fresnel crystal fallback
 
   varying vec3 vWorldNormal;
   varying vec3 vLocalPos;
@@ -1000,11 +990,13 @@ const MARBLE_FRAG = /* glsl */ `
     vec2 uvG = clamp(screenUv + refrG.xy * uvScale, vec2(0.004), vec2(0.996));
     vec2 uvB = clamp(screenUv + refrB.xy * uvScale, vec2(0.004), vec2(0.996));
 
-    vec3 refracted = vec3(
-      texture2D(uBackdropTex, uvR).r,
-      texture2D(uBackdropTex, uvG).g,
-      texture2D(uBackdropTex, uvB).b
-    );
+    vec3 refracted = uSafeMode > 0.5
+      ? mix(vec3(0.86, 0.84, 0.80), vec3(0.10, 0.09, 0.11), uThemeDark)
+      : vec3(
+          texture2D(uBackdropTex, uvR).r,
+          texture2D(uBackdropTex, uvG).g,
+          texture2D(uBackdropTex, uvB).b
+        );
 
     // Subtle rolling internal optical crystal swirl driven by real 3D quaternion vLocalPos
     float swirlA = sin(vLocalPos.x * 5.2 + vLocalPos.y * 4.1 + vLocalPos.z * 3.4);
@@ -1089,9 +1081,10 @@ const MARBLE_FRAG = /* glsl */ `
     bodyCol += specTint * (specSharp1 * 0.98 + specBroad1 * 0.24 + specRim2 * 0.26);
     bodyCol += mix(vec3(1.0, 0.96, 0.88), prismIridescence, uMarbleAurora) * rimThin * mix(0.38, 0.72, uThemeDark);
 
-    // Anti-aliased outer sphere alpha
+    // Anti-aliased outer sphere alpha (translucent Fresnel shell in Zero-FBO Safe Mode)
     float edgeAA = smoothstep(0.0, 0.13, ndv);
-    float alpha = edgeAA * uMarbleOpacity;
+    float safeAlpha = clamp(0.32 + fresnel * 0.58 + specSharp1 * 0.65 + causticFocus * 0.28, 0.0, 0.96);
+    float alpha = edgeAA * mix(1.0, safeAlpha, uSafeMode) * uMarbleOpacity;
 
     gl_FragColor = vec4(clamp(bodyCol, 0.0, 1.0), alpha);
   }
@@ -1108,6 +1101,7 @@ export function createLoginThreeController(
     initialStage: 'intro' | 'auth' | 'portal';
     initialVariant: LoginThreeVariantId;
     reducedMotion: boolean;
+    safeMode?: boolean;
     onMarbleStep?: (snapshot: MarbleStepSnapshot) => void;
     onFloorBounce?: () => void;
     onOverlayRender?: (ctx: LoginThreeOverlayRenderContext) => boolean;
@@ -1121,9 +1115,11 @@ export function createLoginThreeController(
     onOverlayContextRestored?: (renderer: THREE.WebGLRenderer) => void;
     onContextLostChange?: (lost: boolean) => void;
     onBootDiagnostics?: (reason: string) => void;
+    onEarlyContextLoss?: (reason: string) => void;
   }
 ): LoginThreeController | null {
   const {
+    safeMode = false,
     onMarbleStep,
     onFloorBounce,
     onOverlayRender,
@@ -1132,6 +1128,7 @@ export function createLoginThreeController(
     onOverlayContextRestored,
     onContextLostChange,
     onBootDiagnostics,
+    onEarlyContextLoss,
   } = options;
   let reducedMotion = Boolean(options.reducedMotion);
   const isIosSafari = isIosSafariRuntime();
@@ -1139,14 +1136,25 @@ export function createLoginThreeController(
   try {
     // Use `powerPreference: 'default'` across desktop & mobile so Windows Optimus/hybrid-GPU Chrome
     // never triggers a discrete GPU switch / TDR context loss during initial WebGL2 context creation.
-    renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      alpha: false,
-      powerPreference: 'default',
-      failIfMajorPerformanceCaveat: false,
-      preserveDrawingBuffer: false,
-    });
+    if (safeMode) {
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: false,
+        alpha: false,
+        powerPreference: 'default',
+        failIfMajorPerformanceCaveat: false,
+        preserveDrawingBuffer: false,
+      });
+    } else {
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        alpha: false,
+        powerPreference: 'default',
+        failIfMajorPerformanceCaveat: false,
+        preserveDrawingBuffer: false,
+      });
+    }
   } catch (err1) {
     // Fallback for MSAA / driver rejection
     try {
@@ -1174,26 +1182,27 @@ export function createLoginThreeController(
   }
   canvas.style.opacity = '';
 
+  const glRendererLabel = getUnmaskedRendererString(renderer);
   const isSoftwareGl = isSoftwareWebGLRenderer(renderer);
   const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 2.0 : 1.75;
-  const backdropScale = isIosSafari ? 0.85 : 1.0;
-  const initialDpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+  const effectiveMaxDpr = safeMode ? 1.0 : maxDpr;
+  const backdropScale = isIosSafari ? 0.85 : 0.9;
+  const initialDpr = Math.min(window.devicePixelRatio || 1, effectiveMaxDpr);
   renderer.setPixelRatio(initialDpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
 
-  // Use native FP16 wave FBO whenever the GPU supports HalfFloat render targets (including Apple Metal GPUs),
-  // avoiding the expensive 12-wave per-pixel analytic shader fallback on iOS Safari.
-  const useHalfFloat = !isSoftwareGl && supportsHalfFloatRenderTarget(renderer);
+  // Use native FP16 wave FBO whenever the GPU supports HalfFloat render targets (skipped in Zero-FBO Safe Mode)
+  const useHalfFloat = !safeMode && !isSoftwareGl && supportsHalfFloatRenderTarget(renderer);
   const rtType = useHalfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType;
   const encodedByte = useHalfFloat ? 0.0 : 1.0;
 
   const initialW = Math.max(2, canvas.clientWidth || window.innerWidth || 1280);
   const initialH = Math.max(2, canvas.clientHeight || window.innerHeight || 720);
   const getSimDims = (w: number, h: number) => {
-    const scale = isSoftwareGl ? 0.28 : isIosSafari ? 0.30 : 0.44;
+    const scale = isSoftwareGl ? 0.28 : isIosSafari ? 0.30 : 0.36;
     const minDim = isIosSafari ? 160 : 192;
-    const maxDim = isSoftwareGl ? 256 : isIosSafari ? 256 : 460;
+    const maxDim = isSoftwareGl ? 256 : isIosSafari ? 256 : 360;
     return {
       sw: clamp(Math.round(w * scale), minDim, maxDim),
       sh: clamp(Math.round(h * scale), minDim, maxDim),
@@ -1201,6 +1210,10 @@ export function createLoginThreeController(
   };
 
   let { sw: simW, sh: simH } = getSimDims(initialW, initialH);
+
+  // Tiny 1x1 placeholder texture used in Zero-FBO Safe Mode (zero render-target allocations)
+  const safeFallbackTex = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1);
+  safeFallbackTex.needsUpdate = true;
 
   const createFluidRT = (w: number, h: number) =>
     new THREE.WebGLRenderTarget(w, h, {
@@ -1214,26 +1227,29 @@ export function createLoginThreeController(
       stencilBuffer: false,
     });
 
-  let simRead = createFluidRT(simW, simH);
-  let simWrite = createFluidRT(simW, simH);
+  let simRead: THREE.WebGLRenderTarget | null = useHalfFloat ? createFluidRT(simW, simH) : null;
+  let simWrite: THREE.WebGLRenderTarget | null = useHalfFloat ? createFluidRT(simW, simH) : null;
 
-  // Live silk backdrop render target for real-time glass marble refraction
-  const backdropRT = new THREE.WebGLRenderTarget(
-    Math.max(2, Math.round(initialW * initialDpr * backdropScale)),
-    Math.max(2, Math.round(initialH * initialDpr * backdropScale)),
-    {
-      type: THREE.UnsignedByteType,
-      format: THREE.RGBAFormat,
-      minFilter: THREE.LinearFilter,
-      magFilter: THREE.LinearFilter,
-      wrapS: THREE.ClampToEdgeWrapping,
-      wrapT: THREE.ClampToEdgeWrapping,
-      depthBuffer: false,
-      stencilBuffer: false,
-    }
-  );
+  // Live silk backdrop render target for real-time glass marble refraction (skipped in Zero-FBO Safe Mode)
+  const backdropRT: THREE.WebGLRenderTarget | null = safeMode
+    ? null
+    : new THREE.WebGLRenderTarget(
+        Math.max(2, Math.round(initialW * initialDpr * backdropScale)),
+        Math.max(2, Math.round(initialH * initialDpr * backdropScale)),
+        {
+          type: THREE.UnsignedByteType,
+          format: THREE.RGBAFormat,
+          minFilter: THREE.LinearFilter,
+          magFilter: THREE.LinearFilter,
+          wrapS: THREE.ClampToEdgeWrapping,
+          wrapT: THREE.ClampToEdgeWrapping,
+          depthBuffer: false,
+          stencilBuffer: false,
+        }
+      );
 
-  const clearFluidTarget = (rt: THREE.WebGLRenderTarget) => {
+  const clearFluidTarget = (rt: THREE.WebGLRenderTarget | null) => {
+    if (!rt) return;
     const prev = renderer.getRenderTarget();
     renderer.setRenderTarget(rt);
     if (useHalfFloat) {
@@ -1253,7 +1269,7 @@ export function createLoginThreeController(
   const simScene = new THREE.Scene();
   const simMat = new THREE.ShaderMaterial({
     uniforms: {
-      uPrevState: { value: simRead.texture },
+      uPrevState: { value: simRead ? simRead.texture : safeFallbackTex },
       uTexelSize: { value: new THREE.Vector2(1 / simW, 1 / simH) },
       uEncodedByte: { value: encodedByte },
       uDecay: { value: 0.976 },
@@ -1282,7 +1298,7 @@ export function createLoginThreeController(
   const clothCam = new THREE.PerspectiveCamera(42, initialW / initialH, 0.1, 40);
   clothCam.position.set(0, 0, 7.6);
 
-  const meshSegs = isSoftwareGl ? 52 : isIosSafari ? 72 : 120;
+  const meshSegs = safeMode ? 48 : isSoftwareGl ? 52 : isIosSafari ? 72 : 84;
   const clothGeo = new THREE.PlaneGeometry(20.0, 18.0, meshSegs, meshSegs);
   const initVarNum = options.initialVariant === 'aurora' ? 1 : 0;
 
@@ -1301,9 +1317,14 @@ export function createLoginThreeController(
     analyticWaveCursor = (analyticWaveCursor + 1) % ANALYTIC_WAVE_COUNT;
   };
 
+  const clothDefines: Record<string, number> = {};
+  if (useHalfFloat) clothDefines.USE_FLUID_FBO = 1;
+  if (safeMode) clothDefines.SAFE_MODE = 1;
+
   const clothMat = new THREE.ShaderMaterial({
+    defines: clothDefines,
     uniforms: {
-      uFluidTex: { value: simRead.texture },
+      uFluidTex: { value: simRead ? simRead.texture : safeFallbackTex },
       uFluidTexel: { value: new THREE.Vector2(1 / simW, 1 / simH) },
       uEncodedByte: { value: encodedByte },
       uUseFluidFbo: { value: useHalfFloat ? 1.0 : 0.0 },
@@ -1344,7 +1365,7 @@ export function createLoginThreeController(
   const blitScene = new THREE.Scene();
   const blitMat = new THREE.ShaderMaterial({
     uniforms: {
-      uBackdropTex: { value: backdropRT.texture },
+      uBackdropTex: { value: backdropRT ? backdropRT.texture : safeFallbackTex },
     },
     vertexShader: QUAD_VERT,
     fragmentShader: BLIT_FRAG,
@@ -1361,12 +1382,12 @@ export function createLoginThreeController(
 
   const marbleGeo = new THREE.SphereGeometry(
     1,
-    isSoftwareGl ? 28 : 48,
-    isSoftwareGl ? 20 : 36
+    safeMode || isSoftwareGl ? 28 : 44,
+    safeMode || isSoftwareGl ? 20 : 32
   );
   const marbleMat = new THREE.ShaderMaterial({
     uniforms: {
-      uBackdropTex: { value: backdropRT.texture },
+      uBackdropTex: { value: backdropRT ? backdropRT.texture : safeFallbackTex },
       uResolution: { value: new THREE.Vector2(initialW * initialDpr, initialH * initialDpr) },
       uAspect: { value: initialAspect },
       uTime: { value: 0 },
@@ -1375,6 +1396,7 @@ export function createLoginThreeController(
       uMarbleOpacity: { value: 1.0 },
       uMarbleAurora: { value: initVarNum },
       uMarbleSink: { value: 1.0 },
+      uSafeMode: { value: safeMode ? 1.0 : 0.0 },
     },
     vertexShader: MARBLE_VERT,
     fragmentShader: MARBLE_FRAG,
@@ -1586,7 +1608,7 @@ export function createLoginThreeController(
     if (isDisposed || width <= 0 || height <= 0) return;
     viewportWidth = width;
     viewportHeight = height;
-    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+    const dpr = Math.min(window.devicePixelRatio || 1, effectiveMaxDpr);
     renderer.setPixelRatio(dpr);
     renderer.setSize(width, height, false);
 
@@ -1607,9 +1629,11 @@ export function createLoginThreeController(
     const drawingSize = renderer.getDrawingBufferSize(new THREE.Vector2());
     const fbW = Math.max(2, Math.round(drawingSize.x || width * dpr));
     const fbH = Math.max(2, Math.round(drawingSize.y || height * dpr));
-    const bw = Math.max(2, Math.round(fbW * backdropScale));
-    const bh = Math.max(2, Math.round(fbH * backdropScale));
-    backdropRT.setSize(bw, bh);
+    if (backdropRT) {
+      const bw = Math.max(2, Math.round(fbW * backdropScale));
+      const bh = Math.max(2, Math.round(fbH * backdropScale));
+      backdropRT.setSize(bw, bh);
+    }
 
     simMat.uniforms.uAspect.value = aspect;
     clothMat.uniforms.uAspect.value = aspect;
@@ -1624,23 +1648,25 @@ export function createLoginThreeController(
     marbleX = clamp(marbleX, -aspect + playLeftInset + padX, aspect - playRightInset - padX);
     marbleY = clamp(marbleY, -1 + playBottomInset + padY, 1 - playTopInset - padY);
 
-    const nextDims = getSimDims(width, height);
-    if (Math.abs(nextDims.sw - simW) > 32 || Math.abs(nextDims.sh - simH) > 32) {
-      simW = nextDims.sw;
-      simH = nextDims.sh;
-      simRead.dispose();
-      simWrite.dispose();
-      simRead = createFluidRT(simW, simH);
-      simWrite = createFluidRT(simW, simH);
-      clearFluidTarget(simRead);
-      clearFluidTarget(simWrite);
-      simMat.uniforms.uPrevState.value = simRead.texture;
-      clothMat.uniforms.uFluidTex.value = simRead.texture;
-      (simMat.uniforms.uTexelSize.value as THREE.Vector2).set(1 / simW, 1 / simH);
-      (clothMat.uniforms.uFluidTexel.value as THREE.Vector2).set(1 / simW, 1 / simH);
+    if (useHalfFloat && simRead && simWrite) {
+      const nextDims = getSimDims(width, height);
+      if (Math.abs(nextDims.sw - simW) > 32 || Math.abs(nextDims.sh - simH) > 32) {
+        simW = nextDims.sw;
+        simH = nextDims.sh;
+        simRead.dispose();
+        simWrite.dispose();
+        simRead = createFluidRT(simW, simH);
+        simWrite = createFluidRT(simW, simH);
+        clearFluidTarget(simRead);
+        clearFluidTarget(simWrite);
+        simMat.uniforms.uPrevState.value = simRead.texture;
+        clothMat.uniforms.uFluidTex.value = simRead.texture;
+        (simMat.uniforms.uTexelSize.value as THREE.Vector2).set(1 / simW, 1 / simH);
+        (clothMat.uniforms.uFluidTexel.value as THREE.Vector2).set(1 / simW, 1 / simH);
+      }
     }
 
-    onOverlayResize?.(width, height, renderer, isSoftwareGl);
+    onOverlayResize?.(width, height, renderer, isSoftwareGl || safeMode);
   };
 
   let isRenderingFrame = false;
@@ -1910,7 +1936,7 @@ export function createLoginThreeController(
       fboStepAccum = 0;
       pendingBurstStrength = 0;
       queuedMarbleWaveStrength = 0;
-    } else if (useHalfFloat) {
+    } else if (useHalfFloat && simRead && simWrite) {
       clothMat.uniforms.uUseFluidFbo.value = 1.0;
       if (marbleWaveStrength > 0.001) {
         queuedMarbleWaveU = marbleU;
@@ -1929,9 +1955,11 @@ export function createLoginThreeController(
         }
 
         const fboSteps = Math.min(2, Math.floor(fboStepAccum / FBO_FIXED_STEP_SEC));
+        let readRt: THREE.WebGLRenderTarget = simRead;
+        let writeRt: THREE.WebGLRenderTarget = simWrite;
         for (let stepIdx = 0; stepIdx < fboSteps; stepIdx += 1) {
           fboStepAccum -= FBO_FIXED_STEP_SEC;
-          simMat.uniforms.uPrevState.value = simRead.texture;
+          simMat.uniforms.uPrevState.value = readRt.texture;
           simMat.uniforms.uDecay.value = 0.976 + currentSurge * 0.008;
 
           (simMat.uniforms.uBurstPos.value as THREE.Vector2).set(pendingBurstU, pendingBurstV);
@@ -1945,17 +1973,19 @@ export function createLoginThreeController(
           simMat.uniforms.uMarbleWaveStrength.value = queuedMarbleWaveStrength;
           simMat.uniforms.uMarbleWaveRadius.value = marbleR * 0.92;
 
-          renderer.setRenderTarget(simWrite);
+          renderer.setRenderTarget(writeRt);
           renderer.render(simScene, orthoCam);
 
-          const temp = simRead;
-          simRead = simWrite;
-          simWrite = temp;
+          const temp = readRt;
+          readRt = writeRt;
+          writeRt = temp;
 
           // Consume impulse queues on the first fixed step so multi-step catchup doesn't double-inject
           pendingBurstStrength = 0;
           queuedMarbleWaveStrength = 0;
         }
+        simRead = readRt;
+        simWrite = writeRt;
       } else {
         fboStepAccum = 0;
         pendingBurstStrength = 0;
@@ -2013,7 +2043,7 @@ export function createLoginThreeController(
     }
 
     const effectiveSink = needsMarblePass ? marbleSink * marbleOpacity : 0;
-    clothMat.uniforms.uFluidTex.value = simRead.texture;
+    clothMat.uniforms.uFluidTex.value = simRead ? simRead.texture : safeFallbackTex;
     clothMat.uniforms.uTime.value = elapsed;
     clothMat.uniforms.uThemeDark.value = currentThemeDark;
     clothMat.uniforms.uAuthBlend.value = currentAuthBlend;
@@ -2028,14 +2058,21 @@ export function createLoginThreeController(
     (clothMat.uniforms.uMarbleVel.value as THREE.Vector2).set(marbleVx, marbleVy);
 
     if (needsMarblePass) {
-      // Hero / Login: render silk into offscreen backdropRT so glass marble refracts it cleanly
-      renderer.setRenderTarget(backdropRT);
-      renderer.render(clothScene, clothCam);
+      if (backdropRT) {
+        // Hero / Login: render silk into offscreen backdropRT so glass marble refracts it cleanly
+        renderer.setRenderTarget(backdropRT);
+        renderer.render(clothScene, clothCam);
 
-      // --- PASS 3: Blit Silk Backdrop to Screen + Overlay Theme-Reactive Transparent Glass Marble ---
-      renderer.setRenderTarget(null);
-      renderer.autoClear = true;
-      renderer.render(blitScene, orthoCam);
+        // --- PASS 3: Blit Silk Backdrop to Screen + Overlay Theme-Reactive Transparent Glass Marble ---
+        renderer.setRenderTarget(null);
+        renderer.autoClear = true;
+        renderer.render(blitScene, orthoCam);
+      } else {
+        // Zero-FBO Safe Mode: render silk directly to main framebuffer, then overlay translucent marble
+        renderer.setRenderTarget(null);
+        renderer.autoClear = true;
+        renderer.render(clothScene, clothCam);
+      }
 
       // Evaluate exact Luxury <-> Aurora wave state right at the marble's position so
       // the crystal orb morphs seamlessly the instant the theme wave sweeps across it!
@@ -2078,7 +2115,7 @@ export function createLoginThreeController(
             dt,
             elapsed,
             reducedMotion,
-            isSoftwareGl,
+            isSoftwareGl: isSoftwareGl || safeMode,
           })
         );
       } finally {
@@ -2214,12 +2251,21 @@ export function createLoginThreeController(
     }
   };
 
+  let earlyContextLossNotified = false;
+  const triggerEarlyRecoveryIfNeeded = (reason: string) => {
+    if (!safeMode && !earlyContextLossNotified && pacer.committedFrames <= 5) {
+      earlyContextLossNotified = true;
+      onEarlyContextLoss?.(reason);
+    }
+  };
+
   const onContextLost = (e: Event) => {
     e.preventDefault();
     isContextLost = true;
     canvas.style.opacity = '0';
     onContextLostChange?.(true);
     syncLoopLifecycle();
+    triggerEarlyRecoveryIfNeeded(`context_lost_frame_${pacer.committedFrames}`);
   };
   const onContextRestored = () => {
     isContextLost = false;
@@ -2328,10 +2374,12 @@ export function createLoginThreeController(
   if (renderer.getContext()?.isContextLost() || lastRenderError) {
     isContextLost = Boolean(renderer.getContext()?.isContextLost());
     canvas.style.opacity = '0';
-    onBootDiagnostics?.(
-      lastRenderError ? `initial_render_error:${lastRenderError}` : 'context_lost_after_first_frame'
-    );
+    const reason = lastRenderError
+      ? `initial_render_error:${lastRenderError}`
+      : 'context_lost_after_first_frame';
+    onBootDiagnostics?.(reason);
     onContextLostChange?.(true);
+    triggerEarlyRecoveryIfNeeded(reason);
   }
   syncLoopLifecycle();
 
@@ -2705,6 +2753,7 @@ export function createLoginThreeController(
         isContextLost,
         isSoftwareGl,
         isIosSafari,
+        safeMode,
         useHalfFloat,
         antialias: Boolean(renderer.getContextAttributes?.()?.antialias),
         dpr: renderer.getPixelRatio(),
@@ -2715,6 +2764,7 @@ export function createLoginThreeController(
         marbleSpeed: Number(Math.hypot(marbleVx, marbleVy).toFixed(3)),
         elapsed: Number(elapsed.toFixed(2)),
         glError: lastGlError,
+        glRenderer: glRendererLabel,
         lastError: lastRenderError,
       };
     },
@@ -2759,9 +2809,10 @@ export function createLoginThreeController(
       document.removeEventListener('visibilitychange', onVisibilityChange);
       onOverlayDispose?.();
 
-      simRead.dispose();
-      simWrite.dispose();
-      backdropRT.dispose();
+      simRead?.dispose();
+      simWrite?.dispose();
+      backdropRT?.dispose();
+      safeFallbackTex.dispose();
       quadGeo.dispose();
       simMat.dispose();
       clothGeo.dispose();

@@ -109,8 +109,32 @@ export interface UseMarbleBackdropStageOptions {
 export interface UseMarbleBackdropStageResult {
   readonly stageRef: React.RefObject<HTMLDivElement | null>;
   readonly canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  readonly canvasKey: number;
   readonly webglFallback: boolean;
   readonly webglBootReason: string | null;
+}
+
+const WEBGL_SAFE_MODE_SESSION_KEY = 'ainvtry_webgl_safe_mode';
+
+function readInitialWebglSafeMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (new URLSearchParams(window.location.search).get('safe3d') === '1') {
+      return true;
+    }
+    return window.sessionStorage.getItem(WEBGL_SAFE_MODE_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function persistWebglSafeMode(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(WEBGL_SAFE_MODE_SESSION_KEY, '1');
+  } catch {
+    // Ignore storage quota/privacy-mode errors
+  }
 }
 
 interface CachedTarget {
@@ -162,6 +186,9 @@ export function useMarbleBackdropStage(
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controllerRef = useRef<LoginThreeController | null>(null);
+  const safeModeRetryTriggeredRef = useRef(false);
+  const [safeMode, setSafeMode] = useState<boolean>(() => readInitialWebglSafeMode());
+  const [canvasKey, setCanvasKey] = useState(0);
   const [webglFallback, setWebglFallback] = useState(false);
   const [webglBootReason, setWebglBootReason] = useState<string | null>(null);
 
@@ -474,6 +501,7 @@ export function useMarbleBackdropStage(
           initialStage: initialStageRef.current,
           initialVariant: initialVariantRef.current,
           reducedMotion,
+          safeMode,
           onMarbleStep: handleMarbleStep,
           onFloorBounce: floorRailSelector ? handleFloorBounce : undefined,
           onOverlayRender: initialOpts.onOverlayRender
@@ -505,6 +533,19 @@ export function useMarbleBackdropStage(
             if (!disposed) {
               setWebglBootReason(reason);
             }
+          },
+          onEarlyContextLoss: (reason) => {
+            if (disposed || safeMode || safeModeRetryTriggeredRef.current) return;
+            safeModeRetryTriggeredRef.current = true;
+            persistWebglSafeMode();
+            setWebglBootReason(`retrying_safe_mode:${reason}`);
+            const retryTimer = window.setTimeout(() => {
+              activeTimers.delete(retryTimer);
+              if (disposed) return;
+              setSafeMode(true);
+              setCanvasKey((prev) => prev + 1);
+            }, 350);
+            activeTimers.add(retryTimer);
           },
         });
       } catch (err) {
@@ -1225,7 +1266,7 @@ export function useMarbleBackdropStage(
       cleanupRuntime?.();
       cleanupRuntime = null;
     };
-  }, [floorRailSelector]);
+  }, [floorRailSelector, safeMode, canvasKey]);
 
-  return { stageRef, canvasRef, webglFallback, webglBootReason };
+  return { stageRef, canvasRef, canvasKey, webglFallback, webglBootReason };
 }
