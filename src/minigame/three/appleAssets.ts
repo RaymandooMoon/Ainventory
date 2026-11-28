@@ -50,7 +50,7 @@ export function createAppleLeafGeometry(): THREE.BufferGeometry {
 /**
  * Generates a high-DPI 1024x128 sprite atlas containing digits 1..9 in 9 equal horizontal slots.
  * Rendered with bold high-contrast typography and dark rim contour for instant scanability
- * during fast 120-second Fruit Box play.
+ * during fast 120-second APPLE 10 play.
  */
 export function createDigitAtlasTexture(): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null;
@@ -255,7 +255,7 @@ export function createNeonBackdropMaterial(): THREE.ShaderMaterial {
           col += pulseCol * ring * uPulseStrength * 0.65;
         }
 
-        // Soft-tint eye-comfort filter (honoring classic Fruit Box soft color toggle)
+        // Soft-tint eye-comfort filter (honoring the soft color toggle)
         if (uSoft > 0.01) {
           float luma = dot(col, vec3(0.299, 0.587, 0.114));
           col = mix(col, vec3(luma * 0.92 + 0.04, luma * 0.94 + 0.045, luma * 1.02 + 0.06), uSoft * 0.55);

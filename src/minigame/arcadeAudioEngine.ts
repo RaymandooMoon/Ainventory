@@ -1,6 +1,6 @@
 /**
  * 100% Offline Procedural Web Audio API Neon Arcade Sound & BGM Engine.
- * Synthesizes an upbeat ~22s catchy synth-chiptune BGM loop inspired by Fruit Box
+ * Synthesizes an upbeat ~22s catchy synth-chiptune BGM loop (original composition)
  * plus dynamic harmonic SFX for dragging, sum-10 lock-on, combo pops, golden bursts,
  * countdown ticks, and victory fanfare — zero external audio downloads required.
  */

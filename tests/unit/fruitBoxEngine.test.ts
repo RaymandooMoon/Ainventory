@@ -17,7 +17,7 @@ import {
   type FruitBoxCell,
 } from '../../src/minigame/fruitBoxEngine.ts';
 
-describe('Fruit Box (사과게임) Core Engine', () => {
+describe('APPLE 10 Core Engine', () => {
   it('generates a classic 17x10 board of 170 apples with values 1..9 and total sum divisible by 10', () => {
     const game = createFruitBoxGame({ mode: 'classic', seed: 42 });
     assert.equal(game.cols, CLASSIC_COLS);
@@ -239,7 +239,7 @@ describe('Fruit Box (사과게임) Core Engine', () => {
         if (url.pathname === '/minigame/index.html') {
           return new Response(null, { status: 307, headers: { Location: '/minigame/' } });
         }
-        return new Response('<html><body>APPLE BOX 3D</body></html>', {
+        return new Response('<html><body>APPLE 10 3D</body></html>', {
           status: 200,
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
         });

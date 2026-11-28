@@ -5,41 +5,53 @@ import type {
   SelectionVisualState,
 } from './AppleArcadeStage.ts';
 
-interface FallingApple2D {
+interface PopToken2D {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
-  rot: number;
-  vRot: number;
   value: number;
   isGolden: boolean;
-  alpha: number;
+  age: number;
+  life: number;
 }
 
-interface PopSpark2D {
+interface PopRing2D {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
-  radius: number;
   color: string;
   age: number;
   life: number;
 }
 
 const MAX_CELLS = 170;
+const POP_LIFE_SEC = 0.32;
+
+/** Paper 2D palette — achromatic paper + ink, single red accent on tokens. */
+const PAPER = {
+  page: '#efefec',
+  board: '#ffffff',
+  boardEdge: '#dcdcd7',
+  gridLine: 'rgba(28, 28, 30, 0.05)',
+  ink: '#1c1c1e',
+  exact: '#1f8a4c',
+  over: '#c62828',
+  token: '#e5484d',
+  tokenSoft: '#d4898b',
+  gold: '#f2b300',
+  goldSoft: '#e2c472',
+} as const;
 
 /**
- * High-Performance Original 2D Fruit Box (원조 후르츠박스 / フルーツボックス) Canvas Renderer.
+ * High-Performance Paper 2D Canvas Renderer — Ainvtry's own flat, minimal board style.
+ * Flat round number tokens on a white paper card (no gradients, outlines, leaves or orchard scenery);
+ * cleared tokens pop in place with a scale-fade + ink ripple instead of falling.
  * Optimizations for instant 0-lag drag responsiveness:
  * - Pre-bakes Hi-DPI offscreen sprite stamps for digits 1..9 (regular + golden) once per resize/tint
- *   so each apple draws via a single GPU-accelerated `drawImage` (< 1.2ms total frame time).
- * - Pre-bakes static orchard backdrop + rounded cream frame + grid dots into an offscreen layer.
+ *   so each token draws via a single GPU-accelerated `drawImage` (< 1.2ms total frame time).
+ * - Pre-bakes the static paper page + board card + grid hairlines into an offscreen layer.
  * - Uses zero-allocation `Uint8Array` bitmasks & cached canvas `DOMRect` (zero layout flush on drag).
  * - Renders synchronously on pointer drag/pop so selection box tracks cursor with zero frame lag.
  */
-export function createOriginalFruitBox2D(options: {
+export function createPaperBoard2D(options: {
   readonly canvas: HTMLCanvasElement;
   readonly cols: number;
   readonly rows: number;
@@ -72,108 +84,62 @@ export function createOriginalFruitBox2D(options: {
   let bgCache: HTMLCanvasElement | null = null;
   let spritePixelSize = 0;
   let spriteHalfLogical = 0;
-  const redSprites: (HTMLCanvasElement | null)[] = new Array(10).fill(null);
+  const tokenSprites: (HTMLCanvasElement | null)[] = new Array(10).fill(null);
   const goldSprites: (HTMLCanvasElement | null)[] = new Array(10).fill(null);
 
-  const fallingApples: FallingApple2D[] = [];
-  const sparks: PopSpark2D[] = [];
+  const popTokens: PopToken2D[] = [];
+  const popRings: PopRing2D[] = [];
   let disposed = false;
   let rafId = 0;
   let dirty = true;
   let lastTime = performance.now();
   let elapsed = 0;
 
-  const paintCartoonAppleStamp = (
+  const paintFlatTokenStamp = (
     c: CanvasRenderingContext2D,
     r: number,
     value: number,
     isGolden: boolean
   ): void => {
-    // Soft ground shadow
-    c.fillStyle = 'rgba(42, 82, 22, 0.14)';
+    // Flat solid disc — no gradient, outline, highlight or leaf
+    c.fillStyle = isGolden
+      ? softColors
+        ? PAPER.goldSoft
+        : PAPER.gold
+      : softColors
+        ? PAPER.tokenSoft
+        : PAPER.token;
     c.beginPath();
-    c.ellipse(0, r * 0.94, r * 0.72, r * 0.22, 0, 0, Math.PI * 2);
+    c.arc(0, 0, r * 0.86, 0, Math.PI * 2);
     c.fill();
 
-    // Twin-lobe classic apple body
-    const bodyGrad = c.createRadialGradient(-r * 0.28, -r * 0.34, r * 0.12, 0, r * 0.06, r * 1.08);
-    if (isGolden) {
-      bodyGrad.addColorStop(0, '#fff5a8');
-      bodyGrad.addColorStop(0.28, '#ffd138');
-      bodyGrad.addColorStop(1, '#d48206');
-    } else if (softColors) {
-      bodyGrad.addColorStop(0, '#ffd4d0');
-      bodyGrad.addColorStop(0.26, '#ef8d89');
-      bodyGrad.addColorStop(1, '#c8605e');
-    } else {
-      bodyGrad.addColorStop(0, '#ff8d80');
-      bodyGrad.addColorStop(0.24, '#ec3328');
-      bodyGrad.addColorStop(1, '#b51513');
-    }
-
-    c.beginPath();
-    c.moveTo(0, -r * 0.72);
-    c.bezierCurveTo(r * 0.45, -r * 1.04, r * 1.06, -r * 0.56, r * 0.94, r * 0.12);
-    c.bezierCurveTo(r * 0.85, r * 0.76, r * 0.38, r * 1.02, 0, r * 0.84);
-    c.bezierCurveTo(-r * 0.38, r * 1.02, -r * 0.85, r * 0.76, -r * 0.94, r * 0.12);
-    c.bezierCurveTo(-r * 1.06, -r * 0.56, -r * 0.45, -r * 1.04, 0, -r * 0.72);
-    c.closePath();
-
-    c.fillStyle = bodyGrad;
-    c.fill();
-    c.lineWidth = Math.max(1.2, r * 0.07);
-    c.strokeStyle = isGolden ? '#9e5d00' : softColors ? '#ad5050' : '#8c0e0e';
-    c.stroke();
-
-    // Specular highlight crescent
-    c.fillStyle = 'rgba(255, 255, 255, 0.42)';
-    c.beginPath();
-    c.ellipse(-r * 0.36, -r * 0.34, r * 0.22, r * 0.12, -0.55, 0, Math.PI * 2);
-    c.fill();
-
-    // Curved brown stem
-    c.strokeStyle = '#6c421f';
-    c.lineWidth = Math.max(1.8, r * 0.12);
+    // Minimal ink stem tick
+    c.strokeStyle = PAPER.ink;
+    c.lineWidth = Math.max(1.4, r * 0.1);
     c.lineCap = 'round';
     c.beginPath();
-    c.moveTo(0, -r * 0.68);
-    c.quadraticCurveTo(r * 0.05, -r * 0.98, r * 0.18, -r * 1.08);
+    c.moveTo(0, -r * 0.8);
+    c.lineTo(0, -r * 1.02);
     c.stroke();
 
-    // Fresh green leaf
-    c.fillStyle = isGolden ? '#b6e64c' : softColors ? '#8cc87c' : '#58c93a';
-    c.strokeStyle = softColors ? '#5b924e' : '#2e881a';
-    c.lineWidth = Math.max(1, r * 0.06);
-    c.beginPath();
-    c.moveTo(r * 0.05, -r * 0.8);
-    c.quadraticCurveTo(r * 0.42, -r * 1.16, r * 0.62, -r * 0.84);
-    c.quadraticCurveTo(r * 0.32, -r * 0.64, r * 0.05, -r * 0.8);
-    c.closePath();
-    c.fill();
-    c.stroke();
-
-    // Bold high-contrast white digit
-    c.font = `800 ${Math.max(12, Math.round(r * 1.18))}px 'Pretendard Variable', 'SF Pro Rounded', system-ui, -apple-system, sans-serif`;
+    // Clean digit (dark on gold for contrast, white on red)
+    c.font = `700 ${Math.max(12, Math.round(r * 1.04))}px 'Pretendard Variable', 'SF Pro Text', system-ui, -apple-system, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.lineJoin = 'round';
-    c.lineWidth = Math.max(2.6, r * 0.19);
-    c.strokeStyle = isGolden ? 'rgba(116, 62, 0, 0.82)' : 'rgba(98, 12, 12, 0.78)';
-    c.strokeText(String(value), 0, r * 0.09);
-    c.fillStyle = '#ffffff';
-    c.fillText(String(value), 0, r * 0.09);
+    c.fillStyle = isGolden ? PAPER.ink : '#ffffff';
+    c.fillText(String(value), 0, r * 0.06);
   };
 
-  const rebuildAppleSprites = (): void => {
+  const rebuildTokenSprites = (): void => {
     if (typeof document === 'undefined' || cellSize <= 0) return;
-    const appleRadius = cellSize * 0.4;
-    const logicalBox = Math.ceil(appleRadius * 2.5);
+    const tokenRadius = cellSize * 0.4;
+    const logicalBox = Math.ceil(tokenRadius * 2.5);
     spriteHalfLogical = logicalBox * 0.5;
     spritePixelSize = Math.max(16, Math.ceil(logicalBox * currentDpr));
 
     for (let digit = 1; digit <= 9; digit += 1) {
       for (const isGolden of [false, true]) {
-        const targetArr = isGolden ? goldSprites : redSprites;
+        const targetArr = isGolden ? goldSprites : tokenSprites;
         let off = targetArr[digit];
         if (!off) {
           off = document.createElement('canvas');
@@ -185,7 +151,7 @@ export function createOriginalFruitBox2D(options: {
         if (!octx) continue;
         octx.setTransform(currentDpr, 0, 0, currentDpr, spriteHalfLogical * currentDpr, spriteHalfLogical * currentDpr);
         octx.clearRect(-spriteHalfLogical, -spriteHalfLogical, logicalBox, logicalBox);
-        paintCartoonAppleStamp(octx, appleRadius, digit, isGolden);
+        paintFlatTokenStamp(octx, tokenRadius, digit, isGolden);
       }
     }
   };
@@ -201,43 +167,46 @@ export function createOriginalFruitBox2D(options: {
     if (!bctx) return;
 
     bctx.setTransform(currentDpr, 0, 0, currentDpr, 0, 0);
-
-    const bgGrad = bctx.createLinearGradient(0, 0, 0, viewportH);
-    bgGrad.addColorStop(0, '#b9e686');
-    bgGrad.addColorStop(1, '#8ecc5a');
-    bctx.fillStyle = bgGrad;
+    bctx.fillStyle = PAPER.page;
     bctx.fillRect(0, 0, viewportW, viewportH);
 
-    const pad = Math.max(10, cellSize * 0.32);
+    const pad = Math.max(8, cellSize * 0.24);
     const frameX = boardX - pad;
     const frameY = boardY - pad;
     const frameW = boardCols * cellSize + pad * 2;
     const frameH = boardRows * cellSize + pad * 2;
 
     bctx.save();
-    bctx.shadowColor = 'rgba(42, 92, 18, 0.22)';
-    bctx.shadowBlur = 22;
-    bctx.shadowOffsetY = 6;
-    bctx.fillStyle = '#f3fce9';
-    bctx.strokeStyle = '#6db63e';
-    bctx.lineWidth = 4;
+    bctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
+    bctx.shadowBlur = 16;
+    bctx.shadowOffsetY = 2;
+    bctx.fillStyle = PAPER.board;
     bctx.beginPath();
-    bctx.roundRect(frameX, frameY, frameW, frameH, 18);
+    bctx.roundRect(frameX, frameY, frameW, frameH, 12);
     bctx.fill();
-    bctx.stroke();
     bctx.restore();
 
-    bctx.fillStyle = 'rgba(110, 176, 66, 0.14)';
-    const dotR = Math.max(1.5, cellSize * 0.045);
-    for (let r = 0; r < boardRows; r += 1) {
-      const cy = boardY + (r + 0.5) * cellSize;
-      for (let c = 0; c < boardCols; c += 1) {
-        const cx = boardX + (c + 0.5) * cellSize;
-        bctx.beginPath();
-        bctx.arc(cx, cy, dotR, 0, Math.PI * 2);
-        bctx.fill();
-      }
+    bctx.strokeStyle = PAPER.boardEdge;
+    bctx.lineWidth = 1;
+    bctx.beginPath();
+    bctx.roundRect(frameX + 0.5, frameY + 0.5, frameW - 1, frameH - 1, 12);
+    bctx.stroke();
+
+    // Hairline cell grid (graph-paper feel)
+    bctx.strokeStyle = PAPER.gridLine;
+    bctx.lineWidth = 1;
+    bctx.beginPath();
+    for (let c = 1; c < boardCols; c += 1) {
+      const x = Math.round(boardX + c * cellSize) + 0.5;
+      bctx.moveTo(x, boardY);
+      bctx.lineTo(x, boardY + boardRows * cellSize);
     }
+    for (let r = 1; r < boardRows; r += 1) {
+      const y = Math.round(boardY + r * cellSize) + 0.5;
+      bctx.moveTo(boardX, y);
+      bctx.lineTo(boardX + boardCols * cellSize, y);
+    }
+    bctx.stroke();
   };
 
   const computeLayout = (): void => {
@@ -251,59 +220,58 @@ export function createOriginalFruitBox2D(options: {
     boardX = (viewportW - totalW) * 0.5;
     boardY = (viewportH - totalH) * 0.5;
     rebuildBackgroundCache();
-    rebuildAppleSprites();
+    rebuildTokenSprites();
     dirty = true;
   };
+
+  const selectionColor = (state: SelectionVisualState): string =>
+    state === 'exact' ? PAPER.exact : state === 'over' ? PAPER.over : PAPER.ink;
 
   const drawFrame = (dt: number): void => {
     if (bgCache) {
       ctx.drawImage(bgCache, 0, 0, viewportW, viewportH);
     } else {
-      ctx.fillStyle = '#a4db72';
+      ctx.fillStyle = PAPER.page;
       ctx.fillRect(0, 0, viewportW, viewportH);
     }
 
-    const appleRadius = cellSize * 0.4;
     const drawSize = spriteHalfLogical * 2;
-    const selRingR = appleRadius * 1.12;
-    const selStrokeW = Math.max(2.5, appleRadius * 0.15);
+    const markInset = cellSize * 0.08;
+    const markSize = cellSize - markInset * 2;
+    const markStrokeW = Math.max(1.5, cellSize * 0.05);
 
-    // Draw all active 2D apples using ultra-fast pre-baked Hi-DPI sprite stamps!
+    // Draw all active tokens using pre-baked Hi-DPI sprite stamps
     for (let i = 0; i < cells.length; i += 1) {
       const cell = cells[i];
       if (cell.cleared) continue;
 
-      const cx = boardX + (cell.col + 0.5) * cellSize;
-      const cy = boardY + (cell.row + 0.5) * cellSize;
+      const cellX = boardX + cell.col * cellSize;
+      const cellY = boardY + cell.row * cellSize;
+      const cx = cellX + cellSize * 0.5;
+      const cy = cellY + cellSize * 0.5;
       const isSelected = cell.id < MAX_CELLS && selectedMask[cell.id] === 1;
       const isHint = cell.id < MAX_CELLS && hintMask[cell.id] === 1;
 
       if (isSelected || isHint) {
-        ctx.lineWidth = selStrokeW;
-        if (isSelected && selectionState === 'exact') {
-          ctx.strokeStyle = '#24b445';
-          ctx.fillStyle = 'rgba(130, 245, 118, 0.42)';
-        } else if (isSelected && selectionState === 'over') {
-          ctx.strokeStyle = '#d9384a';
-          ctx.fillStyle = 'rgba(255, 120, 138, 0.28)';
-        } else if (isSelected) {
-          ctx.strokeStyle = '#f2ae00';
-          ctx.fillStyle = 'rgba(255, 232, 110, 0.44)';
+        // Rounded-square cell marks (ink / green / red)
+        ctx.lineWidth = markStrokeW;
+        if (isSelected) {
+          ctx.strokeStyle = selectionColor(selectionState);
+          ctx.globalAlpha = 1;
         } else {
-          const pulse = 0.45 + 0.45 * Math.sin(elapsed * 9.0);
-          ctx.strokeStyle = `rgba(34, 184, 72, ${pulse.toFixed(2)})`;
-          ctx.fillStyle = `rgba(148, 245, 134, ${(pulse * 0.35).toFixed(2)})`;
+          ctx.strokeStyle = PAPER.ink;
+          ctx.globalAlpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(elapsed * 7.0));
         }
         ctx.beginPath();
-        ctx.arc(cx, cy, selRingR, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.roundRect(cellX + markInset, cellY + markInset, markSize, markSize, cellSize * 0.18);
         ctx.stroke();
+        ctx.globalAlpha = 1;
       }
 
-      const sprite = (cell.isGolden ? goldSprites : redSprites)[cell.value];
+      const sprite = (cell.isGolden ? goldSprites : tokenSprites)[cell.value];
       if (sprite) {
         if (isSelected) {
-          const scaled = drawSize * 1.08;
+          const scaled = drawSize * 0.92;
           ctx.drawImage(sprite, cx - scaled * 0.5, cy - scaled * 0.5, scaled, scaled);
         } else {
           ctx.drawImage(sprite, cx - spriteHalfLogical, cy - spriteHalfLogical, drawSize, drawSize);
@@ -311,78 +279,86 @@ export function createOriginalFruitBox2D(options: {
       }
     }
 
-    // Crisp classic drag rectangle
+    // Ink drag rectangle with corner ticks
     if (selectionRect) {
       const minX = boardX + Math.min(selectionRect.x1, selectionRect.x2) * cellSize;
       const minY = boardY + Math.min(selectionRect.y1, selectionRect.y2) * cellSize;
-      const w = Math.abs(selectionRect.x2 - selectionRect.x1) * cellSize;
-      const h = Math.abs(selectionRect.y2 - selectionRect.y1) * cellSize;
+      const w = Math.max(4, Math.abs(selectionRect.x2 - selectionRect.x1) * cellSize);
+      const h = Math.max(4, Math.abs(selectionRect.y2 - selectionRect.y1) * cellSize);
+      const color = selectionColor(selectionState);
 
-      ctx.fillStyle =
-        selectionState === 'exact'
-          ? 'rgba(84, 224, 96, 0.28)'
-          : selectionState === 'over'
-            ? 'rgba(236, 72, 92, 0.18)'
-            : 'rgba(255, 226, 94, 0.28)';
-      ctx.strokeStyle =
-        selectionState === 'exact'
-          ? '#22b144'
-          : selectionState === 'over'
-            ? '#d9384a'
-            : '#e6a500';
-      ctx.lineWidth = 2.5;
+      ctx.save();
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle = color;
+      ctx.fillRect(minX, minY, w, h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(minX, minY, w, h);
+      ctx.setLineDash([]);
+
+      const tick = Math.min(12, w * 0.3, h * 0.3);
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'square';
       ctx.beginPath();
-      ctx.roundRect(minX, minY, Math.max(4, w), Math.max(4, h), 6);
-      ctx.fill();
+      ctx.moveTo(minX, minY + tick);
+      ctx.lineTo(minX, minY);
+      ctx.lineTo(minX + tick, minY);
+      ctx.moveTo(minX + w - tick, minY);
+      ctx.lineTo(minX + w, minY);
+      ctx.lineTo(minX + w, minY + tick);
+      ctx.moveTo(minX + w, minY + h - tick);
+      ctx.lineTo(minX + w, minY + h);
+      ctx.lineTo(minX + w - tick, minY + h);
+      ctx.moveTo(minX + tick, minY + h);
+      ctx.lineTo(minX, minY + h);
+      ctx.lineTo(minX, minY + h - tick);
       ctx.stroke();
+      ctx.restore();
     }
 
-    // Classic gravity-drop falling apples (blitted from cached sprites!)
-    for (let i = fallingApples.length - 1; i >= 0; i -= 1) {
-      const fa = fallingApples[i];
-      fa.vy += 1280 * dt;
-      fa.x += fa.vx * dt;
-      fa.y += fa.vy * dt;
-      fa.rot += fa.vRot * dt;
-      fa.alpha = Math.max(0, fa.alpha - dt * 0.55);
-
-      if (fa.y > viewportH + appleRadius * 2 || fa.alpha <= 0.02) {
-        fallingApples.splice(i, 1);
+    // In-place pop: token swells and fades (no gravity drop)
+    for (let i = popTokens.length - 1; i >= 0; i -= 1) {
+      const pt = popTokens[i];
+      pt.age += dt;
+      if (pt.age >= pt.life) {
+        popTokens.splice(i, 1);
         continue;
       }
-
-      const sprite = (fa.isGolden ? goldSprites : redSprites)[fa.value];
+      const t = pt.age / pt.life;
+      const sprite = (pt.isGolden ? goldSprites : tokenSprites)[pt.value];
       if (sprite) {
+        const scaled = drawSize * (1 + 0.35 * t);
         ctx.save();
-        ctx.globalAlpha = fa.alpha;
-        ctx.translate(fa.x, fa.y);
-        ctx.rotate(fa.rot);
-        ctx.drawImage(sprite, -spriteHalfLogical, -spriteHalfLogical, drawSize, drawSize);
+        ctx.globalAlpha = 1 - t;
+        ctx.drawImage(sprite, pt.x - scaled * 0.5, pt.y - scaled * 0.5, scaled, scaled);
         ctx.restore();
       }
     }
 
-    // Crisp pop sparkles
-    for (let i = sparks.length - 1; i >= 0; i -= 1) {
-      const sp = sparks[i];
-      sp.age += dt;
-      if (sp.age >= sp.life) {
-        sparks.splice(i, 1);
+    // Expanding ink ripples
+    for (let i = popRings.length - 1; i >= 0; i -= 1) {
+      const ring = popRings[i];
+      ring.age += dt;
+      if (ring.age >= ring.life) {
+        popRings.splice(i, 1);
         continue;
       }
-      sp.vy += 380 * dt;
-      sp.x += sp.vx * dt;
-      sp.y += sp.vy * dt;
-      const alpha = 1 - sp.age / sp.life;
+      const t = ring.age / ring.life;
       ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = sp.color;
+      ctx.globalAlpha = (1 - t) * 0.7;
+      ctx.strokeStyle = ring.color;
+      ctx.lineWidth = Math.max(1, 2 * (1 - t));
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y, sp.radius * alpha, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(ring.x, ring.y, cellSize * (0.3 + 0.45 * t), 0, Math.PI * 2);
+      ctx.stroke();
       ctx.restore();
     }
   };
+
+  const hasPendingAnimation = (): boolean =>
+    popTokens.length > 0 || popRings.length > 0 || hasActiveHint;
 
   const scheduleLoop = (): void => {
     if (disposed || rafId !== 0) return;
@@ -399,8 +375,7 @@ export function createOriginalFruitBox2D(options: {
     lastTime = now;
     elapsed += dt;
 
-    const needsContinuousAnimation =
-      fallingApples.length > 0 || sparks.length > 0 || hasActiveHint;
+    const needsContinuousAnimation = hasPendingAnimation();
 
     if (dirty || needsContinuousAnimation) {
       dirty = false;
@@ -422,7 +397,7 @@ export function createOriginalFruitBox2D(options: {
       elapsed += dt;
       dirty = false;
       drawFrame(dt);
-      if (fallingApples.length > 0 || sparks.length > 0 || hasActiveHint) {
+      if (hasPendingAnimation()) {
         scheduleLoop();
       }
     }
@@ -479,46 +454,33 @@ export function createOriginalFruitBox2D(options: {
         for (const cell of event.clearedCells) {
           const px = boardX + (cell.col + 0.5) * cellSize;
           const py = boardY + (cell.row + 0.5) * cellSize;
-          fallingApples.push({
+          popTokens.push({
             x: px,
             y: py,
-            vx: (Math.random() - 0.5) * 260,
-            vy: -240 - Math.random() * 180,
-            rot: 0,
-            vRot: (Math.random() - 0.5) * 9,
             value: cell.value,
             isGolden: cell.isGolden,
-            alpha: 1,
+            age: 0,
+            life: POP_LIFE_SEC,
           });
-          const colors = cell.isGolden
-            ? ['#ffd138', '#fff4a3', '#68d348']
-            : ['#ff6b63', '#ffd84d', '#68d348'];
-          for (let k = 0; k < 6; k += 1) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 60 + Math.random() * 140;
-            sparks.push({
-              x: px,
-              y: py,
-              vx: Math.cos(angle) * speed,
-              vy: Math.sin(angle) * speed - 60,
-              radius: 3 + Math.random() * 3,
-              color: colors[k % colors.length],
-              age: 0,
-              life: 0.35 + Math.random() * 0.2,
-            });
-          }
+          popRings.push({
+            x: px,
+            y: py,
+            color: cell.isGolden ? PAPER.gold : PAPER.exact,
+            age: 0,
+            life: POP_LIFE_SEC * 1.4,
+          });
         }
       }
       dirty = true;
       scheduleLoop();
     },
     setFeverLevel() {
-      // Classic 2D stays crisp regardless of fever level
+      // Paper 2D stays calm and crisp regardless of fever level
     },
     setSoftColors(soft) {
       if (softColors === soft) return;
       softColors = soft;
-      rebuildAppleSprites();
+      rebuildTokenSprites();
       dirty = true;
       scheduleLoop();
     },
@@ -557,7 +519,7 @@ export function createOriginalFruitBox2D(options: {
       }
       bgCache = null;
       for (let i = 0; i < 10; i += 1) {
-        redSprites[i] = null;
+        tokenSprites[i] = null;
         goldSprites[i] = null;
       }
     },

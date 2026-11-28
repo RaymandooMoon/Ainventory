@@ -77,7 +77,7 @@ export default function SiteOfflineGameModal({
             <div className="site-modal-card site-offline-card">
               <div className="site-modal-body">
                 <p className="site-offline-loading">
-                  {lang === 'ko' ? '3D 네온 사과게임 준비 중…' : 'Loading 3D Neon Apple Box…'}
+                  {lang === 'ko' ? 'APPLE 10 // 3D 준비 중…' : 'Loading APPLE 10 // 3D…'}
                 </p>
               </div>
             </div>
@@ -145,7 +145,7 @@ export default function SiteOfflineGameModal({
             <div className="site-offline-hero-content">
               <span className="site-offline-badge">
                 <Gamepad2 size={14} />
-                <span>사과게임 3D</span>
+                <span>APPLE 10 // 3D</span>
               </span>
               <strong>{lang === 'ko' ? '드래그로 합 10 만들기' : 'Drag to Make 10'}</strong>
             </div>

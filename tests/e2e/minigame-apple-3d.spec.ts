@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('Neon Arcade 3D Apple Box (/minigame)', () => {
+test.describe('APPLE 10 Neon 3D / Paper 2D minigame (/minigame)', () => {
   test('renders /minigame title overlay, starts 3D WebGL board, handles drag selection, hint, soft tint, and reset without errors', async ({
     page,
   }) => {
@@ -17,11 +17,11 @@ test.describe('Neon Arcade 3D Apple Box (/minigame)', () => {
     const playBtn = page.getByTestId('mg-play-btn');
     await expect(playBtn).toBeVisible();
 
-    // Switch visual style to Original 2D and back to Neon 3D cleanly
-    await page.getByRole('radio', { name: /원조 2D/ }).click();
-    await expect(root).toHaveClass(/is-original-2d/);
+    // Switch visual style to Paper 2D and back to Neon 3D cleanly
+    await page.getByRole('radio', { name: /페이퍼 2D/ }).click();
+    await expect(root).toHaveClass(/is-paper-2d/);
     await page.getByRole('radio', { name: /네온 3D/ }).click();
-    await expect(root).not.toHaveClass(/is-original-2d/);
+    await expect(root).not.toHaveClass(/is-paper-2d/);
 
     // Switch mode to Fever and back to Classic
     await page.getByRole('radio', { name: /피버 3D/ }).click();
@@ -54,9 +54,9 @@ test.describe('Neon Arcade 3D Apple Box (/minigame)', () => {
     await expect(page.getByTestId('mg-sum-pill')).toContainText(/SUM \d+/);
     await page.mouse.up();
 
-    // Toggle to Original 2D mid-game and verify drag works on the 2D canvas too
-    await page.getByRole('button', { name: /2D 원조 전환|3D 네온 전환/ }).click();
-    await expect(root).toHaveClass(/is-original-2d/);
+    // Toggle to Paper 2D mid-game and verify drag works on the 2D canvas too
+    await page.getByRole('button', { name: /2D 페이퍼 전환|3D 네온 전환/ }).click();
+    await expect(root).toHaveClass(/is-paper-2d/);
     await page.mouse.move(startX, startY);
     await page.mouse.down();
     await page.mouse.move(endX, endY, { steps: 6 });

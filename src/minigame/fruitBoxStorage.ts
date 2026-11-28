@@ -9,7 +9,10 @@ export interface FruitBoxRecords {
   readonly gamesPlayed: number;
 }
 
-export type FruitBoxVisualStyle = 'neon3d' | 'original2d';
+export type FruitBoxVisualStyle = 'neon3d' | 'paper2d';
+
+/** Pre-rename identifier persisted by older builds; migrated to `paper2d` on read. */
+const LEGACY_PAPER_2D_STYLE = 'original2d';
 
 export interface FruitBoxPreferences {
   readonly mode: FruitBoxMode;
@@ -119,12 +122,18 @@ export function saveGameResultToRecords(params: {
   return { records: next, isNewBest };
 }
 
+export function normalizeVisualStyle(raw: unknown): FruitBoxVisualStyle {
+  if (raw === 'neon3d' || raw === 'paper2d') return raw;
+  if (raw === LEGACY_PAPER_2D_STYLE) return 'paper2d';
+  return DEFAULT_FRUITBOX_PREFS.visualStyle;
+}
+
 export function readFruitBoxPreferences(): FruitBoxPreferences {
   const parsed = safeReadJson(PREFS_STORAGE_KEY);
   if (!parsed) return DEFAULT_FRUITBOX_PREFS;
   return {
     mode: parsed.mode === 'fever' ? 'fever' : 'classic',
-    visualStyle: parsed.visualStyle === 'original2d' ? 'original2d' : 'neon3d',
+    visualStyle: normalizeVisualStyle(parsed.visualStyle),
     sfxEnabled: typeof parsed.sfxEnabled === 'boolean' ? parsed.sfxEnabled : true,
     bgmEnabled: typeof parsed.bgmEnabled === 'boolean' ? parsed.bgmEnabled : true,
     softColors: typeof parsed.softColors === 'boolean' ? parsed.softColors : false,

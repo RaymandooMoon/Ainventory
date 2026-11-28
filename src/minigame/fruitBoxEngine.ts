@@ -137,7 +137,7 @@ function generateValidBoardCells(
       runningSum += val;
     }
 
-    // Adjust final slots so total sum is guaranteed divisible by 10 (exact Fruit Box invariant)
+    // Adjust final slots so total sum is guaranteed divisible by 10 (sum-10 clearability invariant)
     const remainder = runningSum % TARGET_SUM;
     if (remainder !== 0) {
       const neededAdd = TARGET_SUM - remainder;
@@ -264,7 +264,7 @@ export function normalizeSelectionRect(rect: GridSelectionRect): GridSelectionRe
 /**
  * Evaluates which active apples fall inside a grid-space drag rectangle.
  * Each cell `(col, row)` occupies `[col, col + 1] x [row, row + 1]` with center `(col + 0.5, row + 0.5)`
- * and hit margin `0.26` around its center (matching original Fruit Box feel: grazing the outer
+ * and hit margin `0.26` around its center (forgiving drag feel: grazing the outer
  * corners doesn't accidentally snag neighbors, while dragging smoothly across centers locks cleanly).
  */
 export function evaluateSelectionRect(

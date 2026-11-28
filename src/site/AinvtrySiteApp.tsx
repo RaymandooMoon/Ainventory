@@ -252,7 +252,7 @@ export default function AinvtrySiteApp() {
     const cancelSw = scheduleAfterFirstPaint(() => {
       void registerOfflineMinigameServiceWorker();
       // Pre-warm the lightweight minigame module in memory while online
-      // so tapping "Play Apple Box Now" in the offline auto-popup works instantaneously!
+      // so tapping the minigame CTA in the offline auto-popup works instantaneously!
       void import('../minigame/FruitBoxGamePage.tsx').catch(() => {});
     });
     const unsubHealth = subscribeConnectionHealth((nextHealth) => {
@@ -1393,13 +1393,13 @@ export default function AinvtrySiteApp() {
                   className="site-bottombar-link site-bottombar-minigame"
                   aria-label={
                     lang === 'ko'
-                      ? '오프라인 3D 사과게임 미니게임 열기'
-                      : 'Open offline 3D Apple Box minigame'
+                      ? '오프라인 APPLE 10 미니게임 열기'
+                      : 'Open offline APPLE 10 minigame'
                   }
                 >
                   <Gamepad2 size={13} aria-hidden="true" />
                   <span className="site-bottombar-link-full">
-                    {lang === 'ko' ? '사과게임' : 'Minigame'}
+                    {lang === 'ko' ? '미니게임' : 'Minigame'}
                   </span>
                   <span className="site-bottombar-link-short" aria-hidden="true">
                     {lang === 'ko' ? '게임' : 'Game'}
