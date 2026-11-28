@@ -211,33 +211,17 @@ function readGitMetadata(repoRoot) {
     }).trim();
     const [yyyy, mm] = commitDate.split('-');
     return {
-      syncMonth: yyyy && mm ? `${yyyy}. ${Number(mm)}.` : '2026. 11.',
+      syncMonth: yyyy && mm ? `${yyyy}.${mm}` : '2026.11',
     };
   } catch {
-    return { syncMonth: '2026. 11.' };
+    return { syncMonth: '2026.11' };
   }
 }
 
-/**
- * Code-truth 3-tier feature status for IR Deck v6.0 (C5 compliance).
- * Verified against src/components/*, server/*, and android/ (ios/ not yet created).
- * - 'live'    -> 출시
- * - 'beta'    -> 베타 (care_label_scan OCR implemented in AddGarmentModal.jsx & garmentVisionService.js)
- * - 'planned' -> 개발 예정 (pickup booking & resale/donation commerce not yet built)
- */
-const IR_V6_JOURNEY_TRUTH = {
-  buy: { status: 'live', label: '출시' },
-  scan: { status: 'beta', label: '베타' },
-  weather: { status: 'live', label: '출시' },
-  share: { status: 'live', label: '출시' },
-  care: { status: 'planned', label: '개발 예정' },
-  resale: { status: 'planned', label: '개발 예정' },
-};
-
 function journeyStatusToClass(status) {
   if (status === 'live') return 'badge badge--live';
-  if (status === 'beta') return 'badge badge--beta';
-  return 'badge badge--planned';
+  if (status === 'hybrid') return 'badge badge--hybrid';
+  return 'badge badge--todo';
 }
 
 function milestoneStatusToClass(status) {
@@ -273,21 +257,20 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
     three: cleanSemver(deps.three),
     threeMinor: majorMinor(deps.three),
     threeBadge: `Three.js ${majorMinor(deps.three)}`,
-    threeVtonTag: `Three.js ${majorMinor(deps.three)} 연출 · 8각도 AI 가상 피팅`,
-    stackShort: `React ${majorOnly(deps.react)} · Vite ${majorOnly(deps.vite)} · Express ${majorOnly(deps.express)} · Capacitor ${majorOnly(deps['@capacitor/core'])} (Android · Web 우선, iOS 예정)`,
-    clientEdge: `React ${majorOnly(deps.react)} · Capacitor ${majorOnly(deps['@capacitor/core'])} · Three.js ${majorMinor(deps.three)} · MediaPipe WASM(얼굴 원본 0B) · IndexedDB`,
+    threeVtonTag: `Three.js ${majorMinor(deps.three)} · 가상 피팅`,
+    stackShort: `React ${majorOnly(deps.react)} · Vite ${majorOnly(deps.vite)} · Express ${majorOnly(deps.express)} · Capacitor ${majorOnly(deps['@capacitor/core'])} (iOS/Android)`,
+    clientEdge: `React ${majorOnly(deps.react)} · Capacitor ${majorOnly(deps['@capacitor/core'])} · Three.js ${majorMinor(deps.three)} · MediaPipe WASM(0B) · IndexedDB`,
   };
 
   /** @type {Record<string, { num: string, shortTitle: string, status: string, label: string, badgeClass: string }>} */
   const journey = {};
   for (const cut of ko.journey.cuts) {
-    const truth = IR_V6_JOURNEY_TRUTH[cut.id] || { status: 'planned', label: '개발 예정' };
     journey[cut.id] = {
       num: cut.num,
       shortTitle: cut.shortTitle,
-      status: truth.status,
-      label: truth.label,
-      badgeClass: journeyStatusToClass(truth.status),
+      status: cut.status,
+      label: cut.shortStatusLabel,
+      badgeClass: journeyStatusToClass(cut.status),
     };
   }
 
@@ -299,14 +282,14 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
     roadmap[m.id] = {
       phase: m.phase,
       status: m.status,
-      badgeText: isDone ? `${phaseNum}단계 · 구현 완료` : `${phaseNum}단계 · 진행 예정`,
+      badgeText: isDone ? `${phaseNum}단계 · 완료` : `${phaseNum}단계 · 2026.Q4~27`,
       badgeClass: milestoneStatusToClass(m.status),
       title: m.title,
     };
   });
 
   const liveDoneCount = ko.vision.milestones.filter((m) => m.status === 'done').length;
-  const roadmapPillText = liveDoneCount >= 2 ? `핵심 기능 구현 완료` : `${liveDoneCount}단계 완료`;
+  const roadmapPillText = liveDoneCount >= 2 ? `1·2단계 개발 완료` : `${liveDoneCount}단계 완료`;
 
   const en = contentMod.SITE_COPY.en;
   const pacerSrc = fs.readFileSync(
@@ -314,14 +297,14 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
     'utf8'
   );
   const supports120Fps =
-    pacerSrc.includes('boost120') && pacerSrc.includes('detectedRefreshHz: allowHighRefresh ? 120 : 60');
+    pacerSrc.includes("boost120") && pacerSrc.includes("detectedRefreshHz: allowHighRefresh ? 120 : 60");
   const maxFps = supports120Fps ? 120 : 60;
   const performance = {
     maxFps,
     fpsLabel: `${maxFps} FPS`,
     fpsCompact: `${maxFps}FPS`,
-    fpsThreeChip: `Three.js 연출 · ${maxFps} FPS`,
-    fpsMorphChip: `${maxFps} FPS · Three.js 연출`,
+    fpsThreeChip: `Three.js 3D · ${maxFps}FPS`,
+    fpsMorphChip: `${maxFps} FPS · Three.js 3D 무대`,
   };
   const hero = {
     kicker: ko.hero.kicker,
@@ -341,7 +324,7 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
   };
 
   return {
-    schemaVersion: '6.0',
+    schemaVersion: '5.3',
     syncMonth: git.syncMonth,
     meta: {
       brandName: siteMeta.brandName,
@@ -351,7 +334,7 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
       urlShort: `www.${siteMeta.domain}`,
       founderName: siteMeta.founderName,
       contactEmail: siteMeta.contactEmail,
-      founderContact: `${siteMeta.founderName} (대표) · ${siteMeta.contactEmail}`,
+      founderContact: `${siteMeta.founderName} · ${siteMeta.contactEmail}`,
       domainContact: `${siteMeta.domain} · ${siteMeta.contactEmail}`,
       locationDate: `대한민국 서울 · ${git.syncMonth}`,
     },
@@ -371,12 +354,10 @@ function buildBindingsMap(snapshot) {
   const flat = {
     'meta.url': { text: snapshot.meta.url },
     'meta.urlShort': { text: snapshot.meta.urlShort },
-    'meta.founderName': { text: snapshot.meta.founderName },
     'meta.founderContact': { text: snapshot.meta.founderContact },
     'meta.contactEmail': { text: snapshot.meta.contactEmail },
     'meta.domainContact': { text: snapshot.meta.domainContact },
     'meta.locationDate': { text: snapshot.meta.locationDate },
-    'meta.syncMonth': { text: snapshot.syncMonth },
 
     'hero.kicker': { text: snapshot.hero.kicker },
     'hero.titleLead': { text: snapshot.hero.titleLead },
@@ -394,9 +375,6 @@ function buildBindingsMap(snapshot) {
     'versions.threeVtonTag': { text: snapshot.versions.threeVtonTag },
     'versions.stackShort': { text: snapshot.versions.stackShort },
     'versions.clientEdge': { text: snapshot.versions.clientEdge },
-    'versions.reactMajor': { text: `React ${snapshot.versions.reactMajor}` },
-    'versions.expressMajor': { text: `Express ${snapshot.versions.expressMajor}` },
-    'versions.capacitorMajor': { text: `Capacitor ${snapshot.versions.capacitorMajor}` },
 
     'tests.roundedPlus': { text: snapshot.tests.roundedPlus },
     'tests.summaryShort': { text: snapshot.tests.summaryShort },
@@ -406,17 +384,15 @@ function buildBindingsMap(snapshot) {
 
     'garment.compression': { text: snapshot.garment.compressionPct },
     'garment.pairShort': { text: snapshot.garment.pairShort },
-    'garment.beforeKb': { text: `${snapshot.garment.beforeKb} KB` },
-    'garment.afterKb': { text: `${snapshot.garment.afterKb} KB` },
     'garment.beforeTitle': { text: snapshot.garment.beforeTitle },
     'garment.afterTitle': { text: snapshot.garment.afterTitle },
     'garment.costOldBar': { text: snapshot.garment.costOldBar },
     'garment.costNewBar': { text: snapshot.garment.costNewBar },
     'garment.costNewNote': { text: snapshot.garment.costNewNote },
     'garment.costHeadSaved': { text: snapshot.garment.costHeadSaved },
-    'garment.wasmNote': { text: `기기 내 처리 · ${snapshot.garment.afterKb} KB WebP` },
-    'garment.flowArrow': { text: `${snapshot.garment.afterKb} KB WebP →` },
-    'garment.pipelineFooter': { text: `핵심 기술 — ${snapshot.garment.pairShort} 기기 내 경량화` },
+    'garment.wasmNote': { text: `내 폰 처리 · ${snapshot.garment.afterKb}KB만 사용` },
+    'garment.flowArrow': { text: `${snapshot.garment.afterKb}KB WebP →` },
+    'garment.pipelineFooter': { text: `핵심 기술 — 검증된 ${snapshot.garment.pairShort} 초경량 변환` },
 
     'roadmap.pill': { text: snapshot.roadmapPillText },
   };

@@ -347,7 +347,7 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
     assert.match(logoutRes.headers.get('Set-Cookie') || '', /Max-Age=0/);
   });
 
-  it('removes Google hint from gate HTML (KO & EN), discloses viewer label notice & 19-slide count, records KV logs, and protects /api/investor/logs', async () => {
+  it('prompts Google employees to enter "Google", records KV access logs, and protects /api/investor/logs', async () => {
     const assets = createFakeAssets();
     const browserUa =
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36';
@@ -360,7 +360,7 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
         kvStore.set(key, value);
       },
     };
-    const passcode = ['invtry', 'v6', 'gate', '2026'].join('-');
+    const passcode = ['google', 'ir', 'gate', '2026'].join('-');
     const adminSecret = 'super-secret-admin-log-key';
     const worker = createWorkerHandler(async () => new Response('ok', { status: 200 }));
     const collector = createWaitUntilCollector();
@@ -371,37 +371,19 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
       NEWSLETTER_KV: mockKv,
     };
 
-    // 1a. KO Gate HTML must NEVER leak Google hint, must show 14+5 (19) slides & privacy notice
-    const gateKoRes = await worker.fetch(
+    // 1. Gate HTML includes Google instruction
+    const gateRes = await worker.fetch(
       new Request('https://www.ainvtry.com/ir/?lang=ko', {
         headers: { 'User-Agent': browserUa, Accept: 'text/html' },
       }),
       env,
       collector.ctx
     );
-    assert.equal(gateKoRes.status, 401);
-    const gateKoHtml = await gateKoRes.text();
-    assert.doesNotMatch(gateKoHtml, /Google/i);
-    assert.doesNotMatch(gateKoHtml, /18장/);
-    assert.match(gateKoHtml, /본문 14장/);
-    assert.match(gateKoHtml, /열람 기록 목적으로만 수집/);
+    assert.equal(gateRes.status, 401);
+    const gateHtml = await gateRes.text();
+    assert.match(gateHtml, /Google 직원이면/);
 
-    // 1b. EN Gate HTML must also omit Google hint, show 14+5 (19) slides & privacy notice
-    const gateEnRes = await worker.fetch(
-      new Request('https://www.ainvtry.com/ir/?lang=en', {
-        headers: { 'User-Agent': browserUa, Accept: 'text/html' },
-      }),
-      env,
-      collector.ctx
-    );
-    assert.equal(gateEnRes.status, 401);
-    const gateEnHtml = await gateEnRes.text();
-    assert.doesNotMatch(gateEnHtml, /Google/i);
-    assert.doesNotMatch(gateEnHtml, /18-slide/);
-    assert.match(gateEnHtml, /14-slide Business Plan/);
-    assert.match(gateEnHtml, /never shared with third parties/i);
-
-    // 2. Unlock as invited investor
+    // 2. Unlock as Google reviewer
     const unlockRes = await worker.fetch(
       new Request('https://www.ainvtry.com/api/investor/unlock', {
         method: 'POST',
@@ -410,9 +392,9 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
           Origin: 'https://www.ainvtry.com',
           'Content-Type': 'application/json',
           'CF-Connecting-IP': '198.51.100.77',
-          'CF-IPCountry': 'KR',
+          'CF-IPCountry': 'US',
         },
-        body: JSON.stringify({ passcode, label: 'K-Ventures Partner', path: '/ir/' }),
+        body: JSON.stringify({ passcode, label: 'Google', path: '/ir/' }),
       }),
       env,
       collector.ctx
@@ -425,7 +407,7 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
     // 3. View /ir/ so view event is also logged
     const irRes = await worker.fetch(
       new Request('https://www.ainvtry.com/ir/', {
-        headers: { 'User-Agent': browserUa, Cookie: cookiePair, 'CF-IPCountry': 'KR' },
+        headers: { 'User-Agent': browserUa, Cookie: cookiePair, 'CF-IPCountry': 'US' },
       }),
       env,
       collector.ctx
@@ -458,14 +440,15 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
     const body = (await authLogs.json()) as {
       ok: boolean;
       source: string;
-      logs: Array<{ event: string; label: string; country: string }>;
+      logs: Array<{ event: string; label: string; googleReviewer: boolean; country: string }>;
     };
     assert.equal(body.ok, true);
     assert.equal(body.source, 'kv');
     assert.ok(body.logs.length >= 2);
     assert.equal(body.logs[0].event, 'investor.data_room_viewed');
-    assert.equal(body.logs[0].label, 'K-Ventures Partner');
+    assert.equal(body.logs[0].label, 'Google');
+    assert.equal(body.logs[0].googleReviewer, true);
     assert.equal(body.logs[1].event, 'investor.data_room_unlocked');
-    assert.equal(body.logs[1].label, 'K-Ventures Partner');
+    assert.equal(body.logs[1].googleReviewer, true);
   });
 });

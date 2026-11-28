@@ -66,6 +66,12 @@
     if (paramTheme === 'dark' || paramTheme === 'light') return paramTheme;
     const saved = safeStorageGet(STORAGE_KEYS.theme);
     if (saved === 'dark' || saved === 'light') return saved;
+    if (
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+    ) {
+      return 'dark';
+    }
     return 'light';
   }
 
@@ -450,6 +456,11 @@
   function mountLiveHeroFrame() {
     if (!liveHeroFrame || !isHttpRuntime || liveHeroMounted) return;
     liveHeroMounted = true;
+    const markReady = () => {
+      if (liveHeroShell) liveHeroShell.classList.add('is-live-ready');
+      syncLiveHeroFrame(false);
+    };
+    liveHeroFrame.addEventListener('load', markReady, { once: true });
     liveHeroFrame.setAttribute('src', buildLiveHeroUrl());
   }
 

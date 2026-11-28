@@ -539,7 +539,7 @@ async function notifyFounderInvestorAccess(
   await Promise.allSettled(tasks);
 }
 
-export function renderInvestorGateHtml({ lang = 'ko', theme = 'light', configured = true }) {
+export function renderInvestorGateHtml({ lang = 'ko', theme = 'dark', configured = true }) {
   const isEn = lang === 'en';
   const isLight = theme === 'light';
   const bg = isLight ? '#f5f5f7' : '#09090b';
@@ -556,22 +556,18 @@ export function renderInvestorGateHtml({ lang = 'ko', theme = 'light', configure
   const heading = isEn ? 'Investor Data Room' : '투자자 전용 사업계획서';
   const subtitle = configured
     ? isEn
-      ? 'This 14-slide Business Plan (+ 5-slide Appendix, 19 slides total) is restricted to invited investors and partners. Enter your access passcode to unlock for 12 hours.'
-      : '본 사업계획서(본문 14장 · 부록 5장, 총 19장)는 초대된 투자자 · 파트너 전용 자료입니다. 전달받으신 접근 코드를 입력하시면 12시간 동안 열람하실 수 있습니다.'
+      ? 'This 18-slide Business Plan and unit economics brief is restricted to invited investors and partners. Enter your access passcode to unlock for 12 hours.'
+      : '본 18장 사업계획서 및 수익성 상세 지표는 초대된 투자자 · 파트너 전용 자료입니다. 전달받으신 접근 코드를 입력하시면 12시간 동안 열람하실 수 있습니다.'
     : isEn
-      ? 'This 14-slide Business Plan (+ 5-slide Appendix) is shared privately by direct founder invitation. Request an access passcode via email below.'
-      : '본 사업계획서(본문 14장 · 부록 5장)는 창업자 직접 초대를 통해서만 열람하실 수 있습니다. 아래 이메일로 열람 코드를 요청해 주세요.';
-  const privacyNotice = isEn
-    ? 'Viewer name and organization are collected solely to verify invitations and log data-room access, and are never shared with third parties.'
-    : '입력하신 성함과 소속은 초대 확인 및 데이터룸 열람 기록 목적으로만 수집되며 외부에 제공되지 않습니다.';
+      ? 'This 18-slide Business Plan is shared privately by direct founder invitation. Request an access passcode via email below.'
+      : '본 18장 사업계획서는 창업자 직접 초대를 통해서만 열람하실 수 있습니다. 아래 이메일로 열람 코드를 요청해 주세요.';
 
   const formHtml = configured
     ? `<form id="ir-gate-form" novalidate>
         <label class="field-label" for="ir-passcode">${isEn ? 'Access Passcode' : '접근 코드'}</label>
         <input id="ir-passcode" name="passcode" type="password" autocomplete="one-time-code" required placeholder="${isEn ? 'Enter investor passcode' : '투자자 접근 코드를 입력하세요'}" />
-        <label class="field-label" for="ir-label">${isEn ? 'Name / Organization (Optional)' : '성함 / 소속 (선택)'}</label>
-        <input id="ir-label" name="label" type="text" maxlength="64" autocomplete="organization" placeholder="${isEn ? 'e.g. Kim · Partner VC' : '예: 홍길동 · ○○벤처스'}" />
-        <p class="privacy-note">${privacyNotice}</p>
+        <label class="field-label" for="ir-label">${isEn ? 'Name / Organization (If Google employee, please enter "Google")' : '성함 / 소속 (Google 직원이면 "Google"이라고 입력해 주세요)'}</label>
+        <input id="ir-label" name="label" type="text" maxlength="64" autocomplete="organization" placeholder="${isEn ? 'e.g. Google, or Kim · Partner VC' : '예: Google 또는 홍길동 · ○○벤처스'}" />
         <p id="ir-gate-error" class="error-msg" role="alert" aria-live="polite"></p>
         <button id="ir-gate-submit" type="submit" class="btn-primary">${isEn ? 'Unlock Business Plan' : '사업계획서 열람하기'}</button>
       </form>`
@@ -663,12 +659,6 @@ export function renderInvestorGateHtml({ lang = 'ko', theme = 'light', configure
     .btn-primary:disabled {
       opacity: 0.55;
       cursor: wait;
-    }
-    .privacy-note {
-      margin: -6px 0 12px;
-      font-size: 11.5px;
-      line-height: 1.5;
-      color: ${muted};
     }
     .error-msg {
       min-height: 18px;
@@ -1096,7 +1086,7 @@ export async function handleProtectedIrRoute(request, url, env, cryptoDeps, ctx)
 
     if (isHtmlDoc) {
       const lang = url.searchParams.get('lang') === 'en' ? 'en' : 'ko';
-      const theme = url.searchParams.get('theme') === 'dark' ? 'dark' : 'light';
+      const theme = url.searchParams.get('theme') === 'light' ? 'light' : 'dark';
       return new Response(
         renderInvestorGateHtml({ lang, theme, configured: session.configured }),
         {

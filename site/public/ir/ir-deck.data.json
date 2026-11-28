@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "6.0",
-  "syncMonth": "2026. 11.",
+  "schemaVersion": "5.3",
+  "syncMonth": "2026.11",
   "meta": {
     "brandName": "Ainvtry",
     "logoMark": "iNVTRY",
@@ -9,9 +9,9 @@
     "urlShort": "www.ainvtry.com",
     "founderName": "Raymond Moon",
     "contactEmail": "raymond@ainvtry.com",
-    "founderContact": "Raymond Moon (대표) · raymond@ainvtry.com",
+    "founderContact": "Raymond Moon · raymond@ainvtry.com",
     "domainContact": "ainvtry.com · raymond@ainvtry.com",
-    "locationDate": "대한민국 서울 · 2026. 11."
+    "locationDate": "대한민국 서울 · 2026.11"
   },
   "hero": {
     "kicker": "손 안의 디지털 옷장",
@@ -33,8 +33,8 @@
     "maxFps": 120,
     "fpsLabel": "120 FPS",
     "fpsCompact": "120FPS",
-    "fpsThreeChip": "Three.js 연출 · 120 FPS",
-    "fpsMorphChip": "120 FPS · Three.js 연출"
+    "fpsThreeChip": "Three.js 3D · 120FPS",
+    "fpsMorphChip": "120 FPS · Three.js 3D 무대"
   },
   "versions": {
     "react": "19.3.1",
@@ -50,19 +50,19 @@
     "three": "0.187.0",
     "threeMinor": "0.187",
     "threeBadge": "Three.js 0.187",
-    "threeVtonTag": "Three.js 0.187 연출 · 8각도 AI 가상 피팅",
-    "stackShort": "React 19 · Vite 8 · Express 5 · Capacitor 8 (Android · Web 우선, iOS 예정)",
-    "clientEdge": "React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(얼굴 원본 0B) · IndexedDB"
+    "threeVtonTag": "Three.js 0.187 · 가상 피팅",
+    "stackShort": "React 19 · Vite 8 · Express 5 · Capacitor 8 (iOS/Android)",
+    "clientEdge": "React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(0B) · IndexedDB"
   },
   "tests": {
     "suiteCount": 63,
     "unitSuites": 47,
     "apiSuites": 10,
     "e2eSuites": 6,
-    "caseCount": 431,
-    "roundedPlus": "430+",
-    "summaryShort": "63개 묶음 · 431개 검증 통과",
-    "summaryLine": "자동 품질 검증 63개 묶음(431개 항목) · 웹·앱"
+    "caseCount": 429,
+    "roundedPlus": "420+",
+    "summaryShort": "63개 묶음 · 429개 검증 통과",
+    "summaryLine": "자동 품질 검증 63개 묶음(429개 항목) · 웹·앱"
   },
   "garment": {
     "beforeBytes": 582332,
@@ -83,69 +83,69 @@
       "num": "01",
       "shortTitle": "중복 확인",
       "status": "live",
-      "label": "출시",
+      "label": "LIVE",
       "badgeClass": "badge badge--live"
     },
     "scan": {
       "num": "02",
       "shortTitle": "사진 등록",
-      "status": "beta",
-      "label": "베타",
-      "badgeClass": "badge badge--beta"
+      "status": "hybrid",
+      "label": "LIVE+",
+      "badgeClass": "badge badge--hybrid"
     },
     "weather": {
       "num": "03",
       "shortTitle": "날씨 코디",
       "status": "live",
-      "label": "출시",
+      "label": "LIVE",
       "badgeClass": "badge badge--live"
     },
     "share": {
       "num": "04",
       "shortTitle": "캘린더",
-      "status": "live",
-      "label": "출시",
-      "badgeClass": "badge badge--live"
+      "status": "todo",
+      "label": "TO-DO",
+      "badgeClass": "badge badge--todo"
     },
     "care": {
       "num": "05",
       "shortTitle": "세탁 · 수거",
-      "status": "planned",
-      "label": "개발 예정",
-      "badgeClass": "badge badge--planned"
+      "status": "hybrid",
+      "label": "LIVE+",
+      "badgeClass": "badge badge--hybrid"
     },
     "resale": {
       "num": "06",
       "shortTitle": "간편 판매",
-      "status": "planned",
-      "label": "개발 예정",
-      "badgeClass": "badge badge--planned"
+      "status": "hybrid",
+      "label": "LIVE+",
+      "badgeClass": "badge badge--hybrid"
     }
   },
   "roadmap": {
     "stage-1": {
       "phase": "LIVE 01",
       "status": "done",
-      "badgeText": "1단계 · 구현 완료",
+      "badgeText": "1단계 · 완료",
       "badgeClass": "badge badge--live",
       "title": "레이어드 피팅 · 온디바이스 피부톤"
     },
     "stage-2": {
       "phase": "LIVE 02",
       "status": "done",
-      "badgeText": "2단계 · 구현 완료",
+      "badgeText": "2단계 · 완료",
       "badgeClass": "badge badge--live",
       "title": "실시간 날씨 · 세탁 지도 · 즉시 삭제"
     },
     "stage-3": {
       "phase": "TO-DO",
       "status": "active",
-      "badgeText": "3단계 · 진행 예정",
+      "badgeText": "3단계 · 2026.Q4~27",
       "badgeClass": "badge badge--gold",
       "title": "택 스캔 · 캘린더 · 방문수거 · 리셀"
     }
   },
-  "roadmapPillText": "핵심 기능 구현 완료",
+  "roadmapPillText": "1·2단계 개발 완료",
   "assets": {
     "hashes": {
       "site/public/assets/previews/app-fitting-live-ko-light.webp": "0b2c2deb6bd9",
