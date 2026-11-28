@@ -28,23 +28,26 @@ describe('Newsletter Client Double Opt-In Resilience, CSV Export & Cloudflare Wo
     assert.equal(config.assets?.directory, './dist-site');
     assert.equal(config.assets?.binding, 'ASSETS');
     assert.ok(config.assets?.run_worker_first?.includes('/api/*'));
-    assert.equal(config.vars?.API_UPSTREAM_ORIGIN, 'https://ainventory-api.onrender.com');
+    assert.equal(
+      config.vars?.API_UPSTREAM_ORIGIN,
+      'https://ainventory-api-2xrmog66nq-du.a.run.app'
+    );
   });
 
-  it('attaches automatic Render production API fallback for subscribe, verify, resend, and unsubscribe on hosted domains', () => {
+  it('attaches automatic Seoul Cloud Run production API fallback for subscribe, verify, resend, and unsubscribe on hosted domains', () => {
     const prod = resolveNewsletterEndpoints({}, 'ainvtry.com');
     assert.equal(prod.isStaticOnly, false);
     assert.deepEqual(prod.subscribeUrls, [
       '/api/newsletter/subscribe',
-      'https://ainventory-api.onrender.com/api/newsletter/subscribe',
+      'https://ainventory-api-2xrmog66nq-du.a.run.app/api/newsletter/subscribe',
     ]);
     assert.deepEqual(prod.verifyUrls, [
       '/api/newsletter/verify',
-      'https://ainventory-api.onrender.com/api/newsletter/verify',
+      'https://ainventory-api-2xrmog66nq-du.a.run.app/api/newsletter/verify',
     ]);
     assert.deepEqual(prod.resendUrls, [
       '/api/newsletter/resend',
-      'https://ainventory-api.onrender.com/api/newsletter/resend',
+      'https://ainventory-api-2xrmog66nq-du.a.run.app/api/newsletter/resend',
     ]);
 
     const local = resolveNewsletterEndpoints({}, 'localhost');
@@ -111,7 +114,9 @@ describe('Newsletter Client Double Opt-In Resilience, CSV Export & Cloudflare Wo
       assert.equal(step2.status, 'subscribed');
       assert.equal(step2.email, 'mbo88@naver.com');
     }
-    assert.ok(visitedUrls.includes('https://ainventory-api.onrender.com/api/newsletter/subscribe'));
+    assert.ok(
+      visitedUrls.includes('https://ainventory-api-2xrmog66nq-du.a.run.app/api/newsletter/subscribe')
+    );
   });
 
   it('propagates EMAIL_DELIVERY_NOT_CONFIGURED cleanly without silently falling back to offline_saved', async () => {

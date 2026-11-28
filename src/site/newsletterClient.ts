@@ -87,7 +87,7 @@ const STORAGE_KEY = 'ainvtry_newsletter_sub_v1';
 const PENDING_STORAGE_KEY = 'ainvtry_newsletter_pending_v1';
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"']+@[^\s@<>()[\]\\,;:"']+\.[a-z]{2,63}$/i;
 const REQUEST_TIMEOUT_MS = 28_000;
-const PUBLIC_PRODUCTION_API_BASE = 'https://ainventory-api.onrender.com/api';
+const PUBLIC_PRODUCTION_API_BASE = 'https://ainventory-api-2xrmog66nq-du.a.run.app/api';
 const PUBLIC_SITE_HOSTS = new Set([
   'ainvtry.com',
   'www.ainvtry.com',

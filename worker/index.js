@@ -33,7 +33,7 @@ import {
 
 export { isAuthorizedBrowserBundleFetch, isBlockedAiScraper };
 
-const DEFAULT_UPSTREAM_ORIGIN = 'https://ainventory-api.onrender.com';
+const DEFAULT_UPSTREAM_ORIGIN = 'https://ainventory-api-2xrmog66nq-du.a.run.app';
 const DEFAULT_SITE_ORIGIN = 'https://ainvtry.com';
 const DEFAULT_FROM_EMAIL = 'iNVTRY <newsletter@ainvtry.com>';
 const DEFAULT_NOTIFY_EMAIL = 'raymond@ainvtry.com';

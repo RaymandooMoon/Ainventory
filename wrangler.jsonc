@@ -31,7 +31,7 @@
     ]
   },
   "vars": {
-    "API_UPSTREAM_ORIGIN": "https://ainventory-api.onrender.com",
+    "API_UPSTREAM_ORIGIN": "https://ainventory-api-2xrmog66nq-du.a.run.app",
     "NEWSLETTER_NOTIFY_EMAIL": "raymond@ainvtry.com"
   }
 }
