@@ -311,8 +311,9 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
       brief: { businessModel: { marginValue: string }; revenuePillars: Array<{ mechanism: string }> };
     };
     assert.equal(briefKo.ok, true);
-    assert.equal(briefKo.brief.businessModel.marginValue, '70%+');
-    assert.match(briefKo.brief.revenuePillars[0].mechanism, /6\.9~9\.9K/);
+    assert.equal(briefKo.brief.businessModel.marginValue, '원가 통제');
+    assert.match(briefKo.brief.revenuePillars[0].mechanism, /단가 협의 중/);
+    assert.doesNotMatch(JSON.stringify(briefKo), /70%\+|무제한|\[TBD\]|₩0/);
 
     const irUnlockedRes = await worker.fetch(
       new Request('https://www.ainvtry.com/ir/', {
@@ -347,7 +348,7 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
     assert.match(logoutRes.headers.get('Set-Cookie') || '', /Max-Age=0/);
   });
 
-  it('prompts Google employees to enter "Google", records KV access logs, and protects /api/investor/logs', async () => {
+  it('removes Google hint from gate HTML (KO & EN), shows 22-slide count and privacy notice, records KV access logs, and protects /api/investor/logs', async () => {
     const assets = createFakeAssets();
     const browserUa =
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36';
@@ -360,7 +361,7 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
         kvStore.set(key, value);
       },
     };
-    const passcode = ['google', 'ir', 'gate', '2026'].join('-');
+    const passcode = ['vc', 'ir', 'gate', '2026'].join('-');
     const adminSecret = 'super-secret-admin-log-key';
     const worker = createWorkerHandler(async () => new Response('ok', { status: 200 }));
     const collector = createWaitUntilCollector();
@@ -371,7 +372,7 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
       NEWSLETTER_KV: mockKv,
     };
 
-    // 1. Gate HTML includes Google instruction
+    // 1. Gate HTML (KO & EN) omits Google hint, shows 22 slides, and discloses viewer collection purpose
     const gateRes = await worker.fetch(
       new Request('https://www.ainvtry.com/ir/?lang=ko', {
         headers: { 'User-Agent': browserUa, Accept: 'text/html' },
@@ -381,9 +382,24 @@ describe('Cloudflare Worker Anti-Scraper Shield & Investor Data-Room Passcode Ga
     );
     assert.equal(gateRes.status, 401);
     const gateHtml = await gateRes.text();
-    assert.match(gateHtml, /Google 직원이면/);
+    assert.doesNotMatch(gateHtml, /Google/i);
+    assert.match(gateHtml, /22장/);
+    assert.match(gateHtml, /데이터룸 열람 기록 목적으로만 수집/);
 
-    // 2. Unlock as Google reviewer
+    const gateEnRes = await worker.fetch(
+      new Request('https://www.ainvtry.com/ir/?lang=en', {
+        headers: { 'User-Agent': browserUa, Accept: 'text/html' },
+      }),
+      env,
+      collector.ctx
+    );
+    assert.equal(gateEnRes.status, 401);
+    const gateEnHtml = await gateEnRes.text();
+    assert.doesNotMatch(gateEnHtml, /Google/i);
+    assert.match(gateEnHtml, /22-slide/);
+    assert.match(gateEnHtml, /never shared with third parties/);
+
+    // 2. Unlock as invited investor
     const unlockRes = await worker.fetch(
       new Request('https://www.ainvtry.com/api/investor/unlock', {
         method: 'POST',

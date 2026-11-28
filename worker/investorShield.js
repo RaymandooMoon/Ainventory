@@ -216,16 +216,16 @@ export async function verifyInvestorSession(request, env, cryptoDeps) {
 
 const CONFIDENTIAL_INVESTOR_BRIEF = {
   en: {
-    revenueNote: 'Confidential Investor Brief · Freemium acquisition to compounding multi-stream LTV',
+    revenueNote: 'Confidential Investor Brief · Freemium acquisition to multi-stream monetization structure',
     revenuePillars: [
       {
         id: 'pro',
         icon: 'crown',
         num: '01',
         title: 'iNVTRY Pro Subscription',
-        mechanism: 'ARR · ₩6.9–9.9K/mo',
+        mechanism: 'ARR · Pricing in Discussion',
         detail:
-          'Unlimited 4+ layer 8-angle VTON, real Street View staging, CPW & idle asset analytics, tag OCR & bleed alerts, plus 20% annual discount.',
+          'Layered 8-angle AI virtual try-on (monthly usage cap), real Street View staging, CPW & idle asset analytics, and beta care-label OCR.',
       },
       {
         id: 'affiliate',
@@ -234,45 +234,45 @@ const CONFIDENTIAL_INVESTOR_BRIEF = {
         title: 'Gap Commerce',
         mechanism: 'CPS · 5–12%',
         detail:
-          'AI detects the single missing garment in your closet, verifies fit against owned layers, and links to partner stores (Musinsa, 29CM, D2C) to cut returns.',
+          'AI detects complementary items missing from your closet (excluding duplicate garments), previews combinations against owned layers, and links partner stores.',
       },
       {
         id: 'resale-bm',
         icon: 'badgeCheck',
         num: '03',
-        title: 'Authentic Resale & Care O2O',
-        mechanism: 'GMV · 3–8%',
+        title: 'Authentic Resale & Care O2O (Planned)',
+        mechanism: 'GMV · 3–8% (Planned)',
         detail:
-          '90+ day idle detection bundles existing cutout photos, receipts & wear history for 1-tap authentic resale alongside doorstep laundry pickup.',
+          '90+ day idle detection bundles existing cutout photos, receipts & wear history for 1-tap authentic resale alongside doorstep laundry pickup (planned).',
       },
       {
         id: 'b2b-sdk',
         icon: 'server',
         num: '04',
-        title: 'Brand VTON SDK',
+        title: 'Brand VTON SDK (Planned)',
         mechanism: 'B2B · SaaS + CPC',
         detail:
-          'Onboards boutique and designer collections as digital garment seeds and embeds try-on widgets to lower brand return costs (2027 H2+).',
+          'Onboards boutique and designer collections as digital garment seeds and embeds try-on widgets to lower brand return costs (2027 H2+ planned).',
       },
     ],
     businessModel: {
       eyebrow: 'INVESTOR DATA ROOM · UNIT ECONOMICS',
-      headline: 'Subscription × Gap Commerce × Authentic Resale × B2B SDK',
+      headline: 'Subscription × Gap Commerce × Resale (Planned) × B2B SDK',
       funnelTitle: 'Conversion & Lock-In Flywheel',
       funnelSteps: [
-        { step: '01', label: 'Free Acquisition', value: '₩0 WASM' },
+        { step: '01', label: 'Free Acquisition', value: 'On-Device WASM' },
         { step: '02', label: '20-Item Closet', value: 'Data Lock-in' },
         { step: '03', label: 'Pro + Gap Buy', value: 'ARR + CPS' },
-        { step: '04', label: '1-Tap Resale', value: 'Pays Annual Sub' },
+        { step: '04', label: 'Resale (Planned)', value: 'Circular LTV' },
       ],
-      costTitle: '3-Layer AI Cost Defense',
-      marginValue: '70%+',
-      marginLabel: 'Target Margin',
+      costTitle: '3-Layer AI Cost Control',
+      marginValue: 'Cost-Capped',
+      marginLabel: 'Unit Economics (Beta Measured)',
       costDefenses: [
         {
           title: 'On-Device WASM Inference',
-          metric: '₩0 Server GPU',
-          detail: 'Garment cutout, EXIF strip & skin-tone analysis run locally on client devices.',
+          metric: 'Client Cutout',
+          detail: 'Garment cutout, EXIF strip & face skin-tone analysis run locally on client devices without server GPU costs.',
         },
         {
           title: 'WebP -96% Bandwidth Cut',
@@ -281,25 +281,25 @@ const CONFIDENTIAL_INVESTOR_BRIEF = {
         },
         {
           title: 'Outfit Hash Cache & Quotas',
-          metric: '0 Re-Inference',
-          detail: 'Reuses cached 8-angle outfit renders across revisits with disciplined Free quotas.',
+          metric: 'Cache Reuse',
+          detail: 'Reuses cached 8-angle outfit renders across revisits with monthly usage caps.',
         },
       ],
       footnote:
-        '* Confidential investor preview. Final pricing and 3-year P&L lock after private beta cohort metrics.',
+        '* Confidential investor preview. Final subscription pricing, measured per-render cost, and 3-year P&L will lock after private beta cohort measurement.',
     },
   },
   ko: {
-    revenueNote: '투자자 전용 상세 지표 · 무료 유입에서 복합 LTV로 전환되는 순환 수익 구조',
+    revenueNote: '투자자 전용 상세 지표 · 무료 유입에서 다중 수익 구조로 확장하는 모델',
     revenuePillars: [
       {
         id: 'pro',
         icon: 'crown',
         num: '01',
         title: 'iNVTRY Pro 구독',
-        mechanism: 'ARR · ₩6.9~9.9K/월',
+        mechanism: 'ARR · 단가 협의 중',
         detail:
-          '무제한 4겹+ 8방향 가상 피팅, 거리뷰 무대, 1회 착용 비용(CPW) · 휴면 자산 리포트, 택 OCR · 이염 경고를 제공하며 연간 결제 시 20% 할인을 적용합니다.',
+          '8각도 레이어드 AI 가상 피팅(월 사용 한도), 거리뷰 무대, 1회 착용 비용(CPW) · 휴면 자산 리포트, 케어라벨 OCR(베타)을 제공합니다.',
       },
       {
         id: 'affiliate',
@@ -308,45 +308,45 @@ const CONFIDENTIAL_INVESTOR_BRIEF = {
         title: '갭(Gap) 커머스',
         mechanism: 'CPS · 5~12%',
         detail:
-          '보유 옷장에 없는 공백 1벌을 기존 의류와 AI 사전 조합 검증한 뒤 제휴 몰(무신사 · 29CM · 자사몰)로 연결해 중복 구매와 반품률을 동시에 낮춥니다.',
+          '중복 의류는 비노출하고 보유 옷장에 없는 보완 1벌만 기존 의류와 AI 사전 조합 검증한 뒤 제휴 몰로 연결합니다.',
       },
       {
         id: 'resale-bm',
         icon: 'badgeCheck',
         num: '03',
-        title: '인증 리셀 · 세탁 O2O',
-        mechanism: 'GMV · 3~8%',
+        title: '인증 리셀 · 세탁 O2O (개발 예정)',
+        mechanism: 'GMV · 3~8% (예정)',
         detail:
-          '90일+ 장기 휴면 의류를 자동 감지해 보유 배경 제거 사진 · 영수증 · 착용 이력을 묶은 1탭 정품 인증 리셀과 문 앞 비대면 세탁 방문수거를 연결합니다.',
+          '90일+ 장기 휴면 의류를 감지해 보유 배경 제거 사진 · 영수증 · 착용 이력을 묶은 1탭 인증 리셀과 문 앞 비대면 세탁 방문수거를 연결할 예정입니다.',
       },
       {
         id: 'b2b-sdk',
         icon: 'server',
         num: '04',
-        title: '브랜드 VTON SDK',
+        title: '브랜드 VTON SDK (개발 예정)',
         mechanism: 'B2B · 월정액+CPC',
         detail:
-          '편집숍 · 디자이너 브랜드 신상을 디지털 시드로 입점하고 가상 피팅 위젯을 공급해 브랜드의 온라인 반품 원가를 절감합니다 (2027 H2+).',
+          '편집숍 · 디자이너 브랜드 신상을 디지털 시드로 입점하고 가상 피팅 위젯을 공급해 브랜드의 온라인 반품 원가를 절감합니다 (2027 H2+ 예정).',
       },
     ],
     businessModel: {
       eyebrow: 'INVESTOR DATA ROOM · UNIT ECONOMICS',
-      headline: '구독 × 갭 커머스 × 인증 리셀 × B2B 4중 수익 엔진',
+      headline: '구독 × 갭 커머스 × 리셀(예정) × B2B 4중 수익 구조',
       funnelTitle: '무료 유입 → 복합 LTV 전환 구조',
       funnelSteps: [
-        { step: '01', label: '무료 유입', value: '₩0 WASM' },
+        { step: '01', label: '무료 유입', value: '기기 내 WASM' },
         { step: '02', label: '옷장 20벌', value: '데이터 Lock-in' },
-        { step: '03', label: 'Pro · 갭 구매', value: 'ARR + CPS' },
-        { step: '04', label: '1벌 리셀', value: '연 구독 회수' },
+        { step: '03', label: 'Pro · 보완 구매', value: 'ARR + CPS' },
+        { step: '04', label: '리셀 (예정)', value: '순환 LTV' },
       ],
-      costTitle: 'AI 3중 원가 방어 메커니즘',
-      marginValue: '70%+',
-      marginLabel: '목표 총이익률',
+      costTitle: 'AI 3중 원가 통제 메커니즘',
+      marginValue: '원가 통제',
+      marginLabel: '단위경제 (베타 실측 확정)',
       costDefenses: [
         {
           title: '온디바이스 WASM 추론',
-          metric: '서버 GPU ₩0',
-          detail: '의류 배경 제거 · EXIF 제거 · 피부톤 분석을 클라이언트에서 처리해 사용자 비례 적자를 차단합니다.',
+          metric: '기기 내 처리',
+          detail: '의류 배경 제거 · EXIF 제거 · 피부톤 분석을 클라이언트에서 처리해 해당 단계 서버 GPU 비용을 차단합니다.',
         },
         {
           title: 'WebP -96% 대역폭 절감',
@@ -354,13 +354,13 @@ const CONFIDENTIAL_INVESTOR_BRIEF = {
           detail: '원본 대비 96% 경량화와 IndexedDB 로컬 캐시로 저장 · AI 전송 비용을 최소화합니다.',
         },
         {
-          title: '착장 해시 캐시 · 쿼터 제어',
-          metric: '중복 추론 0',
-          detail: '동일 착장 재조회 시 기존 8방향 결과를 재활용하고 Free 월 쿼터로 원가를 방어합니다.',
+          title: '착장 해시 캐시 · 월 사용 한도',
+          metric: '재추론 절감',
+          detail: '동일 착장 재조회 시 기존 8각도 결과를 재활용하고 월 사용 한도로 AI 원가를 통제합니다.',
         },
       ],
       footnote:
-        '* 투자자 전용 기밀 브리프입니다. 요금 [TBD] 및 3개년 손익은 프라이빗 베타 실측 코호트 반영 후 확정 예정.',
+        '* 투자자 전용 기밀 브리프입니다. 구독 단가·실측 건당 원가·3개년 손익은 프라이빗 베타 코호트 계측 후 확정 예정.',
     },
   },
 };
@@ -556,18 +556,22 @@ export function renderInvestorGateHtml({ lang = 'ko', theme = 'dark', configured
   const heading = isEn ? 'Investor Data Room' : '투자자 전용 사업계획서';
   const subtitle = configured
     ? isEn
-      ? 'This 18-slide Business Plan and unit economics brief is restricted to invited investors and partners. Enter your access passcode to unlock for 12 hours.'
-      : '본 18장 사업계획서 및 수익성 상세 지표는 초대된 투자자 · 파트너 전용 자료입니다. 전달받으신 접근 코드를 입력하시면 12시간 동안 열람하실 수 있습니다.'
+      ? 'This 22-slide Business Plan and unit economics brief is restricted to invited investors and partners. Enter your access passcode to unlock for 12 hours.'
+      : '본 22장 사업계획서 및 수익성 상세 지표는 초대된 투자자 · 파트너 전용 자료입니다. 전달받으신 접근 코드를 입력하시면 12시간 동안 열람하실 수 있습니다.'
     : isEn
-      ? 'This 18-slide Business Plan is shared privately by direct founder invitation. Request an access passcode via email below.'
-      : '본 18장 사업계획서는 창업자 직접 초대를 통해서만 열람하실 수 있습니다. 아래 이메일로 열람 코드를 요청해 주세요.';
+      ? 'This 22-slide Business Plan is shared privately by direct founder invitation. Request an access passcode via email below.'
+      : '본 22장 사업계획서는 창업자 직접 초대를 통해서만 열람하실 수 있습니다. 아래 이메일로 열람 코드를 요청해 주세요.';
+  const privacyNotice = isEn
+    ? 'Viewer name and organization are collected solely to verify invitations and log data-room access, and are never shared with third parties.'
+    : '입력하신 성함과 소속은 초대 확인 및 데이터룸 열람 기록 목적으로만 수집되며 외부에 제공되지 않습니다.';
 
   const formHtml = configured
     ? `<form id="ir-gate-form" novalidate>
         <label class="field-label" for="ir-passcode">${isEn ? 'Access Passcode' : '접근 코드'}</label>
         <input id="ir-passcode" name="passcode" type="password" autocomplete="one-time-code" required placeholder="${isEn ? 'Enter investor passcode' : '투자자 접근 코드를 입력하세요'}" />
-        <label class="field-label" for="ir-label">${isEn ? 'Name / Organization (If Google employee, please enter "Google")' : '성함 / 소속 (Google 직원이면 "Google"이라고 입력해 주세요)'}</label>
-        <input id="ir-label" name="label" type="text" maxlength="64" autocomplete="organization" placeholder="${isEn ? 'e.g. Google, or Kim · Partner VC' : '예: Google 또는 홍길동 · ○○벤처스'}" />
+        <label class="field-label" for="ir-label">${isEn ? 'Name / Organization (Optional)' : '성함 / 소속 (선택)'}</label>
+        <input id="ir-label" name="label" type="text" maxlength="64" autocomplete="organization" placeholder="${isEn ? 'e.g. Kim · Partner VC' : '예: 홍길동 · ○○벤처스'}" />
+        <p class="privacy-note">${privacyNotice}</p>
         <p id="ir-gate-error" class="error-msg" role="alert" aria-live="polite"></p>
         <button id="ir-gate-submit" type="submit" class="btn-primary">${isEn ? 'Unlock Business Plan' : '사업계획서 열람하기'}</button>
       </form>`
@@ -659,6 +663,12 @@ export function renderInvestorGateHtml({ lang = 'ko', theme = 'dark', configured
     .btn-primary:disabled {
       opacity: 0.55;
       cursor: wait;
+    }
+    .privacy-note {
+      margin: -6px 0 12px;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: ${muted};
     }
     .error-msg {
       min-height: 18px;
