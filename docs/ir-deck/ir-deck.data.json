@@ -14,18 +14,18 @@
     "locationDate": "대한민국 서울 · 2026.11"
   },
   "hero": {
-    "kicker": "프라이버시를 지키는 디지털 옷장",
+    "kicker": "손 안의 디지털 옷장",
     "titleLead": "어서 오세요, 당신의 인벤토리에",
     "titleAccent": "iNVTRY",
-    "subtitle": "옷을 사는 순간부터 매일의 코디와 관리, 다음 주인에게 건네는 날까지.",
+    "subtitle": "쇼핑 전엔 내 옷과 비교하고, 날씨에 맞게 미리 입혀보고, 잠든 옷은 현금과 기부로.",
     "secondaryCta": "창업자 문의",
     "tocCover": "01 · 표지 — 어서 오세요, 당신의 인벤토리에 · iNVTRY",
     "tocAgendaItem": "어서 오세요, 당신의 인벤토리에",
     "en": {
-      "kicker": "PRIVACY-FIRST DIGITAL CLOSET",
+      "kicker": "The CyberTrunk",
       "titleLead": "Welcome to your",
       "titleAccent": "iNVTRY",
-      "subtitle": "From the moment you buy, through daily styling and care, to its next life.",
+      "subtitle": "Compare before you shop, preview for today’s weather, and turn unworn clothes into cash or donations.",
       "secondaryCta": "Contact Founder"
     }
   },
@@ -168,10 +168,10 @@
       "site/public/assets/previews/app-calendar-ko-dark.webp": "eaf5ff134c34",
       "site/public/assets/previews/app-calendar-en-light.webp": "b568daf8bf12",
       "site/public/assets/previews/app-calendar-en-dark.webp": "59ce538ab1b4",
-      "site/public/assets/previews/site-hero-ko-light.webp": "06bf37b4c808",
-      "site/public/assets/previews/site-hero-ko-dark.webp": "cc7beea1b586",
-      "site/public/assets/previews/site-hero-en-light.webp": "cb064e98c7a2",
-      "site/public/assets/previews/site-hero-en-dark.webp": "86565aca07b2",
+      "site/public/assets/previews/site-hero-ko-light.webp": "d2642e2ed38b",
+      "site/public/assets/previews/site-hero-ko-dark.webp": "0988050697eb",
+      "site/public/assets/previews/site-hero-en-light.webp": "e5468d33a9c0",
+      "site/public/assets/previews/site-hero-en-dark.webp": "1c473d3440f4",
       "site/public/assets/previews/site-live-studio-ko-light.webp": "1d29785bbc88",
       "site/public/assets/previews/site-live-studio-ko-dark.webp": "95356ac467d2",
       "site/public/assets/previews/site-live-studio-en-light.webp": "3083424ec6b7",

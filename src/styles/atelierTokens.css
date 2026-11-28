@@ -54,7 +54,7 @@
   --atelier-font-sans:
     'Pretendard Variable', 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, system-ui,
     sans-serif;
-  --atelier-font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, ui-monospace, monospace;
+  --atelier-font-mono: var(--atelier-font-sans);
   --atelier-ink-on-dark: #f7f7f5;
   --atelier-ink-secondary-on-dark: rgba(247, 247, 245, 0.72);
   --atelier-ink-muted-on-dark: rgba(247, 247, 245, 0.62);

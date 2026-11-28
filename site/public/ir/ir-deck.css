@@ -11,82 +11,89 @@
   --slide-h: 720px;
 
   --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Noto Sans KR', system-ui, sans-serif;
-  --font-serif: 'Instrument Serif', 'Cormorant Garamond', Georgia, serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-serif: var(--font-sans);
+  --font-mono: var(--font-sans);
 
-  /* Light Default — Atelier Paper Daylight */
+  /* Light Default — Slide 01 Warm Alabaster & Champagne Silk */
   --bg-outer: #EAE5DC;
   --bg-canvas: #F6F3EC;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #FAF8F4;
-  --bg-recessed: #ECE7DD;
+  --bg-surface: rgba(255, 253, 249, 0.86);
+  --bg-elevated: rgba(250, 247, 241, 0.92);
+  --bg-recessed: rgba(236, 231, 221, 0.82);
   --bg-toolbar: rgba(246, 243, 236, 0.88);
-  --bg-ambient: radial-gradient(ellipse 68% 58% at 14% 12%, rgba(158, 123, 70, 0.08), transparent 68%),
-                radial-gradient(ellipse 56% 52% at 86% 84%, rgba(31, 111, 67, 0.045), transparent 64%);
+  --bg-ambient:
+    linear-gradient(125deg, rgba(246, 243, 236, 0.88) 0%, rgba(246, 243, 236, 0.76) 52%, rgba(246, 243, 236, 0.88) 100%),
+    url('./assets/bg/silk-luxury-light.webp');
 
   --ink-primary: #141416;
-  --ink-secondary: #4E4A44;
-  --ink-muted: #767067;
+  --ink-secondary: #484642;
+  --ink-muted: #6C675E;
 
-  --hairline: rgba(20, 20, 22, 0.11);
-  --hairline-strong: rgba(20, 20, 22, 0.20);
-  --hairline-gold: rgba(158, 123, 70, 0.34);
+  --hairline: rgba(20, 20, 22, 0.10);
+  --hairline-strong: rgba(20, 20, 22, 0.18);
+  --hairline-gold: rgba(158, 123, 70, 0.36);
 
   --accent-gold: #9E7B46;
-  --accent-gold-soft: rgba(158, 123, 70, 0.12);
-  --accent-gold-strong: #7B5D2E;
+  --accent-gold-soft: rgba(158, 123, 70, 0.11);
+  --accent-gold-strong: #7F591E;
+  --gold-sheen: linear-gradient(180deg, #AD7F32 0%, #7F591E 100%);
+  --title-sheen: linear-gradient(180deg, #111114 0%, #3E3C37 100%);
 
-  --accent-live: #1F6F43;
-  --accent-live-soft: rgba(31, 111, 67, 0.11);
-  --accent-live-border: rgba(31, 111, 67, 0.32);
+  --accent-live: #237A4B;
+  --accent-live-soft: rgba(35, 122, 75, 0.10);
+  --accent-live-border: rgba(35, 122, 75, 0.28);
 
-  --accent-danger: #B42318;
-  --accent-danger-soft: rgba(180, 35, 24, 0.09);
-  --accent-danger-border: rgba(180, 35, 24, 0.28);
+  --accent-danger: #B43832;
+  --accent-danger-soft: rgba(180, 56, 50, 0.085);
+  --accent-danger-border: rgba(180, 56, 50, 0.25);
 
   --accent-hybrid: #8A642B;
-  --accent-hybrid-soft: rgba(158, 123, 70, 0.14);
+  --accent-hybrid-soft: rgba(158, 123, 70, 0.13);
 
   --device-bezel: #D9D3C7;
   --device-inner: #FAF8F4;
   --device-screen-bg: #FFFFFF;
-  --device-shadow: 0 22px 44px rgba(20, 20, 22, 0.14), 0 4px 12px rgba(20, 20, 22, 0.06);
-  --card-shadow: 0 6px 24px rgba(20, 20, 22, 0.045);
+  --device-shadow: 0 22px 44px rgba(20, 20, 22, 0.13), 0 4px 12px rgba(20, 20, 22, 0.05);
+  --card-shadow: 0 10px 28px -10px rgba(20, 20, 22, 0.08);
+  --panel-specular: inset 0 1px 0 rgba(255, 255, 255, 0.82), inset 0 -1px 0 rgba(20, 20, 22, 0.04);
 
   --svg-track: rgba(20, 20, 22, 0.11);
   --svg-node-bg: #FFFFFF;
 }
 
 :root[data-theme='dark'] {
-  /* Dark — OLED Noir Keynote */
-  --bg-outer: #020203;
+  /* Dark — Slide 01 OLED Obsidian Glass & Champagne Silk */
+  --bg-outer: #000000;
   --bg-canvas: #050507;
-  --bg-surface: #0D0E12;
-  --bg-elevated: #13151B;
-  --bg-recessed: #0A0B0E;
-  --bg-toolbar: rgba(9, 10, 14, 0.88);
-  --bg-ambient: radial-gradient(ellipse 68% 58% at 14% 12%, rgba(214, 184, 137, 0.055), transparent 68%),
-                radial-gradient(ellipse 58% 50% at 86% 82%, rgba(74, 222, 128, 0.032), transparent 64%);
+  --bg-surface: rgba(13, 13, 17, 0.76);
+  --bg-elevated: rgba(22, 21, 26, 0.84);
+  --bg-recessed: rgba(9, 9, 12, 0.82);
+  --bg-toolbar: rgba(6, 6, 9, 0.86);
+  --bg-ambient:
+    linear-gradient(125deg, rgba(5, 5, 7, 0.82) 0%, rgba(5, 5, 7, 0.68) 52%, rgba(5, 5, 7, 0.84) 100%),
+    url('./assets/bg/silk-luxury-dark.webp');
 
   --ink-primary: #F5F5F7;
-  --ink-secondary: #A1A1AA;
-  --ink-muted: #71717A;
+  --ink-secondary: rgba(235, 235, 240, 0.78);
+  --ink-muted: rgba(196, 196, 206, 0.64);
 
-  --hairline: rgba(245, 245, 247, 0.10);
-  --hairline-strong: rgba(245, 245, 247, 0.18);
-  --hairline-gold: rgba(214, 184, 137, 0.30);
+  --hairline: rgba(245, 245, 247, 0.11);
+  --hairline-strong: rgba(245, 245, 247, 0.19);
+  --hairline-gold: rgba(214, 184, 137, 0.34);
 
   --accent-gold: #D6B889;
-  --accent-gold-soft: rgba(214, 184, 137, 0.11);
-  --accent-gold-strong: #F2E4CB;
+  --accent-gold-soft: rgba(214, 184, 137, 0.12);
+  --accent-gold-strong: #FAE8BE;
+  --gold-sheen: linear-gradient(180deg, #FAE8BE 0%, #DFB874 52%, #BC8F49 100%);
+  --title-sheen: linear-gradient(180deg, #FFFFFF 0%, #DCDCE4 100%);
 
-  --accent-live: #4ADE80;
-  --accent-live-soft: rgba(74, 222, 128, 0.10);
-  --accent-live-border: rgba(74, 222, 128, 0.30);
+  --accent-live: #68C694;
+  --accent-live-soft: rgba(104, 198, 148, 0.10);
+  --accent-live-border: rgba(104, 198, 148, 0.28);
 
-  --accent-danger: #F87171;
-  --accent-danger-soft: rgba(248, 113, 113, 0.10);
-  --accent-danger-border: rgba(248, 113, 113, 0.28);
+  --accent-danger: #E87D7D;
+  --accent-danger-soft: rgba(232, 125, 125, 0.10);
+  --accent-danger-border: rgba(232, 125, 125, 0.26);
 
   --accent-hybrid: #D6B889;
   --accent-hybrid-soft: rgba(214, 184, 137, 0.12);
@@ -94,21 +101,24 @@
   --device-bezel: #272930;
   --device-inner: #050507;
   --device-screen-bg: #000000;
-  --device-shadow: 0 28px 60px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(214, 184, 137, 0.14);
-  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+  --device-shadow: 0 28px 60px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(214, 184, 137, 0.16);
+  --card-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.52);
+  --panel-specular: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.28);
 
   --svg-track: rgba(245, 245, 247, 0.11);
   --svg-node-bg: #0D0E12;
 }
 
 :root[data-mood='aurora'][data-theme='dark'] {
-  --bg-ambient: radial-gradient(ellipse 68% 58% at 15% 15%, rgba(96, 165, 250, 0.08), transparent 68%),
-                radial-gradient(ellipse 58% 52% at 85% 80%, rgba(167, 139, 250, 0.07), transparent 64%);
+  --bg-ambient:
+    linear-gradient(125deg, rgba(5, 5, 7, 0.82) 0%, rgba(5, 5, 7, 0.68) 52%, rgba(5, 5, 7, 0.84) 100%),
+    url('./assets/bg/silk-aurora-dark.webp');
 }
 
 :root[data-mood='aurora'][data-theme='light'] {
-  --bg-ambient: radial-gradient(ellipse 68% 58% at 15% 15%, rgba(59, 130, 246, 0.07), transparent 68%),
-                radial-gradient(ellipse 58% 52% at 85% 80%, rgba(16, 185, 129, 0.06), transparent 64%);
+  --bg-ambient:
+    linear-gradient(125deg, rgba(246, 243, 236, 0.88) 0%, rgba(246, 243, 236, 0.76) 52%, rgba(246, 243, 236, 0.88) 100%),
+    url('./assets/bg/silk-aurora-light.webp');
 }
 
 :root[data-ratio='4-3'] {
@@ -204,7 +214,8 @@ html, body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-live);
+  background: var(--accent-gold);
+  box-shadow: 0 0 8px rgba(214, 184, 137, 0.55);
   flex: none;
 }
 
@@ -339,7 +350,7 @@ html, body {
   width: 100%;
   transform-origin: left center;
   transform: scaleX(0.0556);
-  background: linear-gradient(90deg, var(--accent-gold), var(--accent-live));
+  background: linear-gradient(90deg, #BC8F49 0%, #DFB874 58%, #FAE8BE 100%);
   transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -398,8 +409,10 @@ html, body {
   padding: 28px 42px 20px;
   background-color: var(--bg-canvas);
   background-image: var(--bg-ambient);
+  background-size: cover;
+  background-position: center;
   border: 1px solid var(--hairline);
-  border-radius: 14px;
+  border-radius: 18px;
   box-shadow: var(--card-shadow);
   color: var(--ink-primary);
 }
@@ -411,7 +424,7 @@ html, body {
   left: 42px;
   right: 42px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--hairline-gold), transparent);
+  background: linear-gradient(90deg, transparent, rgba(214, 184, 137, 0.48), transparent);
   pointer-events: none;
 }
 
@@ -446,38 +459,44 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent-gold);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 660;
+  letter-spacing: 0.08em;
+  color: var(--ink-secondary);
 }
 
 .s-eyebrow::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent-gold);
+  content: '◆';
+  font-size: 8.5px;
+  line-height: 1;
+  color: var(--accent-gold);
 }
 
 .s-title {
   margin: 0;
   font-size: 28px;
-  font-weight: 760;
+  font-weight: 740;
   line-height: 1.16;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.034em;
   word-break: keep-all;
   color: var(--ink-primary);
 }
 
 .serif-accent {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-weight: 400;
-  color: var(--accent-gold);
-  letter-spacing: -0.01em;
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-weight: 760;
+  letter-spacing: -0.032em;
+  background: var(--gold-sheen);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+:root[data-lang='ko'] .s-eyebrow {
+  letter-spacing: 0.05em;
 }
 
 .gold-accent {
@@ -532,11 +551,10 @@ html, body {
 }
 
 .s-foot-brand::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent-gold);
+  content: '◆';
+  font-size: 7.5px;
+  line-height: 1;
+  color: var(--accent-gold);
 }
 
 .s-foot-num {
@@ -606,12 +624,15 @@ html, body {
 .panel {
   background: var(--bg-surface);
   border: 1px solid var(--hairline);
-  border-radius: 14px;
-  box-shadow: var(--card-shadow);
+  border-radius: 16px;
+  box-shadow: var(--panel-specular), var(--card-shadow);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .panel--gold {
   border-color: var(--hairline-gold);
+  background: linear-gradient(180deg, rgba(214, 184, 137, 0.075) 0%, var(--bg-surface) 100%);
 }
 
 .panel--live {
@@ -2275,9 +2296,10 @@ html, body {
   border: 1px solid var(--hairline-gold);
   background: var(--accent-gold-soft);
   color: var(--accent-gold);
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 22px;
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-weight: 700;
+  font-size: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
