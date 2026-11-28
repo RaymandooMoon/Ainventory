@@ -1646,6 +1646,215 @@ html, body {
   font-size: 9.6px;
 }
 
+/* Dual Split Painpoint Layout (50/50 Side-by-Side: 1|2 and 4|5) */
+.pp-dual-grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  min-height: 0;
+}
+
+.pp-dual-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 15px 11px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.pp-dual-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--hairline);
+  flex: none;
+}
+
+.pp-dual-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pp-dual-badge {
+  font-family: var(--font-mono);
+  font-size: 9.2px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2.5px 7px;
+  border-radius: 999px;
+  background: var(--accent-danger-soft);
+  color: var(--accent-danger);
+  border: 1px solid rgba(248, 113, 113, 0.34);
+  white-space: nowrap;
+  flex: none;
+}
+
+.pp-dual-badge--gold {
+  background: rgba(214, 184, 137, 0.14);
+  color: var(--accent-gold);
+  border-color: var(--hairline-gold);
+}
+
+.pp-dual-title {
+  font-size: 13px;
+  font-weight: 760;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pp-dual-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  flex: none;
+}
+
+.pp-dual-kpi {
+  background: var(--svg-node-bg);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 8px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pp-dual-val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+.pp-dual-val.danger-accent { color: var(--accent-danger); }
+.pp-dual-val.gold-accent { color: var(--accent-gold); }
+
+.pp-dual-sub {
+  font-size: 9.8px;
+  line-height: 1.28;
+  color: var(--ink-secondary);
+}
+
+.pp-dual-viz {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--svg-node-bg);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 7px 10px 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.pp-dual-svg {
+  width: 100%;
+  height: 100%;
+  max-height: 152px;
+  display: block;
+}
+
+.pp-dual-table-wrap {
+  flex: none;
+  overflow: hidden;
+}
+
+.pp-table--compact {
+  font-size: 10px;
+  line-height: 1.26;
+}
+
+.pp-table--compact thead th {
+  font-size: 8.8px;
+  padding: 0 5px 5px;
+}
+
+.pp-table--compact tbody td {
+  padding: 4.5px 5px;
+}
+
+.pp-table--compact .pp-peer-name {
+  font-size: 10.2px;
+}
+
+.pp-table--compact .pp-peer-meta {
+  font-size: 8.8px;
+}
+
+.pp-dual-cite {
+  flex: none;
+  border-top: 1px solid var(--hairline);
+  padding-top: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+}
+
+.pp-dual-cite-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5px;
+  padding: 0 10px;
+  border-left: 1px solid var(--hairline);
+  min-width: 0;
+}
+
+.pp-dual-cite-col:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+
+.pp-dual-cite-col:last-child {
+  padding-right: 0;
+}
+
+.pp-dual-cite-title {
+  font-size: 10.6px;
+  font-weight: 740;
+  color: var(--ink-primary);
+  line-height: 1.25;
+}
+
+.pp-dual-cite-desc {
+  font-size: 9.7px;
+  line-height: 1.35;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+:root[data-ratio='4-3'] .pp-dual-grid {
+  gap: 11px;
+}
+:root[data-ratio='4-3'] .pp-dual-col {
+  padding: 10px 12px;
+  gap: 7px;
+}
+:root[data-ratio='4-3'] .pp-dual-val {
+  font-size: 18px;
+}
+:root[data-ratio='4-3'] .pp-dual-title {
+  font-size: 12px;
+}
+:root[data-ratio='4-3'] .pp-table--compact {
+  font-size: 9.3px;
+}
+:root[data-ratio='4-3'] .pp-dual-cite-desc {
+  font-size: 9.1px;
+}
+
 /* ============================================================================
  * Slide 05 — 6 -> 1 Sankey Convergence
  * ============================================================================ */
@@ -5778,6 +5987,53 @@ html, body {
   border-top: 1px solid var(--hairline);
 }
 :root[data-layout='mobile'] .pp-tk-col:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+:root[data-layout='mobile'] .pp-dual-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+:root[data-layout='mobile'] .pp-dual-col {
+  padding: 12px;
+  gap: 10px;
+}
+:root[data-layout='mobile'] .pp-dual-head {
+  flex-wrap: wrap;
+}
+:root[data-layout='mobile'] .pp-dual-title {
+  white-space: normal;
+}
+:root[data-layout='mobile'] .pp-dual-kpi {
+  padding: 8px 9px;
+  overflow: hidden;
+}
+:root[data-layout='mobile'] .pp-dual-val {
+  font-size: 16px;
+  white-space: normal;
+  line-height: 1.15;
+}
+:root[data-layout='mobile'] .pp-dual-svg {
+  max-height: 190px;
+}
+:root[data-layout='mobile'] .pp-dual-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+:root[data-layout='mobile'] .pp-table--compact {
+  min-width: 420px;
+  font-size: 10.5px;
+}
+:root[data-layout='mobile'] .pp-dual-cite {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+:root[data-layout='mobile'] .pp-dual-cite-col {
+  padding: 7px 0 0;
+  border-left: none;
+  border-top: 1px solid var(--hairline);
+}
+:root[data-layout='mobile'] .pp-dual-cite-col:first-child {
   padding-top: 0;
   border-top: none;
 }

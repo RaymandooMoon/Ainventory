@@ -859,7 +859,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 05 (04a) — PAINPOINT 01 (1+2): DUPLICATE BUYS & RETURNS      -->
+      <!-- SLIDE 05 (04a) — PAINPOINT 01 (LEFT) | PAINPOINT 02 (RIGHT)        -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-04a" class="ir-slide" data-slide="5">
@@ -871,190 +871,236 @@
           </header>
 
           <div class="s-body">
-            <div class="pp-grid">
-              <div class="pp-left">
-                <div class="pp-kpi-row">
-                  <div class="panel pp-kpi-card">
-                    <span class="pp-kpi-label">PP 01 · 장롱 방치 · 매장 중복</span>
-                    <span class="pp-kpi-val danger-accent">25% · £30B</span>
-                    <span class="pp-kpi-sub">실측 22~25% 휴면(학술) · 설문 82% · 영국 16억 벌(WRAP)</span>
+            <div class="pp-dual-grid">
+              <!-- ==================== LEFT HALF: PAINPOINT 01 ==================== -->
+              <article class="panel pp-dual-col">
+                <div class="pp-dual-head">
+                  <div class="pp-dual-head-left">
+                    <span class="pp-dual-badge">PAINPOINT 01</span>
+                    <span class="pp-dual-title">매장 중복 구매 · 장롱 방치</span>
                   </div>
-                  <div class="panel pp-kpi-card">
-                    <span class="pp-kpi-label">PP 02 · 미국 리테일 반품 · 의류율</span>
-                    <span class="pp-kpi-val gold-accent">$849.9B</span>
-                    <span class="pp-kpi-sub">의류 온라인 반품 24.4% · Gen Z 브래케팅 51% (NRF ’25)</span>
+                  <span class="pp-panel-meta">학술 실측 · WRAP</span>
+                </div>
+
+                <div class="pp-dual-kpis">
+                  <div class="pp-dual-kpi">
+                    <span class="pp-kpi-label">12개월 미착용 휴면율</span>
+                    <span class="pp-dual-val danger-accent">22~25% · 82%</span>
+                    <span class="pp-dual-sub">실측 22~25% (학술) · 설문 82% (Movinga)</span>
+                  </div>
+                  <div class="pp-dual-kpi">
+                    <span class="pp-kpi-label">영국 방치 의류 자산</span>
+                    <span class="pp-dual-val gold-accent">£30B · 16억 벌</span>
+                    <span class="pp-dual-sub">1인 실측 132~198벌 보유 (WRAP · JCE)</span>
                   </div>
                 </div>
 
-                <div class="panel pp-viz-panel">
-                  <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">PP 01 오프라인 방치 × PP 02 온라인 반품 급등</span>
-                    <span class="pp-panel-meta">학술 실측 · NRF ’25</span>
+                <div class="pp-dual-viz">
+                  <svg class="pp-dual-svg" viewBox="0 0 540 148" role="img" aria-label="PAINPOINT 01 오프라인 장롱 실측 휴면율과 주요국 12개월 미착용률">
+                    <!-- Left Donut: Physical Wardrobe Audit -->
+                    <g transform="translate(88, 72)">
+                      <circle cx="0" cy="0" r="48" fill="none" stroke="var(--hairline)" stroke-width="1" stroke-dasharray="2 5" />
+                      <circle cx="0" cy="0" r="39" fill="none" stroke="var(--svg-track)" stroke-width="8" />
+                      <circle cx="0" cy="0" r="39" fill="none" stroke="var(--accent-danger)" stroke-width="8" stroke-dasharray="61.3 245.0" stroke-linecap="round" transform="rotate(-90)" />
+                      <circle cx="0" cy="0" r="27" fill="var(--svg-node-bg)" stroke="var(--hairline)" stroke-width="1" />
+                      <text x="0" y="-3" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="13.5" font-weight="800">22~25%</text>
+                      <text x="0" y="10" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="6.4" font-weight="700">DORMANT</text>
+                      <text x="0" y="62" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-mono)" font-size="8.2" font-weight="700">실측 1인 132~198벌</text>
+                    </g>
+
+                    <line x1="174" y1="10" x2="174" y2="138" stroke="var(--hairline)" stroke-width="1" />
+
+                    <!-- Right Bars: Country 12M Unworn & Delusion -->
+                    <g transform="translate(190, 12)">
+                      <text x="0" y="9" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.6" font-weight="750">주요국 12개월 미착용률 · Wardrobe Delusion</text>
+
+                      <text x="0" y="32" fill="var(--ink-primary)" font-size="9.5" font-weight="700">벨기에 (설문)</text>
+                      <rect x="94" y="22" width="196" height="11" rx="2" fill="var(--svg-track)" />
+                      <rect x="94" y="22" width="172" height="11" rx="2" fill="var(--accent-danger)" opacity="0.9" />
+                      <text x="298" y="32" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.5" font-weight="800">88%</text>
+
+                      <text x="0" y="56" fill="var(--ink-secondary)" font-size="9.5" font-weight="600">미국 (설문)</text>
+                      <rect x="94" y="46" width="196" height="11" rx="2" fill="var(--svg-track)" />
+                      <rect x="94" y="46" width="161" height="11" rx="2" fill="var(--accent-danger)" opacity="0.78" />
+                      <text x="298" y="56" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.5" font-weight="750">82%</text>
+
+                      <text x="0" y="80" fill="var(--ink-secondary)" font-size="9.5" font-weight="600">영국 (설문)</text>
+                      <rect x="94" y="70" width="196" height="11" rx="2" fill="var(--svg-track)" />
+                      <rect x="94" y="70" width="143" height="11" rx="2" fill="var(--accent-gold)" opacity="0.82" />
+                      <text x="298" y="80" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.5" font-weight="750">73%</text>
+
+                      <text x="0" y="104" fill="var(--ink-secondary)" font-size="9.5" font-weight="600">직접 실측 휴면</text>
+                      <rect x="94" y="94" width="196" height="11" rx="2" fill="var(--svg-track)" />
+                      <rect x="94" y="94" width="49" height="11" rx="2" fill="var(--ink-secondary)" opacity="0.75" />
+                      <text x="298" y="104" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="9.5" font-weight="750">22~25%</text>
+
+                      <text x="0" y="126" fill="var(--ink-muted)" font-size="8.4">인지 왜곡: 다수 소비자가 보유량 과소평가 → 매장 중복 구매 반복</text>
+                    </g>
+                  </svg>
+                </div>
+
+                <div class="pp-dual-table-wrap">
+                  <table class="pp-table pp-table--compact">
+                    <thead>
+                      <tr>
+                        <th>기존 서비스</th>
+                        <th>매장 중복 방지</th>
+                        <th>구조적 공백</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="pp-peer-name">무신사 · 29CM</span><span class="pp-peer-meta">신상품 수수료</span></td>
+                        <td class="pp-cell-danger">불가</td>
+                        <td>타몰·오프라인 옷 누락 · 중복 경고 시 매출 이해상충</td>
+                      </tr>
+                      <tr>
+                        <td><span class="pp-peer-name">네이버 플러스 스토어</span><span class="pp-peer-meta">주문 이력 한정</span></td>
+                        <td class="pp-cell-danger">불가</td>
+                        <td>백화점·편집숍 보유 옷 및 실착용 횟수 데이터 부재</td>
+                      </tr>
+                      <tr>
+                        <td><span class="pp-peer-name">에이클로젯 · Whering</span><span class="pp-peer-meta">KR/UK 옷장 앱</span></td>
+                        <td class="pp-cell-danger">불가</td>
+                        <td>무료 100벌 상한 · 매장 내 즉시 유사도 비교 부재</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="pp-dual-cite">
+                  <div class="pp-dual-cite-col">
+                    <span class="pp-tk-num">PAPER 01 · 장롱 실측</span>
+                    <span class="pp-dual-cite-title">Vermeyen et al. (2025, JCE) · de Wagenaar (2022)</span>
+                    <p class="pp-dual-cite-desc">플랑드르 성인(n=156) 평균 198벌 중 22%, 네덜란드 실측 132벌 중 25%가 1년간 미착용 휴면이며 소비자가 보유량을 과소평가함을 입증.</p>
                   </div>
-                  <div class="pp-viz-wrap">
-                    <svg class="pp-viz-svg" viewBox="0 0 460 184" role="img" aria-label="오프라인 장롱 방치 비율과 온라인 의류 채널별 반품률 급등 비교">
-                      <!-- Left Donut: Physical Wardrobe Audit (22~25% Dormant) -->
-                      <g transform="translate(86, 90)">
-                        <circle cx="0" cy="0" r="56" fill="none" stroke="var(--hairline)" stroke-width="1" stroke-dasharray="2 5" />
-                        <circle cx="0" cy="0" r="45" fill="none" stroke="var(--svg-track)" stroke-width="9" />
-                        <circle cx="0" cy="0" r="45" fill="none" stroke="var(--accent-danger)" stroke-width="9" stroke-dasharray="70.7 282.7" stroke-linecap="round" transform="rotate(-90)" />
-                        <circle cx="0" cy="0" r="31" fill="var(--svg-node-bg)" stroke="var(--hairline)" stroke-width="1" />
-                        <text x="0" y="-4" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="16" font-weight="800">22~25%</text>
-                        <text x="0" y="10" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="6.8" font-weight="700">DORMANT</text>
-                        <text x="0" y="69" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-mono)" font-size="8" font-weight="600">실측 1인 132~198벌 보유</text>
-                        <text x="0" y="82" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="7.6" font-weight="700">설문 미착용 최대 82% (Movinga)</text>
-                      </g>
+                  <div class="pp-dual-cite-col">
+                    <span class="pp-tk-num">GAP 01 · 이해상충</span>
+                    <span class="pp-dual-cite-title">커머스 수수료 모델의 구조적 한계</span>
+                    <p class="pp-dual-cite-desc">신상품 판매 수수료 기반 커머스 앱은 “집에 비슷한 옷이 있다”는 중복 경고를 넣을 수 없고 오프라인 구매 이력도 단절.</p>
+                  </div>
+                </div>
+              </article>
 
-                      <!-- Center Divider -->
-                      <line x1="176" y1="16" x2="176" y2="168" stroke="var(--hairline)" stroke-width="1" />
+              <!-- ==================== RIGHT HALF: PAINPOINT 02 ==================== -->
+              <article class="panel pp-dual-col">
+                <div class="pp-dual-head">
+                  <div class="pp-dual-head-left">
+                    <span class="pp-dual-badge pp-dual-badge--gold">PAINPOINT 02</span>
+                    <span class="pp-dual-title">온라인 의류 반품 · 브래케팅 손실</span>
+                  </div>
+                  <span class="pp-panel-meta">NRF ’25 · Coresight</span>
+                </div>
 
-                      <!-- Right Channel Return Rate Bars -->
-                      <g transform="translate(190, 18)">
-                        <text x="0" y="9" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.2" font-weight="750">채널별 반품률 격차 (NRF ’25 · Coresight)</text>
-
-                        <text x="0" y="34" fill="var(--ink-muted)" font-size="9.2" font-weight="600">오프라인 매장</text>
-                        <rect x="82" y="24" width="142" height="12" rx="2" fill="var(--svg-track)" />
-                        <rect x="82" y="24" width="32" height="12" rx="2" fill="var(--ink-muted)" opacity="0.55" />
-                        <text x="230" y="34" fill="var(--ink-secondary)" font-family="var(--font-mono)" font-size="9.2" font-weight="700">8~10%</text>
-
-                        <text x="0" y="61" fill="var(--ink-secondary)" font-size="9.2" font-weight="600">전체 리테일</text>
-                        <rect x="82" y="51" width="142" height="12" rx="2" fill="var(--svg-track)" />
-                        <rect x="82" y="51" width="56" height="12" rx="2" fill="var(--ink-secondary)" opacity="0.65" />
-                        <text x="230" y="61" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="9.2" font-weight="700">15.8%</text>
-
-                        <text x="0" y="88" fill="var(--ink-secondary)" font-size="9.2" font-weight="600">이커머스 평균</text>
-                        <rect x="82" y="78" width="142" height="12" rx="2" fill="var(--svg-track)" />
-                        <rect x="82" y="78" width="69" height="12" rx="2" fill="var(--accent-gold)" opacity="0.82" />
-                        <text x="230" y="88" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.2" font-weight="750">19.3%</text>
-
-                        <text x="0" y="115" fill="var(--ink-primary)" font-size="9.2" font-weight="750">의류 온라인</text>
-                        <rect x="82" y="105" width="142" height="12" rx="2" fill="var(--svg-track)" />
-                        <rect x="82" y="105" width="87" height="12" rx="2" fill="var(--accent-danger)" opacity="0.92" />
-                        <text x="230" y="115" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.8" font-weight="800">24.4%</text>
-
-                        <text x="0" y="142" fill="var(--ink-muted)" font-size="9.2" font-weight="600">유럽 패션 피크</text>
-                        <rect x="82" y="132" width="142" height="12" rx="2" fill="var(--accent-danger)" opacity="0.22" stroke="var(--accent-danger)" stroke-dasharray="3 2" stroke-width="0.9" />
-                        <text x="230" y="142" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.2" font-weight="700">~40%</text>
-
-                        <text x="0" y="160" fill="var(--ink-muted)" font-size="8.2">건당 역물류 손실 약 €12.50 · 리테일러 이익 평균 -3.8% 잠식</text>
-                      </g>
-                    </svg>
+                <div class="pp-dual-kpis">
+                  <div class="pp-dual-kpi">
+                    <span class="pp-kpi-label">미국 리테일 반품 규모</span>
+                    <span class="pp-dual-val danger-accent">$849.9B</span>
+                    <span class="pp-dual-sub">의류 온라인 반품 24.4% · 유럽 피크 ~40%</span>
+                  </div>
+                  <div class="pp-dual-kpi">
+                    <span class="pp-kpi-label">브래케팅 · 반품 이탈</span>
+                    <span class="pp-dual-val gold-accent">63% · 71%</span>
+                    <span class="pp-dual-sub">다중 주문 63%(Narvar) · 불편 반품 이탈 71%(NRF)</span>
                   </div>
                 </div>
 
-                <div class="panel pp-bars-panel">
-                  <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">중복 구매 · 브래케팅 · 반품 이탈 실증 지표</span>
-                    <span class="pp-panel-meta">NRF ’25 · Narvar · Loop ’26</span>
-                  </div>
-                  <div class="pp-bar-list">
-                    <div class="pp-bar-item">
-                      <div class="pp-bar-top">
-                        <span class="pp-bar-name">불편한 반품 경험 후 해당 몰 재구매 이탈 (NRF ’25)</span>
-                        <span class="pp-bar-val danger-accent">71%</span>
-                      </div>
-                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--danger" style="width:71%"></div></div>
-                    </div>
-                    <div class="pp-bar-item">
-                      <div class="pp-bar-top">
-                        <span class="pp-bar-name">반품 전제 다중 사이즈 주문 — 브래케팅 (Narvar, n=2,023)</span>
-                        <span class="pp-bar-val danger-accent">63%</span>
-                      </div>
-                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--danger" style="width:63%"></div></div>
-                    </div>
-                    <div class="pp-bar-item">
-                      <div class="pp-bar-top">
-                        <span class="pp-bar-name">의류 온라인 반품 1위 원인 — 사이즈·핏 불일치 (Coresight·Loop)</span>
-                        <span class="pp-bar-val gold-accent">53~56%</span>
-                      </div>
-                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--gold" style="width:56%"></div></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                <div class="pp-dual-viz">
+                  <svg class="pp-dual-svg" viewBox="0 0 540 148" role="img" aria-label="PAINPOINT 02 채널별 반품률 급등과 브래케팅 및 핏 불일치 실증 지표">
+                    <!-- Left: Channel Return Rate Bars -->
+                    <g transform="translate(8, 12)">
+                      <text x="0" y="9" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.6" font-weight="750">채널별 반품률 급등 (NRF ’25 · Coresight)</text>
 
-              <div class="pp-right">
-                <div class="panel pp-table-panel">
-                  <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">KR · 글로벌 커머스·옷장 서비스의 구매 전 검증 공백 감사</span>
-                    <span class="pp-panel-meta">기존 시장 5대 유형</span>
-                  </div>
-                  <div class="pp-table-scroll">
-                    <table class="pp-table">
-                      <thead>
-                        <tr>
-                          <th>기존 서비스 / 대응</th>
-                          <th>수익·운영 구조</th>
-                          <th>매장 중복 방지</th>
-                          <th>구매 전 내 옷 조합</th>
-                          <th>구조적 한계</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td><span class="pp-peer-name">무신사 · 29CM</span><span class="pp-peer-meta">KR 패션 커머스</span></td>
-                          <td>신상품 수수료</td>
-                          <td class="pp-cell-danger">불가</td>
-                          <td class="pp-cell-danger">불가</td>
-                          <td>타몰·오프라인 옷 누락 · 중복 경고 시 매출 이해상충</td>
-                        </tr>
-                        <tr>
-                          <td><span class="pp-peer-name">에이블리 · 지그재그</span><span class="pp-peer-meta">리뷰·실착 42% 도입</span></td>
-                          <td>중개·광고</td>
-                          <td class="pp-cell-danger">불가</td>
-                          <td class="pp-cell-danger">불가</td>
-                          <td>리뷰 사진은 타인 체형 기준 — 내 보유 옷과 매칭 불가</td>
-                        </tr>
-                        <tr>
-                          <td><span class="pp-peer-name">쿠팡 · 국내 패션몰</span><span class="pp-peer-meta">무료·빠른 반품</span></td>
-                          <td>멤버십·물류</td>
-                          <td class="pp-cell-danger">불가</td>
-                          <td class="pp-cell-danger">불가</td>
-                          <td>브래케팅 고착화 → 멤버십 인상·셀러 역물류 적자 전가</td>
-                        </tr>
-                        <tr>
-                          <td><span class="pp-peer-name">ZARA · 글로벌 SPA</span><span class="pp-peer-meta">유료 반품 33% 전환</span></td>
-                          <td>사후 수수료</td>
-                          <td class="pp-cell-danger">불가</td>
-                          <td class="pp-cell-danger">불가</td>
-                          <td>반품비 부과 시 구매 전환율 하락·고객 충성도 훼손</td>
-                        </tr>
-                        <tr>
-                          <td><span class="pp-peer-name">에이클로젯 · Whering</span><span class="pp-peer-meta">KR/UK 옷장 앱</span></td>
-                          <td>구독·제휴</td>
-                          <td class="pp-cell-danger">불가</td>
-                          <td class="pp-cell-gold">미연동</td>
-                          <td>매장 즉시 유사도 비교·쇼핑몰 신상품 사전 조합 부재</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                      <text x="0" y="32" fill="var(--ink-muted)" font-size="9.2" font-weight="600">오프라인 매장</text>
+                      <rect x="82" y="22" width="132" height="11" rx="2" fill="var(--svg-track)" />
+                      <rect x="82" y="22" width="30" height="11" rx="2" fill="var(--ink-muted)" opacity="0.55" />
+                      <text x="220" y="32" fill="var(--ink-secondary)" font-family="var(--font-mono)" font-size="9.2" font-weight="700">8~10%</text>
+
+                      <text x="0" y="55" fill="var(--ink-secondary)" font-size="9.2" font-weight="600">이커머스 평균</text>
+                      <rect x="82" y="45" width="132" height="11" rx="2" fill="var(--svg-track)" />
+                      <rect x="82" y="45" width="64" height="11" rx="2" fill="var(--accent-gold)" opacity="0.82" />
+                      <text x="220" y="55" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.2" font-weight="750">19.3%</text>
+
+                      <text x="0" y="78" fill="var(--ink-primary)" font-size="9.2" font-weight="750">의류 온라인</text>
+                      <rect x="82" y="68" width="132" height="11" rx="2" fill="var(--svg-track)" />
+                      <rect x="82" y="68" width="81" height="11" rx="2" fill="var(--accent-danger)" opacity="0.92" />
+                      <text x="220" y="78" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.5" font-weight="800">24.4%</text>
+
+                      <text x="0" y="101" fill="var(--ink-muted)" font-size="9.2" font-weight="600">유럽 패션 피크</text>
+                      <rect x="82" y="91" width="132" height="11" rx="2" fill="var(--accent-danger)" opacity="0.22" stroke="var(--accent-danger)" stroke-dasharray="3 2" stroke-width="0.9" />
+                      <text x="220" y="101" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.2" font-weight="750">~40%</text>
+
+                      <text x="0" y="125" fill="var(--ink-muted)" font-size="8.2">건당 역물류 ~€12.50 · 리테일러 이익 -3.8% 잠식</text>
+                    </g>
+
+                    <line x1="274" y1="10" x2="274" y2="138" stroke="var(--hairline)" stroke-width="1" />
+
+                    <!-- Right: Return Drivers & Churn -->
+                    <g transform="translate(288, 12)">
+                      <text x="0" y="9" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8.6" font-weight="750">반품 원인 · 이탈 실증 (Narvar · Loop ’26)</text>
+
+                      <text x="0" y="33" fill="var(--ink-secondary)" font-size="9.1" font-weight="600">불편 반품 후 재구매 이탈</text>
+                      <text x="242" y="33" text-anchor="end" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.3" font-weight="800">71%</text>
+                      <rect x="0" y="39" width="242" height="7" rx="3.5" fill="var(--svg-track)" />
+                      <rect x="0" y="39" width="172" height="7" rx="3.5" fill="var(--accent-danger)" />
+
+                      <text x="0" y="65" fill="var(--ink-secondary)" font-size="9.1" font-weight="600">다중 사이즈 주문 (브래케팅)</text>
+                      <text x="242" y="65" text-anchor="end" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.3" font-weight="800">63%</text>
+                      <rect x="0" y="71" width="242" height="7" rx="3.5" fill="var(--svg-track)" />
+                      <rect x="0" y="71" width="152" height="7" rx="3.5" fill="var(--accent-danger)" opacity="0.82" />
+
+                      <text x="0" y="97" fill="var(--ink-secondary)" font-size="9.1" font-weight="600">반품 1위: 사이즈·핏 불일치</text>
+                      <text x="242" y="97" text-anchor="end" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.3" font-weight="800">53~56%</text>
+                      <rect x="0" y="103" width="242" height="7" rx="3.5" fill="var(--svg-track)" />
+                      <rect x="0" y="103" width="136" height="7" rx="3.5" fill="var(--accent-gold)" />
+
+                      <text x="0" y="125" fill="var(--ink-muted)" font-size="8.2">Gen Z 51% 브래케팅 · 연평균 7.8회 반품 (NRF)</text>
+                    </g>
+                  </svg>
                 </div>
 
-                <div class="panel pp-takeaway">
-                  <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">공개 논문 · 실증 조사가 입증한 구매 단계 손실 메커니즘</span>
-                    <span class="pp-panel-meta">Peer-Reviewed Evidence</span>
+                <div class="pp-dual-table-wrap">
+                  <table class="pp-table pp-table--compact">
+                    <thead>
+                      <tr>
+                        <th>기존 대응 방식</th>
+                        <th>내 옷 매칭</th>
+                        <th>구조적 한계</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="pp-peer-name">리뷰·실착 42%</span><span class="pp-peer-meta">에이블리·지그재그</span></td>
+                        <td class="pp-cell-danger">불가</td>
+                        <td>타인 체형 기준 — 집 안 보유 상·하의와 조합 불가</td>
+                      </tr>
+                      <tr>
+                        <td><span class="pp-peer-name">무료·빠른 반품</span><span class="pp-peer-meta">쿠팡·국내 패션몰</span></td>
+                        <td class="pp-cell-danger">불가</td>
+                        <td>브래케팅 고착화 → 멤버십 인상·셀러 적자 전가</td>
+                      </tr>
+                      <tr>
+                        <td><span class="pp-peer-name">유료 반품 33%</span><span class="pp-peer-meta">ZARA·글로벌 SPA</span></td>
+                        <td class="pp-cell-danger">불가</td>
+                        <td>반품 수수료 부과 시 구매 전환율·충성도 동반 하락</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="pp-dual-cite">
+                  <div class="pp-dual-cite-col">
+                    <span class="pp-tk-num">PAPER 02 · 브래케팅</span>
+                    <span class="pp-dual-cite-title">Xu et al. (2023, IJPR) · M&amp;SOM (2026)</span>
+                    <p class="pp-dual-cite-desc">온라인 핏 불확실성이 ‘반품 쓰나미’(브래케팅)를 고착화하며, 사후 반품 수수료 부과는 시장 축소를 유발하는 딜레마임을 증명.</p>
                   </div>
-                  <div class="pp-takeaway-grid">
-                    <div class="pp-tk-col">
-                      <span class="pp-tk-num">01 · 장롱 인지 왜곡</span>
-                      <span class="pp-tk-title">실측 198벌 중 22~25%가 1년 휴면</span>
-                      <p class="pp-tk-desc">Vermeyen et al. (2025, J. Circular Economy, n=156)과 de Wagenaar et al. (2022, Sustainability)은 소비자가 보유량을 과소평가해 장롱의 22~25%를 1년간 미착용 방치함을 실측했습니다.</p>
-                    </div>
-                    <div class="pp-tk-col">
-                      <span class="pp-tk-num">02 · 브래케팅 딜레마</span>
-                      <span class="pp-tk-title">핏 불확실성이 유발한 ‘반품 쓰나미’</span>
-                      <p class="pp-tk-desc">Xu et al. (2023, IJPR)과 INFORMS M&amp;SOM (2026)은 핏 불확실성이 다중 주문(브래케팅)을 고착화하며, 반품 수수료 부과는 시장 축소를 부르는 구조적 딜레마임을 증명했습니다.</p>
-                    </div>
-                    <div class="pp-tk-col">
-                      <span class="pp-tk-num">03 · 커머스 이해상충</span>
-                      <span class="pp-tk-title">판매 수수료 모델의 구조적 공백</span>
-                      <p class="pp-tk-desc">단품 중심 쇼핑몰은 집 안 보유 옷과의 기장·색감 조합을 검증할 수 없고, 신상품 판매 수수료 구조상 “이미 비슷한 옷이 있다”는 중복 경고를 넣지 못합니다.</p>
-                    </div>
+                  <div class="pp-dual-cite-col">
+                    <span class="pp-tk-num">GAP 02 · 조합 부재</span>
+                    <span class="pp-dual-cite-title">단품 구매 vs 내 옷장 기장·색감 불일치</span>
+                    <p class="pp-dual-cite-desc">단품 사진만 보고 주문했다가 집에 있는 바지·아우터와 기장·색감이 어긋나 반품하는 비중이 크며 사전 조합 검증이 부재.</p>
                   </div>
                 </div>
-              </div>
+              </article>
             </div>
           </div>
           <footer class="s-foot">
@@ -1281,7 +1327,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 07 (04c) — PAINPOINT 03 (4+5): FATIGUE & BIOMETRIC/EXIF RISK -->
+      <!-- SLIDE 07 (04c) — PAINPOINT 04 (LEFT) | PAINPOINT 05 (RIGHT)        -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-04c" class="ir-slide" data-slide="7">
@@ -1293,194 +1339,219 @@
           </header>
 
           <div class="s-body">
-            <div class="pp-grid">
-              <div class="pp-left">
-                <div class="pp-kpi-row">
-                  <div class="panel pp-kpi-card">
-                    <span class="pp-kpi-label">PP 04 · 아침 코디 피로 · 스트레스</span>
-                    <span class="pp-kpi-val danger-accent">17분 · 62%</span>
-                    <span class="pp-kpi-sub">여성 17분/일(평생 6개월) · 62% 옷장 스트레스 (M&amp;S, n=2,000)</span>
+            <div class="pp-dual-grid">
+              <!-- ==================== LEFT HALF: PAINPOINT 04 ==================== -->
+              <article class="panel pp-dual-col">
+                <div class="pp-dual-head">
+                  <div class="pp-dual-head-left">
+                    <span class="pp-dual-badge pp-dual-badge--gold">PAINPOINT 04</span>
+                    <span class="pp-dual-title">아침 코디 결정 피로 · 4개 앱 분절</span>
                   </div>
-                  <div class="panel pp-kpi-card">
-                    <span class="pp-kpi-label">PP 05 · 이미지 앱 EXIF 고지 준수율</span>
-                    <span class="pp-kpi-val gold-accent">10.4%</span>
-                    <span class="pp-kpi-sub">안드로이드 앱 10.4%만 준수(MetaLeak) · 62.3% 삭제법 모름</span>
+                  <span class="pp-panel-meta">M&amp;S UK · UX 감사</span>
+                </div>
+
+                <div class="pp-dual-kpis">
+                  <div class="pp-dual-kpi">
+                    <span class="pp-kpi-label">매일 아침 코디 소요 시간</span>
+                    <span class="pp-dual-val danger-accent">17분/일 · 연 103h</span>
+                    <span class="pp-dual-sub">여성 17분 · 남성 13분 · 평생 약 6개월 소모</span>
+                  </div>
+                  <div class="pp-dual-kpi">
+                    <span class="pp-kpi-label">옷장 스트레스 (Wardrobe Rage)</span>
+                    <span class="pp-dual-val gold-accent">62% · &lt;50%</span>
+                    <span class="pp-dual-sub">62% 스트레스 경험 · 150벌+ 중 정기 착용 50% 미만</span>
                   </div>
                 </div>
 
-                <div class="panel pp-viz-panel">
-                  <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">PP 04 아침 4개 앱 분절 × PP 05 원본 서버 유출</span>
-                    <span class="pp-panel-meta">UX·프라이버시 감사</span>
+                <div class="pp-dual-viz">
+                  <svg class="pp-dual-svg" viewBox="0 0 540 148" role="img" aria-label="PAINPOINT 04 매일 아침 4개 앱 단절 워크플로우와 아침 코디 결정 피로 지표">
+                    <!-- Top Row: 4 Siloed Morning Apps -->
+                    <text x="10" y="13" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.6" font-weight="750">매일 아침 4개 앱 컨텍스트 스위칭 (실시간 기온·강수·장소·옷장 단절)</text>
+
+                    <rect x="10" y="21" width="114" height="44" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="67" y="39" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">01 날씨 앱</text>
+                    <text x="67" y="54" text-anchor="middle" fill="var(--ink-muted)" font-size="8.2">기온·강수 텍스트만</text>
+
+                    <text x="136" y="47" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="11.5" font-weight="800">✕</text>
+
+                    <rect x="148" y="21" width="114" height="44" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="205" y="39" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">02 옷장 앱</text>
+                    <text x="205" y="54" text-anchor="middle" fill="var(--ink-muted)" font-size="8.2">2D 정적 목록</text>
+
+                    <text x="274" y="47" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="11.5" font-weight="800">✕</text>
+
+                    <rect x="286" y="21" width="114" height="44" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="343" y="39" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">03 피팅 앱</text>
+                    <text x="343" y="54" text-anchor="middle" fill="var(--ink-muted)" font-size="8.2">단품 30초 대기</text>
+
+                    <text x="412" y="47" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="11.5" font-weight="800">✕</text>
+
+                    <rect x="424" y="21" width="106" height="44" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="477" y="39" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">04 지도 앱</text>
+                    <text x="477" y="54" text-anchor="middle" fill="var(--ink-muted)" font-size="8.2">목적지·TPO 별도 확인</text>
+
+                    <line x1="10" y1="77" x2="530" y2="77" stroke="var(--hairline)" stroke-width="1" />
+
+                    <!-- Bottom Row: M&S Empirical Fatigue Bars -->
+                    <text x="10" y="92" fill="var(--ink-secondary)" font-size="9" font-weight="650">매일 아침 ‘Wardrobe Rage’ 스트레스 경험 (M&amp;S, n=2,000)</text>
+                    <text x="530" y="92" text-anchor="end" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.3" font-weight="800">62%</text>
+                    <rect x="10" y="97" width="520" height="6.5" rx="3.2" fill="var(--svg-track)" />
+                    <rect x="10" y="97" width="322" height="6.5" rx="3.2" fill="var(--accent-danger)" />
+
+                    <text x="10" y="121" fill="var(--ink-secondary)" font-size="9" font-weight="650">보유 150벌+ 중 정기 착용 비중 (옷장이 가득해도 입을 옷 없음)</text>
+                    <text x="530" y="121" text-anchor="end" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.3" font-weight="800">50% 미만</text>
+                    <rect x="10" y="126" width="520" height="6.5" rx="3.2" fill="var(--svg-track)" />
+                    <rect x="10" y="126" width="245" height="6.5" rx="3.2" fill="var(--accent-gold)" />
+                  </svg>
+                </div>
+
+                <div class="pp-dual-table-wrap">
+                  <table class="pp-table pp-table--compact">
+                    <thead>
+                      <tr>
+                        <th>기존 서비스</th>
+                        <th>날씨·내 옷 연동</th>
+                        <th>핵심 한계</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="pp-peer-name">기상청 · 애플 날씨</span><span class="pp-peer-meta">기본 날씨 앱</span></td>
+                        <td class="pp-cell-danger">기온만 (옷장✕)</td>
+                        <td>숫자·아이콘뿐 — 체감 코디 결정 불가</td>
+                      </tr>
+                      <tr>
+                        <td><span class="pp-peer-name">무신사 · 지그재그(Zefi)</span><span class="pp-peer-meta">KR 커머스 AI</span></td>
+                        <td class="pp-cell-danger">신상품 위주</td>
+                        <td>내 옷장 대신 새 상품 구매 유도 중심</td>
+                      </tr>
+                      <tr>
+                        <td><span class="pp-peer-name">에이클로젯 · Alta</span><span class="pp-peer-meta">KR/US 옷장</span></td>
+                        <td class="pp-cell-gold">2D 기온 콜라주</td>
+                        <td>평면 콜라주 · 목적지 거리·강수 연출 부재</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="pp-dual-cite">
+                  <div class="pp-dual-cite-col">
+                    <span class="pp-tk-num">SURVEY 04 · 결정 피로</span>
+                    <span class="pp-dual-cite-title">Marks &amp; Spencer UK Survey (n=2,000)</span>
+                    <p class="pp-dual-cite-desc">성인 2,000명 조사에서 여성은 아침 17분(남성 13분, 연 103시간·평생 6개월)을 코디에 소모하며 62%가 옷장 스트레스를 경험.</p>
                   </div>
-                  <div class="pp-viz-wrap">
-                    <svg class="pp-viz-svg" viewBox="0 0 460 184" role="img" aria-label="매일 아침 4개 앱 분절 피로와 기존 앱의 얼굴·집 배경·GPS 외부 서버 전송 경로">
-                      <!-- Top Row: Painpoint 04 (4 Siloed Morning Apps) -->
-                      <text x="14" y="15" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.3" font-weight="750">PP 04 · 매일 아침 4개 앱 단절 (13~17분/일 · 연 103시간 소모)</text>
+                  <div class="pp-dual-cite-col">
+                    <span class="pp-tk-num">GAP 04 · 컨텍스트 단절</span>
+                    <span class="pp-dual-cite-title">날씨·장소·옷장의 매일 아침 분절</span>
+                    <p class="pp-dual-cite-desc">쇼핑은 월 2회지만 옷 입기는 매일 발생하는데도 날씨·지도·옷장·피팅 앱이 4개로 나뉘어 아침 인지 부하를 증폭.</p>
+                  </div>
+                </div>
+              </article>
 
-                      <rect x="14" y="23" width="92" height="48" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
-                      <text x="60" y="42" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">01 날씨 앱</text>
-                      <text x="60" y="57" text-anchor="middle" fill="var(--ink-muted)" font-size="8.2">기온·강수 텍스트</text>
+              <!-- ==================== RIGHT HALF: PAINPOINT 05 ==================== -->
+              <article class="panel pp-dual-col">
+                <div class="pp-dual-head">
+                  <div class="pp-dual-head-left">
+                    <span class="pp-dual-badge">PAINPOINT 05</span>
+                    <span class="pp-dual-title">얼굴·집 사진 생체·EXIF 유출 불안</span>
+                  </div>
+                  <span class="pp-panel-meta">IEEE ’24 · GDPR</span>
+                </div>
 
-                      <text x="119" y="51" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="11.5" font-weight="800">✕</text>
-
-                      <rect x="132" y="23" width="92" height="48" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
-                      <text x="178" y="42" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">02 옷장 앱</text>
-                      <text x="178" y="57" text-anchor="middle" fill="var(--ink-muted)" font-size="8.2">2D 정적 목록</text>
-
-                      <text x="237" y="51" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="11.5" font-weight="800">✕</text>
-
-                      <rect x="250" y="23" width="92" height="48" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
-                      <text x="296" y="42" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">03 피팅 앱</text>
-                      <text x="296" y="57" text-anchor="middle" fill="var(--ink-muted)" font-size="8.2">단품 30초 대기</text>
-
-                      <text x="355" y="51" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="11.5" font-weight="800">✕</text>
-
-                      <rect x="368" y="23" width="78" height="48" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
-                      <text x="407" y="42" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">04 지도</text>
-                      <text x="407" y="57" text-anchor="middle" fill="var(--ink-muted)" font-size="8.2">TPO·거리 확인</text>
-
-                      <!-- Divider -->
-                      <line x1="14" y1="88" x2="446" y2="88" stroke="var(--hairline)" stroke-width="1" />
-
-                      <!-- Bottom Row: Painpoint 05 (Raw Biometric & EXIF Cloud Exposure) -->
-                      <text x="14" y="106" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8.3" font-weight="750">PP 05 · 기존 AI·옷장 앱 이용 시 원본 생체·위치 데이터 외부 서버 유출</text>
-
-                      <rect x="14" y="116" width="122" height="54" rx="6" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-opacity="0.55" stroke-width="1" />
-                      <text x="75" y="137" text-anchor="middle" fill="var(--ink-primary)" font-size="9.8" font-weight="750">셀카 · 집 거울 사진</text>
-                      <text x="75" y="154" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="7.8">얼굴 + 실내 배경 + GPS</text>
-
-                      <line x1="136" y1="143" x2="178" y2="143" stroke="var(--accent-danger)" stroke-width="1.6" stroke-dasharray="3 2" />
-                      <polygon points="176,139 184,143 176,147" fill="var(--accent-danger)" />
-                      <text x="159" y="135" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="7.2" font-weight="700">RAW</text>
-
-                      <rect x="186" y="116" width="128" height="54" rx="6" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-width="1.1" />
-                      <text x="250" y="137" text-anchor="middle" fill="var(--accent-danger)" font-size="9.8" font-weight="750">외부 클라우드 서버</text>
-                      <text x="250" y="154" text-anchor="middle" fill="var(--ink-secondary)" font-size="8">24~48h 보관 · 후처리 경유</text>
-
-                      <line x1="314" y1="143" x2="342" y2="143" stroke="var(--accent-danger)" stroke-width="1.4" stroke-dasharray="3 2" />
-                      <polygon points="340,139 348,143 340,147" fill="var(--accent-danger)" />
-
-                      <rect x="350" y="116" width="96" height="54" rx="6" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-opacity="0.65" stroke-width="1" />
-                      <text x="398" y="137" text-anchor="middle" fill="var(--accent-danger)" font-size="9.6" font-weight="750">침해감 · 이탈</text>
-                      <text x="398" y="154" text-anchor="middle" fill="var(--ink-muted)" font-size="7.8">GDPR Art.9 · PIPA</text>
-                    </svg>
+                <div class="pp-dual-kpis">
+                  <div class="pp-dual-kpi">
+                    <span class="pp-kpi-label">안드로이드 EXIF 고지 준수율</span>
+                    <span class="pp-dual-val danger-accent">10.4% · 89.6%</span>
+                    <span class="pp-dual-sub">고지 준수 10.4% · 정책 미준수 89.6% (MetaLeak ’24)</span>
+                  </div>
+                  <div class="pp-dual-kpi">
+                    <span class="pp-kpi-label">EXIF·GPS 삭제법 미인지율</span>
+                    <span class="pp-dual-val gold-accent">62.3%</span>
+                    <span class="pp-dual-sub">집 주소 GPS 무인지 전송 (ALIBIS ’26) · GDPR Art.9</span>
                   </div>
                 </div>
 
-                <div class="panel pp-bars-panel">
-                  <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">결정 피로 · EXIF 프라이버시 노출 실증 지표</span>
-                    <span class="pp-panel-meta">M&amp;S · IEEE MetaLeak · ALIBIS</span>
-                  </div>
-                  <div class="pp-bar-list">
-                    <div class="pp-bar-item">
-                      <div class="pp-bar-top">
-                        <span class="pp-bar-name">안드로이드 이미지 앱 EXIF 고지 정책 미준수 (MetaLeak ’24)</span>
-                        <span class="pp-bar-val danger-accent">89.6%</span>
-                      </div>
-                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--danger" style="width:90%"></div></div>
-                    </div>
-                    <div class="pp-bar-item">
-                      <div class="pp-bar-top">
-                        <span class="pp-bar-name">스마트폰 사진 EXIF·GPS 삭제법을 모르는 사용자 (ALIBIS ’26)</span>
-                        <span class="pp-bar-val gold-accent">62.3%</span>
-                      </div>
-                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--gold" style="width:62%"></div></div>
-                    </div>
-                    <div class="pp-bar-item">
-                      <div class="pp-bar-top">
-                        <span class="pp-bar-name">매일 아침 옷장 스트레스(‘Wardrobe Rage’) 경험 (M&amp;S, n=2,000)</span>
-                        <span class="pp-bar-val danger-accent">62%</span>
-                      </div>
-                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--danger" style="width:62%"></div></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                <div class="pp-dual-viz">
+                  <svg class="pp-dual-svg" viewBox="0 0 540 148" role="img" aria-label="PAINPOINT 05 기존 AI 피팅 앱의 원본 셀카·집 배경·GPS 외부 서버 전송 경로와 EXIF 미준수 지표">
+                    <!-- Top Row: Raw Biometric & EXIF Cloud Exposure -->
+                    <text x="10" y="13" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8.6" font-weight="750">기존 AI·옷장 앱 이용 시 원본 생체·위치 데이터 외부 서버 유출 경로</text>
 
-              <div class="pp-right">
-                <div class="panel pp-table-panel">
-                  <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">KR · 글로벌 날씨·옷장·AI 피팅 앱 통합성 및 개인정보 감사</span>
-                    <span class="pp-panel-meta">실존 Peer 5대 유형</span>
-                  </div>
-                  <div class="pp-table-scroll">
-                    <table class="pp-table">
-                      <thead>
-                        <tr>
-                          <th>기존 서비스</th>
-                          <th>날씨·내 옷 연동</th>
-                          <th>얼굴·전신 전송</th>
-                          <th>EXIF·배경 처리</th>
-                          <th>이중 Painpoint</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td><span class="pp-peer-name">기상청 · 애플 날씨</span><span class="pp-peer-meta">기본 날씨 앱</span></td>
-                          <td class="pp-cell-danger">기온만 (옷장✕)</td>
-                          <td>해당 없음</td>
-                          <td>해당 없음</td>
-                          <td>숫자·아이콘뿐 — 체감 코디 결정 불가</td>
-                        </tr>
-                        <tr>
-                          <td><span class="pp-peer-name">무신사 · 지그재그(Zefi)</span><span class="pp-peer-meta">KR 커머스 AI</span></td>
-                          <td class="pp-cell-danger">신상품 위주</td>
-                          <td class="pp-cell-danger">외부 서버</td>
-                          <td>클라우드</td>
-                          <td>내 옷장 대신 신상품 구매 유도 중심</td>
-                        </tr>
-                        <tr>
-                          <td><span class="pp-peer-name">에이블리 AI 옷입기</span><span class="pp-peer-meta">KR 커머스 피팅</span></td>
-                          <td class="pp-cell-danger">미지원</td>
-                          <td class="pp-cell-danger">얼굴 서버 업로드</td>
-                          <td class="pp-cell-danger">EXIF 미보장</td>
-                          <td>얼굴 원본 업로드 거부감 · 날씨 단절</td>
-                        </tr>
-                        <tr>
-                          <td><span class="pp-peer-name">드랩 뷔통 · Google Try-On</span><span class="pp-peer-meta">KR/Global 피팅</span></td>
-                          <td class="pp-cell-danger">미지원</td>
-                          <td class="pp-cell-danger">전신 서버 업로드</td>
-                          <td class="pp-cell-gold">클라우드 처리</td>
-                          <td>합성용 전신 전송 필수 · GDPR 민감</td>
-                        </tr>
-                        <tr>
-                          <td><span class="pp-peer-name">에이클로젯 · Alta Daily</span><span class="pp-peer-meta">KR/US 옷장</span></td>
-                          <td class="pp-cell-gold">2D 기온 콜라주</td>
-                          <td class="pp-cell-danger">원본 서버 업로드</td>
-                          <td class="pp-cell-gold">서버 후처리</td>
-                          <td>방 배경·GPS 포함 원본이 서버 경유</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                    <rect x="10" y="21" width="148" height="44" rx="6" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-opacity="0.55" stroke-width="1" />
+                    <text x="84" y="39" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">셀카 · 집 거울 사진</text>
+                    <text x="84" y="54" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8">얼굴 + 실내 배경 + GPS</text>
+
+                    <line x1="158" y1="43" x2="202" y2="43" stroke="var(--accent-danger)" stroke-width="1.6" stroke-dasharray="3 2" />
+                    <polygon points="200,39 208,43 200,47" fill="var(--accent-danger)" />
+                    <text x="182" y="35" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="7.6" font-weight="750">RAW</text>
+
+                    <rect x="210" y="21" width="154" height="44" rx="6" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-width="1.1" />
+                    <text x="287" y="39" text-anchor="middle" fill="var(--accent-danger)" font-size="10" font-weight="750">외부 클라우드 서버</text>
+                    <text x="287" y="54" text-anchor="middle" fill="var(--ink-secondary)" font-size="8.2">24~48h 보관 · 후처리 경유</text>
+
+                    <line x1="364" y1="43" x2="398" y2="43" stroke="var(--accent-danger)" stroke-width="1.5" stroke-dasharray="3 2" />
+                    <polygon points="396,39 404,43 396,47" fill="var(--accent-danger)" />
+
+                    <rect x="406" y="21" width="124" height="44" rx="6" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-opacity="0.65" stroke-width="1" />
+                    <text x="468" y="39" text-anchor="middle" fill="var(--accent-danger)" font-size="9.8" font-weight="750">침해감 · 가입 이탈</text>
+                    <text x="468" y="54" text-anchor="middle" fill="var(--ink-muted)" font-size="8">GDPR Art.9 · PIPA</text>
+
+                    <line x1="10" y1="77" x2="530" y2="77" stroke="var(--hairline)" stroke-width="1" />
+
+                    <!-- Bottom Row: MetaLeak & ALIBIS Bars -->
+                    <text x="10" y="92" fill="var(--ink-secondary)" font-size="9" font-weight="650">안드로이드 이미지 앱 EXIF 고지 정책 미준수 (MetaLeak, IEEE ’24)</text>
+                    <text x="530" y="92" text-anchor="end" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.3" font-weight="800">89.6%</text>
+                    <rect x="10" y="97" width="520" height="6.5" rx="3.2" fill="var(--svg-track)" />
+                    <rect x="10" y="97" width="466" height="6.5" rx="3.2" fill="var(--accent-danger)" />
+
+                    <text x="10" y="121" fill="var(--ink-secondary)" font-size="9" font-weight="650">스마트폰 사진 EXIF·GPS 메타데이터 삭제법 미인지 (ALIBIS ’26)</text>
+                    <text x="530" y="121" text-anchor="end" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.3" font-weight="800">62.3%</text>
+                    <rect x="10" y="126" width="520" height="6.5" rx="3.2" fill="var(--svg-track)" />
+                    <rect x="10" y="126" width="324" height="6.5" rx="3.2" fill="var(--accent-gold)" />
+                  </svg>
                 </div>
 
-                <div class="panel pp-takeaway">
-                  <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">공개 논문이 입증한 아침 피로 × 프라이버시 침해감 장벽</span>
-                    <span class="pp-panel-meta">Peer-Reviewed Evidence</span>
+                <div class="pp-dual-table-wrap">
+                  <table class="pp-table pp-table--compact">
+                    <thead>
+                      <tr>
+                        <th>기존 서비스</th>
+                        <th>얼굴·전신 전송</th>
+                        <th>개인정보 리스크</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="pp-peer-name">에이블리 AI 옷입기</span><span class="pp-peer-meta">KR 커머스 피팅</span></td>
+                        <td class="pp-cell-danger">얼굴 서버 업로드</td>
+                        <td>EXIF 미보장 · 얼굴 원본 업로드 심리 장벽</td>
+                      </tr>
+                      <tr>
+                        <td><span class="pp-peer-name">드랩 뷔통 · Google Try-On</span><span class="pp-peer-meta">KR/Global 피팅</span></td>
+                        <td class="pp-cell-danger">전신 서버 업로드</td>
+                        <td>합성용 전신 전송 필수 · GDPR 생체정보 민감</td>
+                      </tr>
+                      <tr>
+                        <td><span class="pp-peer-name">에이클로젯 · Alta Daily</span><span class="pp-peer-meta">KR/US 옷장</span></td>
+                        <td class="pp-cell-danger">원본 서버 업로드</td>
+                        <td>방 배경·GPS 포함 원본이 클라우드 서버 경유</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="pp-dual-cite">
+                  <div class="pp-dual-cite-col">
+                    <span class="pp-tk-num">PAPER 05-A · 침해감</span>
+                    <span class="pp-dual-cite-title">Feng &amp; Xie (’19) · Smink (’20) · Mao (’26)</span>
+                    <p class="pp-dual-cite-desc">JIA·JBR 및 Frontiers in Psychol.(2026, n=709)은 얼굴·신체 업로드 요구가 ‘지각된 침해감’을 높여 AI 피팅 채택 의도를 저하시킴을 입증.</p>
                   </div>
-                  <div class="pp-takeaway-grid">
-                    <div class="pp-tk-col">
-                      <span class="pp-tk-num">01 · 결정 피로</span>
-                      <span class="pp-tk-title">연 103시간 소모 · 62% 옷장 스트레스</span>
-                      <p class="pp-tk-desc">Marks &amp; Spencer(n=2,000) 조사에서 여성은 아침 17분(남성 13분, 평생 6개월)을 코디에 쓰며 62%가 스트레스를 겪고, 4개 앱 분절이 인지 부하를 키웁니다.</p>
-                    </div>
-                    <div class="pp-tk-col">
-                      <span class="pp-tk-num">02 · 침해감 장벽</span>
-                      <span class="pp-tk-title">셀카 업로드가 VTO 사용 의도 저하</span>
-                      <p class="pp-tk-desc">Feng &amp; Xie (2019, JIA), Smink et al. (2020, J. Bus. Res.), Mao et al. (2026, Front. Psychol., n=709)은 얼굴·신체 요구가 ‘지각된 침해감’을 높여 채택을 가로막음을 입증했습니다.</p>
-                    </div>
-                    <div class="pp-tk-col">
-                      <span class="pp-tk-num">03 · EXIF·법적 위험</span>
-                      <span class="pp-tk-title">고지 준수 10.4% · 집 주소 무인지 유출</span>
-                      <p class="pp-tk-desc">Nguyen et al. (MetaLeak IEEE ’24 · ALIBIS ’26)은 이미지 앱 10.4%만 EXIF 고지를 지키고 62.3%가 GPS 삭제법을 몰라 GDPR Art.9·개인정보보호법 위험에 노출됨을 밝혔습니다.</p>
-                    </div>
+                  <div class="pp-dual-cite-col">
+                    <span class="pp-tk-num">PAPER 05-B · EXIF·규제</span>
+                    <span class="pp-dual-cite-title">Nguyen et al. (MetaLeak ’24 · ALIBIS ’26)</span>
+                    <p class="pp-dual-cite-desc">이미지 앱 10.4%만 EXIF 고지를 지키고 62.3%가 GPS 삭제법을 몰라 GDPR Art.9·개인정보보호법 생체·위치 유출 위험에 노출.</p>
                   </div>
                 </div>
-              </div>
+              </article>
             </div>
           </div>
           <footer class="s-foot">
