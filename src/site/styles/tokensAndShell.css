@@ -656,17 +656,6 @@ html[data-ios-safari='true'] .site-live-app-stage {
   transform: scale(0.97);
 }
 
-.site-utility-pill--app {
-  text-decoration: none;
-  color: var(--ink-primary);
-  font-weight: 640;
-}
-
-.site-utility-pill--app:hover {
-  color: var(--ink-primary);
-  background: var(--bg-elevated);
-}
-
 /* ==========================================================================
  * Central Spatial Stage & Spatial Editorial Noir Hero
  * ========================================================================== */

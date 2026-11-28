@@ -73,6 +73,8 @@ User-agent: *
 Disallow: /ir
 Disallow: /ir/
 Disallow: /assets/
+Disallow: /app
+Disallow: /app/
 Disallow: /app.html
 Disallow: /api/
 Allow: /

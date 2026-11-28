@@ -1,7 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ArrowRight,
-  ArrowUpRight,
   BarChart3,
   ChevronsUpDown,
   Compass,
@@ -58,6 +57,7 @@ import {
   BOTTOM_STAGE_PILLS,
   BRAND_LOGO_ASSETS,
   SITE_COPY,
+  SITE_IR_DECK_HREF,
   SITE_META,
   stageIdToViewId,
   type LegalDocKind,
@@ -1050,19 +1050,6 @@ export default function AinvtrySiteApp() {
             </div>
 
             <div className="site-topbar-right site-utility-rail">
-              <a
-                id="site-topbar-launch-app-link"
-                href="/app"
-                className="site-utility-pill site-utility-pill--app"
-                data-testid="site-topbar-launch-app"
-                data-marble-target="true"
-                data-marble-action="click"
-                aria-label={lang === 'ko' ? 'iNVTRY 웹 앱 시작하기' : 'Launch iNVTRY Web App'}
-              >
-                <span>{lang === 'ko' ? '앱 시작' : 'App'}</span>
-                <ArrowUpRight size={13} aria-hidden="true" />
-              </a>
-              <span className="site-utility-sep" aria-hidden="true" />
               <button
                 type="button"
                 className="site-utility-pill"
@@ -1133,19 +1120,19 @@ export default function AinvtrySiteApp() {
                   {!isIrCoverEmbed && (
                     <div className="site-hero-actions" data-no-marble="true">
                       <a
-                        id="site-hero-launch-app-btn"
-                        href="/app"
+                        id="site-hero-ir-deck-btn"
+                        href={`${SITE_IR_DECK_HREF}?lang=${lang}&theme=${theme}&mood=${motionVariant}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="site-hero-cta site-hero-cta--primary"
-                        data-testid="site-hero-launch-app"
+                        data-testid="site-hero-ir-deck"
                         data-marble-target="true"
                         data-marble-action="click"
                         aria-label={
-                          lang === 'ko'
-                            ? 'iNVTRY 웹 앱 시작하기 (/app)'
-                            : 'Launch iNVTRY Web App (/app)'
+                          lang === 'ko' ? 'iNVTRY IR 자료 열기' : 'Open iNVTRY IR Deck'
                         }
                       >
-                        <span>{lang === 'ko' ? '앱 시작하기' : 'Launch App'}</span>
+                        <span>{lang === 'ko' ? 'IR 자료' : 'IR Deck'}</span>
                         <ArrowRight size={14} aria-hidden="true" />
                       </a>
                     </div>
