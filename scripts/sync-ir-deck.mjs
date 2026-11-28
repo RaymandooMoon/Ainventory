@@ -218,6 +218,21 @@ function readGitMetadata(repoRoot) {
   }
 }
 
+/**
+ * Code-truth 3-tier feature status for IR deck (C5 compliance).
+ * - buy / weather / share (CalendarView.jsx) -> 출시
+ * - scan (care_label_scan OCR implemented)   -> 베타
+ * - care (pickup) / resale (commerce)        -> 개발 예정
+ */
+const IR_JOURNEY_CODE_TRUTH = {
+  buy: { status: 'live', label: '출시' },
+  scan: { status: 'hybrid', label: '베타' },
+  weather: { status: 'live', label: '출시' },
+  share: { status: 'live', label: '출시' },
+  care: { status: 'todo', label: '개발 예정' },
+  resale: { status: 'todo', label: '개발 예정' },
+};
+
 function journeyStatusToClass(status) {
   if (status === 'live') return 'badge badge--live';
   if (status === 'hybrid') return 'badge badge--hybrid';
@@ -257,20 +272,21 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
     three: cleanSemver(deps.three),
     threeMinor: majorMinor(deps.three),
     threeBadge: `Three.js ${majorMinor(deps.three)}`,
-    threeVtonTag: `Three.js ${majorMinor(deps.three)} · 가상 피팅`,
-    stackShort: `React ${majorOnly(deps.react)} · Vite ${majorOnly(deps.vite)} · Express ${majorOnly(deps.express)} · Capacitor ${majorOnly(deps['@capacitor/core'])} (iOS/Android)`,
-    clientEdge: `React ${majorOnly(deps.react)} · Capacitor ${majorOnly(deps['@capacitor/core'])} · Three.js ${majorMinor(deps.three)} · MediaPipe WASM(0B) · IndexedDB`,
+    threeVtonTag: `Three.js ${majorMinor(deps.three)} · 8각도 AI 가상 피팅`,
+    stackShort: `React ${majorOnly(deps.react)} · Vite ${majorOnly(deps.vite)} · Express ${majorOnly(deps.express)} · Capacitor ${majorOnly(deps['@capacitor/core'])} (Web·Android 우선, iOS 예정)`,
+    clientEdge: `React ${majorOnly(deps.react)} · Capacitor ${majorOnly(deps['@capacitor/core'])} · Three.js ${majorMinor(deps.three)} · MediaPipe WASM(얼굴 0B) · IndexedDB`,
   };
 
   /** @type {Record<string, { num: string, shortTitle: string, status: string, label: string, badgeClass: string }>} */
   const journey = {};
   for (const cut of ko.journey.cuts) {
+    const truth = IR_JOURNEY_CODE_TRUTH[cut.id] || { status: 'todo', label: '개발 예정' };
     journey[cut.id] = {
       num: cut.num,
       shortTitle: cut.shortTitle,
-      status: cut.status,
-      label: cut.shortStatusLabel,
-      badgeClass: journeyStatusToClass(cut.status),
+      status: truth.status,
+      label: truth.label,
+      badgeClass: journeyStatusToClass(truth.status),
     };
   }
 
@@ -282,7 +298,7 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
     roadmap[m.id] = {
       phase: m.phase,
       status: m.status,
-      badgeText: isDone ? `${phaseNum}단계 · 완료` : `${phaseNum}단계 · 2026.Q4~27`,
+      badgeText: isDone ? `${phaseNum}단계 · 구현 완료` : `${phaseNum}단계 · 개발 예정`,
       badgeClass: milestoneStatusToClass(m.status),
       title: m.title,
     };

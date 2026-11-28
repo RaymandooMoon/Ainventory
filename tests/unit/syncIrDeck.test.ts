@@ -38,7 +38,7 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
 
     assert.equal(matchedCount, 2);
     assert.ok(html.includes(`data-ir-bind="tests.roundedPlus">${snapshot.tests.roundedPlus}</strong>`));
-    assert.ok(html.includes('class="badge badge--live" data-ir-bind="journey.buy.badge">LIVE</span>'));
+    assert.ok(html.includes('class="badge badge--live" data-ir-bind="journey.buy.badge">출시</span>'));
     assert.ok(html.includes('[TBD] 억원'), 'manual [TBD] investor placeholders must never be overwritten');
   });
 

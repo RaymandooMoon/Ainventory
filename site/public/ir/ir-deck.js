@@ -456,11 +456,6 @@
   function mountLiveHeroFrame() {
     if (!liveHeroFrame || !isHttpRuntime || liveHeroMounted) return;
     liveHeroMounted = true;
-    const markReady = () => {
-      if (liveHeroShell) liveHeroShell.classList.add('is-live-ready');
-      syncLiveHeroFrame(false);
-    };
-    liveHeroFrame.addEventListener('load', markReady, { once: true });
     liveHeroFrame.setAttribute('src', buildLiveHeroUrl());
   }
 

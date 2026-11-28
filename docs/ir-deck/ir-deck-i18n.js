@@ -44,9 +44,9 @@
     '[data-i18n-rich="s12-h2"]':
       '<span class="serif-accent">4 Revenue Streams</span> Anchored in Live Features',
     '[data-i18n-rich="s13-h2"]':
-      '5-Stage Retention Loop × <span class="serif-accent">On-Device Cost Shield</span>',
+      '5-Stage Retention Loop × <span class="serif-accent">Cost Control Architecture</span>',
     '[data-i18n-rich="s14-h2"]':
-      'Production-Verified <span class="serif-accent">6-Layer Architecture</span>',
+      'Live <span class="serif-accent">6-Layer System Architecture</span>',
     '[data-i18n-rich="s15-h2"]':
       'Early Growth Strategy &amp; <span class="serif-accent">18-Month Roadmap</span>',
     '[data-i18n-rich="s16-h2"]':
@@ -63,7 +63,7 @@
     '(ThredUp 2026)': '(ThredUp 2026)',
     '(어패럴뉴스)': '(Apparel News)',
     '+10포인트': '+10 pts',
-    '/월 (협의 중)': '/mo [TBD]',
+    '/월 (협의 중)': '/mo (in discussion)',
     '01 · 배경 삭제와 피부톤 분석': '01 · Background Cutout & Skin-Tone',
     '01 · 사용자 앱': '01 · Client Edge',
     '01 · 세계 중고 의류 $289B → $393B': '01 · Global Resale $289B → $393B',
@@ -1588,6 +1588,124 @@
     '당근·번개장터': 'Karrot·Bunjang',
     '100벌 제한': '100-Item Cap',
     '경쟁 비교 — KR·글로벌 10대 Peer 중 5가지 핵심 기능을 모두 갖춘 유일한 옷장': 'Competitive Landscape — The Only Platform Unifying All 5 Capabilities Across 10 KR & Global Peers',
+    // Essential Factual & Security Corrections (v5.4+ Fact/Security Patch)
+    '중고·세탁': 'Resale · Care',
+    '글로벌 시장 규모 (분리 산정)': 'Global Market Size (Decoupled)',
+    'PRE-SEED': 'PRE-SEED',
+    '18M 검증': '18M VALIDATE',
+    'SEED 진입': 'SEED READY',
+    '베타 · iOS': 'Beta · iOS',
+    '잔존율 · 구독': 'Retention · Pro',
+    '단위경제 · 시드': 'Unit Econ · Seed',
+    '8각도 가상 피팅': '8-Angle Try-On',
+    '내 아바타에 8각도 레이어드 미리 입어보기': 'Preview 8-angle layered outfits on your avatar',
+    '잠든 옷 중고 판매·기부 연결 (개발 예정)': 'Connect idle clothes to resale & donation (Planned)',
+    'Three.js 3D 연출': 'Three.js 3D Stage',
+    'Three.js 3D WebGL2 셰이더로 8각도 AI 가상 피팅의 시점 전환·조명 합성(리라이팅)과 비·눈·햇살 날씨 무대를 실시간 연출합니다.': 'Renders 8-angle AI try-on angle switching, dynamic relighting, and live weather stages via Three.js 3D WebGL2 shaders.',
+    '얼굴 0 Bytes': 'Face 0 Bytes',
+    '피부톤 기기 내 분석': 'On-Device Skin-Tone',
+    'MediaPipe WASM으로 얼굴 피부톤 분석(원본 0B)과 배경·EXIF 삭제를 기기 안에서 먼저 처리합니다.': 'Processes facial skin-tone (0B raw egress) and background/EXIF removal on-device via MediaPipe WASM.',
+    '8각도 레이어드': '8-Angle Layered',
+    '이너·상의·아우터·하의를 한 번에 레이어드해, 45° 단위 8각도 실사 뷰로 앞·옆·뒷모습 코디 조합을 확인합니다.': 'Layer inner, top, outerwear, and bottoms together across 8 45° views to verify full outfit coordination.',
+    'Web · Android': 'Web · Android',
+    'Web · Android 우선 (iOS 예정)': 'Web & Android First (iOS Planned)',
+    'React 19 · Vite 8 · Express 5 · Capacitor 8 단일 코드베이스와 IndexedDB 오프라인 동기화로 Web·Android를 우선 지원하고 iOS를 확장합니다.': 'Built on a shared React 19 · Vite 8 · Express 5 · Capacitor 8 codebase with IndexedDB offline sync — Web & Android first, iOS planned.',
+    '점검 8종 다각도 0% · Doppl 종료': '0/8 peers multi-angle · Doppl shut down',
+    '점검 8종 다각도 회전 지원': 'Audited 8 Peers: Multi-Angle Support',
+    '다각도 측면·뒷모습 실사 회전 미지원 (8 / 8)': 'No multi-angle side & back photoreal rotation (8 / 8)',
+    '2D 코디 · 다각도✕': '2D look · No multi-angle',
+    '8각도 레이어드 · Three.js 3D': '8-Angle Layered · Three.js 3D',
+    '얼굴 원본 0B · 기기 내 전처리': 'Face Raw 0B · On-Device Prep',
+    '세탁·착용 이력 연계 (개발 예정)': 'Care & Wear Log Sync (Planned)',
+    '출시': 'Live',
+    '베타': 'Beta',
+    '개발 예정': 'Planned',
+    'OOTD 캘린더 기록 · 8각도 공유': 'OOTD Calendar · 8-Angle Share',
+    '서비스 흐름 — 상태 표기: 출시 · 베타(라벨 OCR) · 개발 예정(방문 수거·판매/기부)': 'User Journey — Status: Live · Beta (Care-Label OCR) · Planned (Pickup & Resale/Donation)',
+    'PART 02 · 실제 앱 화면 (데모 데이터)': 'PART 02 · LIVE APP SCREENS (DEMO DATA)',
+    '디지털 옷장 (데모)': 'Digital Closet (Demo)',
+    '시연용 데모 · 회당 착용비': 'Demo Data · Cost-Per-Wear',
+    '얼굴 피부톤 안심 분석': 'On-Device Skin-Tone',
+    '피부톤 원본 외부 전송 0건': '0 Raw Facial Uploads',
+    '실제 앱 화면 (시연용 데모 데이터 포함) — Web · Android 우선, iOS 예정 (www.ainvtry.com/app)': 'Live App Screens (Includes Demo Data) — Web & Android First, iOS Planned (www.ainvtry.com/app)',
+    '8각도': '8-Angle',
+    '추가비 없음': 'No Extra GPU',
+    '배경·피부톤 기기 내': 'On-Device BG & Skin-Tone',
+    '피부톤 기기 내 · 원본 미전송': 'On-Device Skin-Tone · 0 Raw Upload',
+    '탈퇴 시 파기': 'Purge on Delete',
+    'Google 약관상 AI 학습 미사용': 'No AI Training (Google Terms)',
+    '01 · 글로벌 중고 의류 $289B → $393B (2025→2030)': '01 · Global Resale $289B → $393B (2025→2030)',
+    '02 · AI 가상 피팅 SW $9.81B → $23.94B (2026→2031)': '02 · Virtual Fitting SW $9.81B → $23.94B (2026→2031)',
+    '04 · EU 대기업 미판매 의류 폐기 금지 (시장 신호)': '04 · EU Unsold-Apparel Ban (Enterprise Signal)',
+    '시장 분리 산정 (비합산)': 'Decoupled Markets (Non-Summed)',
+    '국내 중고 패션 (연 30%↑)': 'KR Resale Fashion (30%+ YoY)',
+    'SOM · 수익풀 목표': 'SOM · Revenue Pool Target',
+    '서울 2030 · 협의 후 공유': 'Seoul 2030 · Shared on Discussion',
+    '8각도 레이어드 · Three.js 3D ▶': '8-Angle Layered · Three.js 3D ▶',
+    '8각도 레이어드 피팅': '8-Angle Layered Try-On',
+    '단가 협의 중': 'Pricing TBD w/ Beta',
+    '8각도 AI 가상 피팅 (월 사용 한도)': '8-Angle AI Try-On (Monthly Quota)',
+    '보완 상품 제휴 (중복 의류 비노출)': 'Gap Commerce Affiliate (No Duplicate Links)',
+    '90일 미착용 연결 (개발 예정)': '90-Day Idle Connect (Planned)',
+    '신상품 가상 피팅 · 중장기 확장': 'New-Arrival Try-On · Mid-Term',
+    '비즈니스 모델 — Pro 구독 중심, 중복 경고 신뢰 우선 · 보완 상품 제휴 분리': 'Business Model — Subscription First, Trust-First Duplicate Shield & Gap Commerce',
+    '사용량 상한 · 캐싱': 'Usage Cap · Caching',
+    '기기 내 처리 한정': 'On-Device Only',
+    '02 · 의류 사진 경량화 · 동기화': '02 · Garment Compression & Sync',
+    '원본 582KB 직접 전송': 'Raw 582KB Upload',
+    '기기 내 배경·EXIF 제거': 'On-Device BG & EXIF Strip',
+    '재추론 절감': 'Cache Reuse',
+    '저장 캐시 재사용': 'Reuse Cached Renders',
+    '원가 통제': 'Cost Guard',
+    '사용량 상한 + 캐싱 단위경제': 'Quota + Caching Unit Economics',
+    '실측 건당 원가 · 마진율은 베타 계측 후 확정 (협의 후 공유)': 'Unit cost & margin finalized after beta measurement',
+    '수익 구조 — 기기 내 전처리(배경·피부톤) + 캐싱 + 월 사용량 상한제': 'Unit Economics — On-Device Prep + Caching + Monthly Usage Caps',
+    '사전 출시': 'Pre-Launch',
+    '핵심 메뉴 구현 · 베타 검증 준비': 'Core Built · Beta Ready',
+    'Three.js 3D 연출 무대': 'Three.js 3D Stage',
+    'Google Cloud 약관상 AI 학습 미사용 · 8각도 가상 피팅': 'No AI Training (Google Cloud Terms) · 8-Angle Try-On',
+    '06 · 저장소': '06 · Storage',
+    '현재: SQLite(sql.js) · 목표: Cloud SQL + GCS 암호화 (예정)': 'Current: SQLite (sql.js) · Target: Cloud SQL + GCS (Planned)',
+    '개발 현황 — 현재 구현(SQLite · Web/Android)과 목표 구조(Cloud SQL · iOS) 구분': 'Build Status — Current (SQLite · Web/Android) vs Target (Cloud SQL · iOS)',
+    '핵심 구현': 'Core Built',
+    '진행 예정': 'Planned',
+    '8각도 레이어드 피팅 · 옷장 자동 정리': '8-Angle Layered Fit · Auto Closet Prep',
+    '실시간 날씨 · 기본 보안 계층': 'Live Weather · Core Privacy Layer',
+    'iOS 출시 · 월 구독 · 중고 판매': 'iOS Launch · Pro Sub · Resale',
+    'OOTD 캘린더 · 8각도 공유': 'OOTD Calendar · 8-Angle Share',
+    '풀스택 단독 구현 · 약력 협의 후 공유': 'Solo Full-Stack Build · Bio Shared on Discussion',
+    '8각도 가상 피팅 품질 고도화': '8-Angle AI Try-On Quality Lead',
+    '클라우드 암호화 · 보안 인프라 (예정)': 'Cloud Encryption & Security Infra (Planned)',
+    'GCP 암호화 이관 (예정)': 'GCP Encrypted Migration (Planned)',
+    '외부 모의해킹 점검 (예정)': 'External Pentest Audit (Planned)',
+    '핵심 특허 2건 이상 출원 (예정)': '2+ Core Patents Filing (Planned)',
+    '팀 및 보안 계획 — 1인 풀스택 실행력과 출시 전 보안 고도화 계획': 'Team & Security — Solo Full-Stack Execution & Pre-Launch Security Plan',
+    '단일 라운드': 'SINGLE ROUND',
+    '8각도 피팅 · iOS · 라벨 OCR': '8-Angle Fit · iOS · Label OCR',
+    '마케팅 · 검증': 'Growth · Beta',
+    '서울 2030 베타 · 제휴': 'Seoul 2030 Beta · Pilots',
+    '클라우드 이관 · 모의해킹': 'Cloud Migration · Pentest',
+    '특허 출원 · 법률 자문': 'Patents · Legal',
+    '희망 투자금 · 조건': 'Ask & Terms',
+    '협의 후 공유': 'Shared on Discussion',
+    '프리시드 (TIPS 연계 검토)': 'Pre-Seed (TIPS Considered)',
+    '18개월 검증 목표': '18M Validation Goals',
+    '잔존율 · 유료 전환 → 시드': 'Retention & Paid Conv. → Seed',
+    '클라우드 보안 · 특허 출원': 'Cloud Security · Patents',
+    '1 ~ 6개월': 'M01 – M06',
+    '01 · 베타 · iOS 출시': '01 · Beta & iOS Launch',
+    '앱 정식 출시 · 외부 모의해킹': 'App Launch · External Pentest',
+    '7 ~ 12개월': 'M07 – M12',
+    '02 · 잔존율 · Pro 구독': '02 · Retention & Pro Sub',
+    '4주 잔존율 · 유료 전환 검증': 'W4 Retention · Paid Validation',
+    '13 ~ 18개월': 'M13 – M18',
+    '03 · 단위경제 · 시드 진입': '03 · Unit Econ → Seed',
+    '원가 실증 · 시드 라운드 조건 달성': 'Verified Margin · Seed Ready',
+    '투자 제안 — 프리시드 단일 라운드 18개월 마일스톤 검증 후 시드 진입': 'Funding Ask — Single Pre-Seed Round, 18M Milestones to Seed',
+    'React 19 · Vite 8 · Capacitor 8 단일 코드베이스와 IndexedDB 오프라인 동기화로 Web·Android를 우선 지원하고 iOS를 확장합니다.': 'Built on a single React 19 · Vite 8 · Capacitor 8 codebase with IndexedDB offline sync — Web & Android first, expanding to iOS.',
+    'OOTD 캘린더': 'OOTD Calendar',
+    'CPW · 자산 리포트': 'CPW & Wardrobe Report',
+    '₩5조+ ↗': '₩5T+ ↗',
   };
 
   const ATTR_EN = {
@@ -1665,6 +1783,11 @@
     'PAINPOINT 04 매일 아침 4개 앱 단절 워크플로우와 아침 코디 결정 피로 지표': 'Painpoint 04 daily morning 4-app siloed workflow and outfit decision fatigue metrics',
     'PAINPOINT 05 기존 AI 피팅 앱의 원본 셀카·집 배경·GPS 외부 서버 전송 경로와 EXIF 미준수 지표': 'Painpoint 05 raw selfie, home background, and GPS cloud egress path with EXIF non-compliance metrics',
     '기존 C2C 의류 판매 4단계 수동 마찰과 구매자 품질·위생 불신 및 세탁 라벨 오인 구조': '4-step manual C2C apparel listing friction alongside buyer quality/hygiene distrust and care-label misuse',
+    '8각도 7겹 AI 피팅 라이브 캡처': 'Live capture of 8-angle 7-layer AI fitting',
+    '270벌 데모 디지털 옷장 라이브 캡처': 'Live capture of 270-item demo digital closet',
+    'OOTD 캘린더 · 8각도 공유': 'OOTD calendar and 8-angle share',
+    '실구동 iNVTRY 8각도 레이어드 피팅 라이브 캡처': 'Live iNVTRY 8-angle layered fitting capture',
+    '8각도 AI 가상 피팅 및 하단 회전 스크롤 라이브 캡처': '8-angle AI virtual try-on and bottom rotation scrubber live capture',
   };
 
   function formatBoundEn(key, koText) {
@@ -1687,7 +1810,21 @@
       case 'performance.fpsMorphChip':
         return raw.replace('Three.js 3D 무대', 'Three.js 3D Stage');
       case 'versions.threeVtonTag':
-        return raw.replace('가상 피팅', 'AI TRY-ON');
+        return raw.replace('8각도 AI 가상 피팅', '8-Angle AI Try-On').replace('가상 피팅', 'AI TRY-ON');
+      case 'versions.stackShort':
+        return raw.replace('(Web·Android 우선, iOS 예정)', '(Web & Android First, iOS Planned)');
+      case 'versions.clientEdge':
+        return raw.replace('얼굴 0B', 'Face 0B');
+      case 'journey.buy.badge':
+      case 'journey.scan.badge':
+      case 'journey.weather.badge':
+      case 'journey.share.badge':
+      case 'journey.care.badge':
+      case 'journey.resale.badge':
+        if (raw === '출시') return 'LIVE';
+        if (raw === '베타') return 'BETA';
+        if (raw === '개발 예정') return 'PLANNED';
+        return raw;
       case 'tests.summaryShort': {
         const m = raw.match(/(\d+)개 묶음\s*·\s*(\d+)개 검증/);
         return m ? `${m[1]} Suites · ${m[2]} Cases Passed` : raw;
@@ -1727,7 +1864,12 @@
       case 'roadmap.stage-3.badge': {
         const m = raw.match(/^(\d+)단계\s*·\s*(.+)$/);
         if (!m) return raw;
-        const suffix = m[2] === '완료' ? 'DONE' : m[2];
+        const suffix =
+          m[2] === '완료' || m[2] === '구현 완료'
+            ? 'BUILT'
+            : m[2] === '개발 예정'
+              ? 'PLANNED'
+              : m[2];
         return `PHASE 0${m[1]} · ${suffix}`;
       }
       default:

@@ -50,9 +50,9 @@
     "three": "0.187.0",
     "threeMinor": "0.187",
     "threeBadge": "Three.js 0.187",
-    "threeVtonTag": "Three.js 0.187 · 가상 피팅",
-    "stackShort": "React 19 · Vite 8 · Express 5 · Capacitor 8 (iOS/Android)",
-    "clientEdge": "React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(0B) · IndexedDB"
+    "threeVtonTag": "Three.js 0.187 · 8각도 AI 가상 피팅",
+    "stackShort": "React 19 · Vite 8 · Express 5 · Capacitor 8 (Web·Android 우선, iOS 예정)",
+    "clientEdge": "React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(얼굴 0B) · IndexedDB"
   },
   "tests": {
     "suiteCount": 63,
@@ -83,64 +83,64 @@
       "num": "01",
       "shortTitle": "중복 확인",
       "status": "live",
-      "label": "LIVE",
+      "label": "출시",
       "badgeClass": "badge badge--live"
     },
     "scan": {
       "num": "02",
       "shortTitle": "사진 등록",
       "status": "hybrid",
-      "label": "LIVE+",
+      "label": "베타",
       "badgeClass": "badge badge--hybrid"
     },
     "weather": {
       "num": "03",
       "shortTitle": "날씨 코디",
       "status": "live",
-      "label": "LIVE",
+      "label": "출시",
       "badgeClass": "badge badge--live"
     },
     "share": {
       "num": "04",
       "shortTitle": "캘린더",
-      "status": "todo",
-      "label": "TO-DO",
-      "badgeClass": "badge badge--todo"
+      "status": "live",
+      "label": "출시",
+      "badgeClass": "badge badge--live"
     },
     "care": {
       "num": "05",
       "shortTitle": "세탁 · 수거",
-      "status": "hybrid",
-      "label": "LIVE+",
-      "badgeClass": "badge badge--hybrid"
+      "status": "todo",
+      "label": "개발 예정",
+      "badgeClass": "badge badge--todo"
     },
     "resale": {
       "num": "06",
       "shortTitle": "간편 판매",
-      "status": "hybrid",
-      "label": "LIVE+",
-      "badgeClass": "badge badge--hybrid"
+      "status": "todo",
+      "label": "개발 예정",
+      "badgeClass": "badge badge--todo"
     }
   },
   "roadmap": {
     "stage-1": {
       "phase": "LIVE 01",
       "status": "done",
-      "badgeText": "1단계 · 완료",
+      "badgeText": "1단계 · 구현 완료",
       "badgeClass": "badge badge--live",
       "title": "레이어드 피팅 · 온디바이스 피부톤"
     },
     "stage-2": {
       "phase": "LIVE 02",
       "status": "done",
-      "badgeText": "2단계 · 완료",
+      "badgeText": "2단계 · 구현 완료",
       "badgeClass": "badge badge--live",
       "title": "실시간 날씨 · 세탁 지도 · 즉시 삭제"
     },
     "stage-3": {
       "phase": "TO-DO",
       "status": "active",
-      "badgeText": "3단계 · 2026.Q4~27",
+      "badgeText": "3단계 · 개발 예정",
       "badgeClass": "badge badge--gold",
       "title": "택 스캔 · 캘린더 · 방문수거 · 리셀"
     }
