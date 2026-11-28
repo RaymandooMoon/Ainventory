@@ -99,7 +99,7 @@ jobs:
             --min-instances="${MIN_INSTANCES}"
             --max-instances=5
             --service-account="${RUNTIME_SA}"
-            --set-env-vars="NODE_ENV=production,TRUST_PROXY=1,SEED_DEMO_DATA=true,APP_PUBLIC_ORIGIN=https://ainvtry.com,CORS_ALLOWED_ORIGINS=https://ainvtry.com\,https://www.ainvtry.com\,https://raymandoomoon.github.io,GCS_PRIVATE_BUCKET=${GCS_PRIVATE},GCS_SCRATCH_BUCKET=${GCS_SCRATCH},RESEND_FROM_EMAIL=iNVTRY <newsletter@ainvtry.com>,NEWSLETTER_NOTIFY_EMAIL=raymond@ainvtry.com"
+            --set-env-vars="^|^NODE_ENV=production|TRUST_PROXY=1|SEED_DEMO_DATA=true|APP_PUBLIC_ORIGIN=https://ainvtry.com|CORS_ALLOWED_ORIGINS=https://ainvtry.com,https://www.ainvtry.com,https://raymandoomoon.github.io|GCS_PRIVATE_BUCKET=${GCS_PRIVATE}|GCS_SCRATCH_BUCKET=${GCS_SCRATCH}|RESEND_FROM_EMAIL=iNVTRY <newsletter@ainvtry.com>|NEWSLETTER_NOTIFY_EMAIL=raymond@ainvtry.com"
             --set-secrets="DATABASE_URL=AINVENTORY_DATABASE_URL:latest,GOOGLE_CLIENT_ID=AINVENTORY_GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=AINVENTORY_GOOGLE_CLIENT_SECRET:latest,OAUTH_STATE_SECRET=AINVENTORY_OAUTH_STATE_SECRET:latest,GEMINI_API_KEY=AINVENTORY_GEMINI_API_KEY:latest,GOOGLE_MAPS_API_KEY=AINVENTORY_GOOGLE_MAPS_API_KEY:latest,RESEND_API_KEY=AINVENTORY_RESEND_API_KEY:latest,SITE_DEMO_PASSWORD=AINVENTORY_SITE_DEMO_PASSWORD:latest,ADMIN_INITIAL_PASSWORD=AINVENTORY_ADMIN_INITIAL_PASSWORD:latest"
           )
           if [[ -n "${SQL_CONN}" ]]; then
