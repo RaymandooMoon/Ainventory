@@ -205,6 +205,7 @@ export default defineConfig(({ mode }) => {
           main: path.resolve(rootDir, 'index.html'),
           app: path.resolve(rootDir, 'app.html'),
           appFull: path.resolve(rootDir, 'app/index.html'),
+          studioEmbed: path.resolve(rootDir, 'studio-embed/index.html'),
           minigame: path.resolve(rootDir, 'minigame/index.html'),
         },
         output: {

@@ -1876,6 +1876,34 @@ export function createWorkerHandler(fetchImpl = fetch) {
       }
 
       if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') {
+        const isLiveStudioEmbed =
+          url.pathname === '/app.html' ||
+          ((url.pathname === '/app' || url.pathname === '/app/') &&
+            url.searchParams.get('embed') === '1');
+        if (isLiveStudioEmbed) {
+          // Fetch `/studio-embed/` directly so Cloudflare auto-trailing-slash never 307-redirects `/app.html` -> `/app`
+          const embedReq = new Request(
+            new URL(`/studio-embed/${url.search}`, url.origin),
+            request
+          );
+          const embedRes = await env.ASSETS.fetch(embedReq);
+          const headers = new Headers(embedRes.headers);
+          headers.delete('X-Frame-Options');
+          headers.set(
+            'Content-Security-Policy',
+            "frame-ancestors 'self' https://ainvtry.com https://www.ainvtry.com"
+          );
+          headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+          headers.set('X-Content-Type-Options', 'nosniff');
+          headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+          headers.set('X-Robots-Tag', 'noindex, nofollow, noai, noimageai');
+          return new Response(embedRes.body, {
+            status: embedRes.status,
+            statusText: embedRes.statusText,
+            headers,
+          });
+        }
+
         if (isFullAppSpaPath(url.pathname)) {
           // Request `/app/` directly from Static Assets to avoid Cloudflare auto-trailing-slash 307 redirect loops
           const appShellRequest = new Request(

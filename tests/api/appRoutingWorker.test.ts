@@ -24,6 +24,12 @@ function createMockAssetsBinding() {
           });
         }
         if (url.pathname === '/app.html') {
+          return new Response(null, {
+            status: 307,
+            headers: { Location: '/app' },
+          });
+        }
+        if (url.pathname === '/studio-embed/') {
           return new Response('<!doctype html><title>iNVTRY Live Embed</title>', {
             status: 200,
             headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -72,7 +78,7 @@ describe('Cloudflare Worker — ainvtry.com/app SPA, OAuth Reverse Proxy & Sandb
     );
   });
 
-  it('keeps /app.html marketing Live Studio embed untouched and blocks AI scrapers on /app', async () => {
+  it('keeps /app.html marketing Live Studio embed at 200 OK without 307 redirect and blocks AI scrapers on /app', async () => {
     const worker = createWorkerHandler();
     const mock = createMockAssetsBinding();
 
@@ -83,8 +89,13 @@ describe('Cloudflare Worker — ainvtry.com/app SPA, OAuth Reverse Proxy & Sandb
       { ASSETS: mock.ASSETS }
     );
     assert.equal(embedRes.status, 200);
+    assert.equal(embedRes.headers.get('x-frame-options'), null);
+    assert.match(
+      embedRes.headers.get('content-security-policy') || '',
+      /frame-ancestors 'self' https:\/\/ainvtry\.com https:\/\/www\.ainvtry\.com/
+    );
     assert.match(await embedRes.text(), /Live Embed/);
-    assert.equal(mock.seenPaths[0], '/app.html');
+    assert.equal(mock.seenPaths[0], '/studio-embed/');
 
     const botRes = await worker.fetch(
       new Request('https://ainvtry.com/app/login', {
