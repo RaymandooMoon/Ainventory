@@ -175,7 +175,7 @@ const TIER_SPECS: readonly TierSpecEntry[] = [
     mvpTechIcons: [
       { icon: 'activity', label: 'Audit Gate', tag: 'PII · HOOK' },
       { icon: 'shieldCheck', label: 'RBAC · IDOR', tag: 'MENU/BTN' },
-      { icon: 'gitBranch', label: 'CI · E2E', tag: '360+ QA' },
+      { icon: 'gitBranch', label: 'CI · E2E', tag: '460+ QA' },
     ],
     prodTechIcons: [
       { icon: 'activity', label: 'WORM Audit', tag: 'SIEM · SOC' },

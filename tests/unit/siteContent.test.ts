@@ -324,7 +324,7 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       // 3. Specs — Key Metrics + Tech Stack (deduplicated pure engineering specs)
       assert.deepEqual(
         copy.stack.heroKpis.map((kpi) => kpi.value),
-        isKo ? ['582→24 KB', '21관절', '360+', '4 APIs'] : ['582→24 KB', '21-Bone', '360+', '4 APIs'],
+        isKo ? ['582→24 KB', '21관절', '460+', '4 APIs'] : ['582→24 KB', '21-Bone', '460+', '4 APIs'],
         `[${lang}] Hero KPIs must spotlight pure deduplicated engineering specs`
       );
       assert.ok(
@@ -423,8 +423,8 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       'architectureTechCatalog must pair 3D wording with Three.js'
     );
     assert.ok(
-      techCatalogRaw.includes('360+ QA'),
-      'architectureTechCatalog QA badge must match live 360+ test count'
+      techCatalogRaw.includes('460+ QA'),
+      'architectureTechCatalog QA badge must match live 460+ test count'
     );
 
     for (const lang of ['en', 'ko'] as const) {

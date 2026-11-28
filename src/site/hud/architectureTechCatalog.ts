@@ -784,9 +784,9 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         id: 'test-suite',
         icon: 'gitBranch',
         name: 'Node + Playwright',
-        badge: '360+ QA',
-        descKo: '단위 · API · RBAC · 모바일 WebGL E2E 55스위트 통합 자동화 검증',
-        descEn: 'Automated 55-suite unit, API, RBAC & mobile WebGL E2E verification',
+        badge: '460+ QA',
+        descKo: '단위 · API · RBAC · 모바일 WebGL E2E 69개 스위트 통합 자동화 검증',
+        descEn: 'Automated 69-suite unit, API, RBAC & mobile WebGL E2E verification',
       },
     ],
     prod: [

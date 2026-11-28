@@ -16,23 +16,23 @@
     '[data-i18n-rich="s03-h2"]':
       'From Shopping to Resale in <span class="serif-accent">One Digital Closet</span>',
     '[data-i18n-rich="s04-h2"]':
-      '<span class="serif-accent">6 Painpoints</span> in Today’s Wardrobe',
+      '<span class="serif-accent">6 Everyday Friction Points</span> in Getting Dressed',
     '[data-i18n-rich="s04a-h2"]':
       'In-Store Duplicate Buys &amp; <span class="serif-accent">Online Apparel Return Losses</span>',
     '[data-i18n-rich="s04b-h2"]':
-      'Structural Limits of <span class="serif-accent">Existing AI Try-On Apps</span>',
+      'Limits of <span class="serif-accent">Existing AI Try-On Apps</span>',
     '[data-i18n-rich="s04c-h2"]':
       'Morning Decision Fatigue &amp; <span class="serif-accent">Biometric / EXIF Leak Anxiety</span>',
     '[data-i18n-rich="s04d-h2"]':
       'Care &amp; Resale Friction × <span class="serif-accent">EU ESPR Circular Gap</span>',
     '[data-i18n-rich="s05-h2"]':
-      '6 Painpoints, <span class="serif-accent">1 Solution</span>',
+      '6 Everyday Pains, <span class="serif-accent">Solved in iNVTRY</span>',
     '[data-i18n-rich="s06-h2"]':
       '<span class="serif-accent">6 Everyday Use Cases</span>',
     '[data-i18n-rich="s07-h2"]':
       '<span class="serif-accent">5 Live Production</span> App Screens',
     '[data-i18n-rich="s08-h2"]':
-      'Three.js 3D · 8-Angle AI Try-On · <span class="serif-accent">On-Device Engine</span>',
+      'Three.js 3D · 8-Angle AI Try-On · <span class="serif-accent">On-Device Prep</span>',
     '[data-i18n-rich="s08-cutout-headline"]':
       'On-device background &amp; EXIF removal · Image size <span data-ir-bind="garment.compression">-96%</span>',
     '[data-i18n-rich="s09-h2"]':
@@ -40,11 +40,11 @@
     '[data-i18n-rich="s10-h2"]':
       'Global Resale <span class="serif-accent">$393B</span> × AI Try-On <span class="serif-accent">$23.9B</span>',
     '[data-i18n-rich="s11-h2"]':
-      'The Only <span class="serif-accent">All-in-One Digital Closet</span>',
+      'Buy to Resale in <span class="serif-accent">One Digital Closet</span>',
     '[data-i18n-rich="s12-h2"]':
-      '<span class="serif-accent">4 Revenue Streams</span> Anchored in Live Features',
+      '<span class="serif-accent">4 Revenue Streams</span> Built on Live Features',
     '[data-i18n-rich="s13-h2"]':
-      '5-Stage Retention Loop × <span class="serif-accent">Cost Control Architecture</span>',
+      'Daily Habit Loop × <span class="serif-accent">Low Cloud Costs</span>',
     '[data-i18n-rich="s14-h2"]':
       'Live <span class="serif-accent">6-Layer System Architecture</span>',
     '[data-i18n-rich="s15-h2"]':
@@ -1706,6 +1706,90 @@
     'OOTD 캘린더': 'OOTD Calendar',
     'CPW · 자산 리포트': 'CPW & Wardrobe Report',
     '₩5조+ ↗': '₩5T+ ↗',
+    // Humanizer pass — natural KO/EN copy parity
+    'Three.js 3D WebGL2로 8각도 피팅의 시점 전환과 조명 합성, 비·눈·햇살 날씨 배경을 실시간으로 보여줍니다.':
+      'Runs live angle switching, lighting adjustments, and rain, snow, and sunlight weather scenes via Three.js 3D WebGL2.',
+    'MediaPipe WASM으로 얼굴 피부톤 분석과 배경·위치정보(EXIF) 삭제를 기기 안에서 끝내 얼굴 원본이 밖으로 나가지 않습니다.':
+      'Runs MediaPipe WASM skin-tone analysis plus background and EXIF removal on-device, so raw face photos never leave the phone.',
+    '이너, 상의, 아우터, 하의를 한 번에 겹쳐 입고 45° 간격 8각도 실사로 앞·옆·뒷모습을 확인합니다.':
+      'Layer innerwear, tops, outerwear, and bottoms together and check front, side, and back silhouettes across 8 45° views.',
+    'React 19 · Vite 8 · Capacitor 8 단일 코드베이스와 오프라인 동기화로 Web·Android를 먼저 지원하고, iOS로 확장합니다.':
+      'Shared React 19 · Vite 8 · Capacitor 8 codebase with offline sync — launching Web & Android first, then expanding to iOS.',
+    '국내·해외 앱 비교': 'KR & Global Apps',
+    '비교 8개 앱 다각도 0% · Doppl 종료': '0/8 apps multi-angle · Doppl shut down',
+    '셀카·집 사진 외부 업로드 거부감': 'Discomfort uploading selfies & home photos',
+    '각 카드를 누르면 근거 데이터 슬라이드(05~08)로 바로 이동합니다': 'Click any card to jump directly to its research slide (05–08)',
+    '가진 옷을 실제보다 적게 기억해 매장에서 비슷한 옷을 또 사게 됩니다': 'People underestimate what they own and end up buying duplicates in-store',
+    '실제 옷장 조사에서 성인 1명이 가진 132~198벌 중 22~25%는 1년 넘게 한 번도 입지 않았습니다. 대부분 자기 보유량을 과소평가합니다.':
+      'Physical closet audits found adults own 132–198 pieces, with 22–25% untouched for over a year — and most underestimate how much they have.',
+    '신상품 판매 수수료 기반 커머스 앱은 “집에 비슷한 옷이 있다”는 중복 경고를 넣기 어렵고, 오프라인 구매 이력도 이어지지 않습니다.':
+      'Shopping apps paid on new-item commissions cannot warn shoppers about duplicates at home, and they miss offline purchases.',
+    '핏을 미리 알 수 없어 여러 사이즈를 시켜 돌려보내는 습관(브래케팅)이 굳어졌습니다. 그렇다고 반품비를 받으면 구매 자체가 줄어듭니다.':
+      'Uncertain fit makes shoppers order multiple sizes to return most of them (bracketing), yet charging return fees hurts checkout conversion.',
+    '단품 사진만 보고 주문했다가 집에 있는 바지·아우터와 기장·색감이 안 맞아 반품하는 경우가 많지만, 미리 맞춰볼 방법이 없습니다.':
+      'Shoppers often return items that clash with pants or coats already at home because they have no way to check pairings before buying.',
+    '비교 8개 앱 다각도 지원': '8 Reviewed Apps: Multi-Angle Support',
+    '8개 앱 모두 정면(0°)만 지원': 'All 8 apps show front (0°) only',
+    '단독 AI 피팅 앱이 오래 못 가는 이유': 'Why Standalone AI Try-On Apps Churn',
+    '① 한두 번 신기해서 써보는 체험': '① One-off novelty try',
+    '단품 1벌만 정면 합성 · 내 옷장과 단절': 'Single-item front swap · disconnected from your closet',
+    '② 30초 대기 · 2D 왜곡 · 겹쳐 입기 불가': '② 30s wait · 2D distortion · no layering',
+    '측면 핏·기장·이너/아우터 겹침 확인 불가': 'Cannot check side fit, length, or inner/outer layering',
+    '③ 구매 결정에 도움 안 됨 → 금방 이탈': '③ Doesn’t help buy decisions → quick churn',
+    'Chen et al. ’24 (2D 효과 미미) · Doppl 종료': 'Chen et al. ’24 (weak 2D impact) · Doppl shut down',
+    'AI 피팅 앱 8종 주요 기능 미지원율': 'Missing Capabilities Across 8 AI Try-On Apps',
+    '국내 4종 + 해외 4종 비교': '4 KR + 4 Global Apps',
+    '100% 미지원': '100% Missing',
+    '75% 미지원': '75% Missing',
+    '국내·해외 주요 AI 피팅 앱 8종 비교': 'Comparison of 8 Live KR & Global AI Try-On Apps',
+    '주요 앱 한계 비교': 'Key App Limits',
+    '공개 논문으로 확인된 기존 2D 가상 피팅의 한계': 'Limits of Existing 2D Try-On in Published Studies',
+    '주요 논문 근거': 'Published Studies',
+    '01 · 2D 정면 한계': '01 · Front-Only 2D Limit',
+    '정면 한 장만으로는 구매 확신 부족': 'One front view rarely builds buying confidence',
+    '정면 2D 피팅만으로는 구매 의향이 유의미하게 오르지 않습니다. 여러 각도로 돌려볼 수 있을 때 소비자 반응이 뚜렷하게 좋아집니다. (Chen et al., 2024 · 논문 69편 분석)':
+      'Single-view 2D try-on does not meaningfully improve shopper attitude, whereas multi-angle views drive a clear lift. (Chen et al., 2024 · 69-study review)',
+    '02 · 각도·겹침 왜곡': '02 · Angle & Layer Distortion',
+    '시점을 돌리면 핏과 겹침이 무너짐': 'Fit and layering break once angles change',
+    '기존 2D 방식은 각도를 조금만 돌려도 옷 형태가 틀어지고 겹친 부위가 깨집니다. 정면 한 장에 기대는 구조적 한계입니다. (He et al., CVPR 2025)':
+      'Legacy 2D pipelines warp garment shapes and break overlaps as soon as viewpoints shift. (He et al., CVPR 2025)',
+    '03 · 리텐션 한계': '03 · Retention Gap',
+    'Google Labs Doppl이 출시 10개월 만에 종료(’26.04.30)된 사례처럼, 내 옷장과 연결되지 않은 단독 AI 피팅 앱은 일회성 체험에 그치기 쉽습니다. (Frontiers in AI, 2026)':
+      'As Google Labs Doppl’s shutdown after 10 months (Apr 30, ’26) showed, standalone try-on apps detached from an everyday closet rarely retain users. (Frontiers in AI, 2026)',
+    '쇼핑은 한 달에 두어 번이지만 옷은 매일 입습니다. 그런데 날씨·지도·옷장·피팅 앱이 4개로 갈라져 아침마다 번거롭습니다.':
+      'People shop twice a month but get dressed every morning — yet weather, maps, closet, and try-on remain split across 4 separate apps.',
+    'EXIF·GPS 삭제법을 모르는 비율': 'Users Unaware How to Strip EXIF/GPS',
+    '거부감 · 가입 이탈': 'Discomfort · Drop-Off',
+    '스마트폰 사진 EXIF·GPS 삭제법을 모르는 비율 (ALIBIS ’26)': 'Smartphone users who don’t know how to strip EXIF/GPS (ALIBIS ’26)',
+    'PAPER 05-A · 거부감': 'PAPER 05-A · PRIVACY DISCOMFORT',
+    '얼굴이나 전신 사진을 서버에 올리라고 요구할수록 사용자 거부감이 커지고 앱 사용 의향도 떨어집니다. (JIA·JBR · Front. Psychol., n=709)':
+      'Requiring face or full-body cloud uploads raises privacy discomfort and directly lowers willingness to use AI try-on apps. (JIA·JBR · Front. Psychol., n=709)',
+    '이미지 앱 중 EXIF 고지를 지키는 곳은 10.4%뿐이고, 사용자 62.3%는 GPS 삭제법을 모릅니다. 생체·위치 유출 위험이 그대로 남습니다.':
+      'Only 10.4% of image apps comply with EXIF disclosure rules and 62.3% of users don’t know how to strip GPS data, leaving home locations exposed.',
+    '판매 과정의 번거로움 × 구매자 불신 · 세탁 정보 단절': 'Listing Hassle × Buyer Distrust · Missing Care History',
+    '판매자·구매자 양면 장벽': 'Both Seller & Buyer Barriers',
+    '판매자 장벽 · 기존 중고 판매 4단계 번거로움 → 등록 포기 · 장롱 방치': 'Seller barrier · 4 manual listing steps → abandoned in the closet',
+    '국내·해외 중고·세탁·옷장 서비스 순환 단절 비교': 'Comparison of KR & Global Resale, Laundry & Closet Apps',
+    '논문과 규제로 확인된 의류 순환의 3가지 걸림돌': '3 Barriers to Clothing Reuse in Studies & Policy',
+    '논문·규제 근거': 'Studies & Regulation',
+    '의류의 2/3는 해어지기도 전에 버려집니다. 안 입는 옷 75%는 충분히 다시 입을 수 있지만 팔기가 번거로워 장롱에 방치됩니다. (Laitala ’14 · Vermeyen ’25)':
+      'Two-thirds of discarded clothes are thrown away before wearing out; 75% of idle closet items are reusable but sit untouched because selling takes too much effort. (Laitala ’14 · Vermeyen ’25)',
+    '중고 구매를 망설이는 가장 큰 이유는 품질(63%)과 위생(58%) 불신입니다. 세탁 라벨을 잘못 읽어 옷을 망치는 경우도 많습니다. (Hur ’20 · Laitala ’12)':
+      'Buyers hesitate over quality (63%) and hygiene (58%) doubts, while misreading care labels ruins garments early. (Hur ’20 · Laitala ’12)',
+    'EU 미판매 의류 폐기 금지(ESPR)가 ’26.07 발효됐지만, 실제 중고 순환을 막는 가장 큰 걸림돌은 정품·상태·관리 이력 부재입니다. (BCG×Vestiaire ’25)':
+      'EU’s unsold apparel destruction ban (ESPR) took effect in Jul ’26, yet missing authenticity, condition, and care records still block resale. (BCG×Vestiaire ’25)',
+    '얼굴 사진 외부 전송 0건': '0 Raw Face Photos Uploaded',
+    '미개척 영역 (WHITE SPACE)': 'WHITE SPACE',
+    '경쟁 비교 — 비교 대상 국내·해외 10개 앱 중 5가지 핵심 기능을 모두 묶은 옷장':
+      'Comparison — The only app among 10 KR & global apps unifying all 5 core features',
+    '비즈니스 모델 — Pro 구독을 중심으로, 중복 구매는 막고 꼭 없는 옷만 제휴 추천':
+      'Business Model — Pro subscription first; warn on duplicates and link only to missing items',
+    '월 사용 한도 + 결과 캐싱으로 원가 관리': 'Monthly Quotas + Render Caching',
+    '건당 원가와 마진율은 베타 데이터로 검증 후 공유합니다': 'Per-render cost & margins will be verified with beta telemetry and shared',
+    '매일 코디 기록 보상 · SNS 공유로 자연 유입': 'Daily outfit log rewards · organic growth via SNS sharing',
+    '단위 경제성 검증 · 시드 라운드 준비': 'Verify unit economics · Seed round ready',
+    '투자 제안 — 프리시드 투자로 18개월 핵심 지표를 검증한 뒤 시드 라운드로 이어갑니다':
+      'Funding Ask — Validate core 18-month milestones on Pre-Seed before raising Seed',
   };
 
   const ATTR_EN = {

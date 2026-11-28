@@ -103,7 +103,7 @@ export const SPECS_3D_PILLAR_LABELS = [
   'GZIP API',
   '21-BONE 3D',
   'LOCAL-FIRST',
-  '360+ TESTS',
+  '460+ TESTS',
 ] as const;
 
 export interface SiteStagePillDescriptor {
@@ -678,7 +678,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'barChart',
           tabLabel: 'Stats',
           title: 'Wear Report',
-          caption: 'Track cost per wear and surface unworn garments effortlessly.',
+          caption: 'Track cost per wear and spot clothes you haven’t worn in months.',
           metricTag: 'CPW',
           imageAlt: 'iNVTRY wear analytics view',
           hudMetrics: [
@@ -716,14 +716,14 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       proofTabVton: '2D VTON',
       proofTabExif: 'EXIF -96%',
       proofBadgeVton: '8-ANGLE 2D VTON · LIVE PREVIEW',
-      proofBadgeExif: 'CLIENT WEBP · EXIF 0% STRIPPED',
+      proofBadgeExif: 'CLIENT WEBP · EXIF STRIPPED',
       proofInputLabel: 'Clean Cutout · 24 KB',
       proofOutputLabel: 'Live 8-Angle Fitting',
       proofFooterCta: 'Open Live App',
       proofMetrics: [
-        { value: '582→24 KB', label: 'EXIF 0% WebP' },
+        { value: '582→24 KB', label: 'No-EXIF WebP' },
         { value: '0 Bytes', label: 'Face Upload' },
-        { value: '360+', label: 'Auto Tests' },
+        { value: '460+', label: 'Auto Tests' },
       ],
     },
     capabilities: {
@@ -1028,7 +1028,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'gitBranch',
           label: 'CI / CD',
           shortSub: 'Gate',
-          devSpec: 'oxlint · TS strict · Vite verify + 360+ automated tests.',
+          devSpec: 'oxlint · TS strict · Vite verify + 460+ automated tests.',
           prodSpec: 'EXIF / SBOM CI gate + progressive canary rollout.',
         },
       ],
@@ -1256,9 +1256,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'tests',
           icon: 'checkCircle',
-          value: '360+',
+          value: '460+',
           label: 'Auto Tests',
-          detail: '55+ unit, API, RBAC & mobile WebGL E2E test suites.',
+          detail: '69 unit, API, RBAC & mobile WebGL E2E test suites.',
         },
         {
           id: 'apis',
@@ -1297,9 +1297,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'qa',
           icon: 'checkCircle',
-          shortLabel: '360+ TESTS',
+          shortLabel: '460+ TESTS',
           label: 'QA Gate',
-          valueText: '55+ Suites',
+          valueText: '69 Suites',
           detail: 'oxlint, strict TS 7, RBAC API & mobile WebGL Playwright E2E.',
         },
       ],
@@ -1347,10 +1347,10 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         },
         {
           index: 5,
-          label: '360+ TESTS',
-          value: '360+ · 55 Suites',
+          label: '460+ TESTS',
+          value: '460+ · 69 Suites',
           title: '07 Governance · Automated QA',
-          detail: 'oxlint, TS 7 strict & 55+ unit, API, RBAC & mobile WebGL Playwright E2E suites.',
+          detail: 'oxlint, TS 7 strict & 69 unit, API, RBAC & mobile WebGL Playwright E2E suites.',
           normalizedHeight: 0.92,
         },
       ],
@@ -1512,27 +1512,27 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       ],
     },
     painPoints: {
-      eyebrow: '6 Disconnected Silos',
-      heading: '6 Fragmented Pain Points Across Fashion Consumption',
-      bottleneckTitle: 'Core Bottleneck: 6 Siloed Apps → 0 Daily Retention',
+      eyebrow: '6 Disconnected Apps',
+      heading: '6 Everyday Friction Points in Getting Dressed',
+      bottleneckTitle: 'Why none stick: 6 separate apps',
       bottleneckDetail:
-        'Closet, fitting, weather, laundry, and resale apps break data continuity so none earn daily habit — unified inside one Privacy-First Wardrobe OS.',
+        'Closet, try-on, weather, laundry, and resale live in different apps, so nothing carries over. One privacy-first app connects the full routine.',
       items: [
         {
           id: 'pain-dup',
           icon: 'shoppingBag',
           code: 'PAIN 01',
-          metric: '70%+ Idle',
+          metric: '25% Audited · 82% Idle',
           title: 'Memory-Driven Duplicate Buying',
-          detail: 'Without real-time closet visibility, shoppers repeatedly buy near-identical garments in stores.',
+          detail: 'Without seeing what’s already at home, shoppers buy near-identical clothes in stores.',
         },
         {
           id: 'pain-return',
           icon: 'box',
           code: 'PAIN 02',
-          metric: '$743B Loss',
+          metric: '$849.9B Returns',
           title: 'Online Returns From Unverified Fit',
-          detail: 'Cannot verify silhouette or color harmony against owned pants & outerwear beforehand (Mordor 2026).',
+          detail: 'You can’t check how a new piece pairs with the pants and coats you already own (NRF 2025).',
         },
         {
           id: 'pain-layer',
@@ -1540,15 +1540,15 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           code: 'PAIN 03',
           metric: '1-Piece Front',
           title: 'No Layered or Multi-Angle Fitting',
-          detail: 'Legacy AI stops at single-piece front swaps, failing real 4+ layer outdoor styling.',
+          detail: 'Most AI try-on tools stop at a single front-facing garment and can’t show layered outfits.',
         },
         {
           id: 'pain-tpo',
           icon: 'cloudRain',
           code: 'PAIN 04',
-          metric: '4 Siloed Apps',
+          metric: '4 Separate Apps',
           title: 'Styling Split From Weather & TPO',
-          detail: 'Weather, maps, calendar, and closet apps stay disconnected, compounding morning decision fatigue.',
+          detail: 'Checking weather, maps, and closet apps separately adds friction every morning.',
         },
         {
           id: 'pain-privacy',
@@ -1556,7 +1556,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           code: 'PAIN 05',
           metric: 'Raw Upload Risk',
           title: 'Face, GPS & Home Privacy Anxiety',
-          detail: 'Selfies and EXIF location metadata risk exposure to external servers and free AI model training.',
+          detail: 'Uploading selfies and GPS-tagged home photos raises real privacy and AI-training concerns.',
         },
         {
           id: 'pain-resale',
@@ -1564,7 +1564,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           code: 'PAIN 06',
           metric: 'Frozen Assets',
           title: 'Laundry Neglect & Resale Friction',
-          detail: 'Re-shooting, measuring, and proving authenticity keep unworn clothes trapped in the closet.',
+          detail: 'Re-shooting, measuring, and answering buyer questions keeps unworn clothes stuck in the closet.',
         },
       ],
     },
@@ -1599,7 +1599,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
     },
     vision: {
       eyebrow: 'Business Model',
-      heading: '4-Layer Revenue Engine',
+      heading: '4 Revenue Streams',
       irBadge: 'Seoul',
       quote: '',
       roadmapTitle: 'Roadmap',
@@ -1610,13 +1610,13 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       ],
       moatsTitle: 'Strengths',
       moats: [
-        { id: 'mvp', icon: 'smartphone', title: 'Cross-Platform', tag: 'LIVE', detail: 'Web, iOS, Android.' },
+        { id: 'mvp', icon: 'smartphone', title: 'Cross-Platform', tag: 'LIVE', detail: 'Web & Android first (iOS planned).' },
         { id: 'layer360', icon: 'layers', title: '8-Cut Layers', tag: '4+', detail: 'Deep coat layering.' },
         { id: 'provenance', icon: 'badgeCheck', title: 'Authentic Resale', tag: 'TO-DO', detail: 'Receipt-backed resale roadmap.' },
         { id: 'privacy', icon: 'lock', title: 'Privacy First', tag: '0B', detail: 'On-device biometrics.' },
       ],
       nextToBmLabel: 'Business Model',
-      revenueTitle: '4-Layer Business Model',
+      revenueTitle: '4 Revenue Streams',
       revenueNote: 'High-level overview · Full pricing & unit economics are available in the Investor Data Room',
       revenuePillars: [
         {
@@ -1626,7 +1626,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           title: 'iNVTRY Pro Subscription',
           mechanism: 'Pro Tier · Private Beta',
           detail:
-            'Expanded multi-layer 8-angle fitting, real street weather staging, wear-value analytics, and upcoming garment care intelligence.',
+            '8-angle layered try-on, live street backdrops, cost-per-wear tracking, and upcoming garment care guides.',
         },
         {
           id: 'affiliate',
@@ -1635,7 +1635,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           title: 'Gap Commerce',
           mechanism: 'Partner Commerce',
           detail:
-            'Detects genuine wardrobe gaps, verifies layering harmony against owned garments, and routes high-intent demand to select brand partners.',
+            'Finds missing wardrobe pieces, previews them with clothes you already own, and links to partner stores to cut returns.',
         },
         {
           id: 'resale-bm',
@@ -1644,7 +1644,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           title: 'Authentic Resale & Care O2O',
           mechanism: 'Resale · Care O2O',
           detail:
-            'Pairs LIVE idle-garment alerts with upcoming purchase-verified authentic resale listings and doorstep garment care partnerships.',
+            'Builds on LIVE idle-garment alerts to add receipt-backed authentic resale and doorstep laundry pickup partnerships.',
         },
         {
           id: 'b2b-sdk',
@@ -1653,37 +1653,37 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           title: 'Brand VTON SDK',
           mechanism: 'B2B Enterprise',
           detail:
-            'Enables fashion houses and retail partners to onboard digital garment seeds and embed virtual try-on previews across storefronts.',
+            'Lets designer brands and select shops embed virtual try-on previews for new arrivals to reduce online returns.',
         },
       ],
       businessModel: {
-        eyebrow: 'CIRCULAR WARDROBE ECOSYSTEM',
-        headline: 'Subscription × Gap Commerce × Authentic Resale × B2B SDK',
-        funnelTitle: 'Circular Lifecycle Flywheel',
+        eyebrow: 'CIRCULAR WARDROBE LOOP',
+        headline: 'Subscription · Gap Commerce · Authentic Resale · Brand SDK',
+        funnelTitle: 'How the Loop Works',
         funnelSteps: [
-          { step: '01', label: 'Local Onboarding', value: 'On-Device' },
-          { step: '02', label: 'Active Wardrobe', value: 'Daily Habit' },
-          { step: '03', label: 'Pro & Gap Fit', value: 'Subscription' },
-          { step: '04', label: 'Circular Resale', value: 'Ecosystem' },
+          { step: '01', label: 'On-Device Setup', value: 'Local Prep' },
+          { step: '02', label: 'Daily Closet Habit', value: 'Everyday Use' },
+          { step: '03', label: 'Pro & Gap Styling', value: 'Subscription' },
+          { step: '04', label: 'Resale & Renewal', value: 'Circular Loop' },
         ],
-        costTitle: '3-Layer Architecture Efficiency',
+        costTitle: '3 Ways We Keep AI Costs Low',
         marginValue: 'IR Brief',
         marginLabel: 'Unit Economics',
         costDefenses: [
           {
-            title: 'On-Device WASM Inference',
+            title: 'On-Device WASM Processing',
             metric: 'Client-First',
-            detail: 'Garment cutout, EXIF strip & skin-tone analysis run locally on client devices to minimize server compute overhead.',
+            detail: 'Garment cutout, EXIF strip, and skin-tone analysis run locally on the phone instead of cloud GPUs.',
           },
           {
             title: 'WebP Payload Compression',
             metric: '582→24 KB',
-            detail: 'Reduces image transfer size with local IndexedDB caching for responsive multi-device browsing.',
+            detail: 'Cuts image transfer size with local IndexedDB caching for fast multi-device browsing.',
           },
           {
-            title: 'Outfit Hash Cache & Quotas',
+            title: 'Outfit Cache & Monthly Quotas',
             metric: 'Smart Cache',
-            detail: 'Reuses cached multi-angle outfit renders across revisits with disciplined per-tier usage quotas.',
+            detail: 'Reuses saved multi-angle renders for repeat outfits and enforces clear monthly quotas per tier.',
           },
         ],
         footnote: '* Detailed pricing, take rates, and unit economics are unlocked after investor passcode verification below.',
@@ -1703,7 +1703,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'faq-platform',
           question: 'Which platforms are supported?',
-          answer: 'Web, iOS, and Android run from one React 19 + Capacitor 8 codebase with IndexedDB offline-first wardrobe storage.',
+          answer: 'Web & Android first (iOS planned) from one React 19 + Capacitor 8 codebase with IndexedDB offline-first wardrobe storage.',
         },
         {
           id: 'faq-partner',
@@ -1731,7 +1731,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
     newsletter: {
       kicker: 'PRIVATE UPDATES',
       title: 'Get the iNVTRY Newsletter',
-      subtitle: 'Receive private beta invites, 8-angle fitting drops, and release notes directly from Seoul.',
+      subtitle: 'Get private beta invites, product updates, and release notes.',
       inlineTitle: 'Newsletter',
       inlineSubtitle: 'Private beta access & product release notes.',
       emailLabel: 'Email address',
@@ -1870,7 +1870,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'layoutGrid',
           tabLabel: '옷장',
           title: '스마트 옷장',
-          caption: '옷장 속 모든 의류를 종류별로 자동 분류하고 세탁·착용 이력까지 관리합니다.',
+          caption: '옷장 속 모든 의류를 종류별로 자동 분류하고 세탁 · 착용 이력까지 관리합니다.',
           metricTag: '11분류',
           imageAlt: 'iNVTRY 디지털 옷장 화면',
           brands: ['ARKET', 'LEMAIRE', 'PATAGONIA', 'A.P.C.'],
@@ -1923,14 +1923,14 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       proofTabVton: '2D VTON',
       proofTabExif: 'EXIF -96%',
       proofBadgeVton: '8방향 2D VTON · 라이브 프리뷰',
-      proofBadgeExif: '로컬 WebP · EXIF 0% 제거',
+      proofBadgeExif: '로컬 WebP · 위치정보(EXIF) 삭제',
       proofInputLabel: '배경 제거 · 24 KB',
       proofOutputLabel: '실시간 8방향 피팅',
       proofFooterCta: '라이브 앱 열기',
       proofMetrics: [
-        { value: '582→24 KB', label: 'EXIF 0% WebP' },
+        { value: '582→24 KB', label: 'EXIF 제거 WebP' },
         { value: '0 Bytes', label: '얼굴 외부 전송' },
-        { value: '360+', label: '자동 검증 테스트' },
+        { value: '460+', label: '자동 검증 테스트' },
       ],
     },
     capabilities: {
@@ -2235,7 +2235,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'gitBranch',
           label: 'CI/CD',
           shortSub: '검증',
-          devSpec: 'oxlint · TS strict · Vite verify + 360+ 자동화 테스트.',
+          devSpec: 'oxlint · TS strict · Vite verify + 460+ 자동화 테스트.',
           prodSpec: 'EXIF · SBOM CI 게이트 + 카나리 점진 배포.',
         },
       ],
@@ -2463,9 +2463,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'tests',
           icon: 'checkCircle',
-          value: '360+',
+          value: '460+',
           label: '자동 테스트',
-          detail: '55개 이상의 단위 · API · RBAC · 모바일 WebGL E2E 테스트 스위트.',
+          detail: '69개 단위 · API · RBAC · 모바일 WebGL E2E 테스트 스위트.',
         },
         {
           id: 'apis',
@@ -2504,9 +2504,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'qa',
           icon: 'checkCircle',
-          shortLabel: '360+ TESTS',
+          shortLabel: '460+ TESTS',
           label: '자동 검증 게이트',
-          valueText: '55+ 스위트',
+          valueText: '69개 스위트',
           detail: 'oxlint · TS 7 strict · RBAC API · 모바일 WebGL Playwright E2E.',
         },
       ],
@@ -2554,10 +2554,10 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         },
         {
           index: 5,
-          label: '360+ TESTS',
-          value: '360+ · 55 스위트',
+          label: '460+ TESTS',
+          value: '460+ · 69 스위트',
           title: '07 거버넌스 · 자동 검증 게이트',
-          detail: 'oxlint · TS 7 strict 및 55개 이상의 단위 · API · RBAC · 모바일 WebGL E2E 스위트.',
+          detail: 'oxlint · TS 7 strict 및 69개 단위 · API · RBAC · 모바일 WebGL E2E 스위트.',
           normalizedHeight: 0.92,
         },
       ],
@@ -2719,27 +2719,27 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       ],
     },
     painPoints: {
-      eyebrow: '파편화된 6대 문제',
-      heading: '패션 소비 전 과정을 가로막는 6대 페인포인트',
-      bottleneckTitle: '핵심 병목: 6개 앱 분절 → 매일 쓰지 못하는 구조',
+      eyebrow: '흩어진 옷장 경험',
+      heading: '옷을 사고 입고 정리할 때 겪는 6가지 불편',
+      bottleneckTitle: '왜 매일 쓰지 못할까: 6개로 쪼개진 앱',
       bottleneckDetail:
-        '옷장 · 피팅 · 날씨 · 세탁 · 중고 앱이 따로 놀아 데이터가 끊기므로 어느 앱도 매일 쓰지 못합니다. 단 하나의 Privacy-First 옷장 OS로 6대 문제를 한 번에 해결합니다.',
+        '옷장, 피팅, 날씨, 세탁, 중고 앱이 따로 움직여 기록이 이어지지 않습니다. 사진 보안을 기본으로 한 하나의 앱에 이 과정을 묶었습니다.',
       items: [
         {
           id: 'pain-dup',
           icon: 'shoppingBag',
           code: 'PAIN 01',
-          metric: '70%+ 방치',
+          metric: '실측 25% · 설문 82% 방치',
           title: '기억 의존 중복 구매',
-          detail: '보유 의류 파악 불가 → 매장에서 비슷한 옷을 반복 구매하게 됩니다.',
+          detail: '집에 무슨 옷이 있는지 기억나지 않아 매장에서 비슷한 옷을 또 사게 됩니다.',
         },
         {
           id: 'pain-return',
           icon: 'box',
           code: 'PAIN 02',
-          metric: '$743B 손실',
+          metric: '$849.9B 반품',
           title: '내 옷과 안 맞는 온라인 반품',
-          detail: '보유 바지 · 아우터와의 비율 · 색감을 사전에 검증할 수 없습니다 (Mordor 2026).',
+          detail: '집에 있는 바지나 아우터와 기장 · 색감이 어울리는지 사전에 확인하기 어렵습니다 (NRF 2025).',
         },
         {
           id: 'pain-layer',
@@ -2747,31 +2747,31 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           code: 'PAIN 03',
           metric: '단품 1벌 정면',
           title: '레이어드 · 측후면 검증 불가',
-          detail: '기존 AI는 정면 단품 합성에 머물러 4겹 이상 외출 코디 확인이 불가합니다.',
+          detail: '기존 AI 피팅은 정면 1벌만 입혀볼 수 있어 4겹 이상 실제 외출 코디를 확인하기 어렵습니다.',
         },
         {
           id: 'pain-tpo',
           icon: 'cloudRain',
           code: 'PAIN 04',
-          metric: '앱 4개 분절',
+          metric: '앱 4개 분산',
           title: '날씨 · 장소(TPO)와 단절된 코디',
-          detail: '날씨 · 지도 · 옷장 앱이 따로 놀아 매일 아침 의사결정 피로가 쌓입니다.',
+          detail: '날씨, 지도, 옷장 앱을 따로 열어야 해 아침마다 옷 고르는 부담이 큽니다.',
         },
         {
           id: 'pain-privacy',
           icon: 'lock',
           code: 'PAIN 05',
           metric: '원본 무방비 전송',
-          title: '얼굴 · GPS · 실내 프라이버시 공포',
-          detail: '셀카와 EXIF 원본이 외부 서버와 무료 AI 학습에 노출될 우려가 큽니다.',
+          title: '얼굴 · GPS · 실내 프라이버시 불안',
+          detail: '얼굴 사진과 집 위치(EXIF)가 외부 서버에 올라가거나 AI 학습에 쓰일까 불안합니다.',
         },
         {
           id: 'pain-resale',
           icon: 'refreshCw',
           code: 'PAIN 06',
           metric: '자산 동결',
-          title: '세탁 방치 · 중고 리셀 마찰',
-          detail: '재촬영 · 실측 · 신뢰 입증의 번거로움으로 안 입는 옷이 방치됩니다.',
+          title: '세탁 방치 · 중고 리셀 번거로움',
+          detail: '다시 사진 찍고 치수 재는 일이 귀찮아 안 입는 옷을 그대로 두게 됩니다.',
         },
       ],
     },
@@ -2806,7 +2806,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
     },
     vision: {
       eyebrow: '비즈니스 모델',
-      heading: '4중 수익 엔진',
+      heading: '4가지 수익 모델',
       irBadge: '서울',
       quote: '',
       roadmapTitle: '로드맵',
@@ -2817,13 +2817,13 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       ],
       moatsTitle: '강점',
       moats: [
-        { id: 'mvp', icon: 'smartphone', title: '웹 · 모바일', tag: 'LIVE', detail: '웹 · iOS · Android 동시 지원.' },
+        { id: 'mvp', icon: 'smartphone', title: '웹 · 모바일', tag: 'LIVE', detail: '웹 · Android 우선 지원 (iOS 예정).' },
         { id: 'layer360', icon: 'layers', title: '다중 레이어드', tag: '4겹+', detail: '셔츠부터 롱코트까지 겹쳐 입기.' },
         { id: 'provenance', icon: 'badgeCheck', title: '정품 인증 리셀', tag: 'TO-DO', detail: '사진 · 구매 기록 연동 로드맵.' },
         { id: 'privacy', icon: 'lock', title: '온디바이스 보안', tag: '0B', detail: '얼굴 사진 외부 전송 없음.' },
       ],
       nextToBmLabel: '비즈니스 모델',
-      revenueTitle: '4중 수익 비즈니스 모델',
+      revenueTitle: '4가지 수익 모델',
       revenueNote: '공개 요약본 · 상세 요금 · 수수료율 · 단위 경제성은 투자자 인증 후 공개됩니다',
       revenuePillars: [
         {
@@ -2833,7 +2833,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           title: 'iNVTRY Pro 구독',
           mechanism: 'Pro 구독 · 비공개',
           detail:
-            '확장된 다중 레이어드 8방향 가상 피팅, 실시간 거리 배경 연출, 착용 가치 분석 및 향후 세탁 · 케어 인텔리전스를 제공합니다.',
+            '8방향 여러 겹 가상 피팅, 실시간 거리 배경, 1회 착용 비용 분석과 세탁 · 관리 안내를 제공합니다.',
         },
         {
           id: 'affiliate',
@@ -2842,7 +2842,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           title: '갭(Gap) 커머스',
           mechanism: '파트너 커머스',
           detail:
-            '보유 옷장에 없는 공백 1벌을 기존 의류와 사전 조합 검증한 뒤 엄선된 파트너 브랜드 · 스토어와 연결해 중복 구매와 반품을 줄입니다.',
+            '옷장에 정말 없는 한 벌만 골라 내 옷과 미리 맞춰본 뒤, 제휴 브랜드 · 스토어로 연결해 중복 구매와 반품을 줄입니다.',
         },
         {
           id: 'resale-bm',
@@ -2851,7 +2851,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           title: '인증 리셀 · 세탁 O2O',
           mechanism: '리셀 · 세탁 제휴',
           detail:
-            '장기 미착용 알림(LIVE)을 바탕으로 향후 구매 이력 기반 정품 인증 리셀과 비대면 세탁 방문수거 제휴로 확장합니다.',
+            '오래 안 입은 옷 알림(LIVE)을 출발점으로, 구매 이력 기반 정품 인증 리셀과 비대면 세탁 방문수거 제휴로 넓혀 갑니다.',
         },
         {
           id: 'b2b-sdk',
@@ -2860,27 +2860,27 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           title: '브랜드 VTON SDK',
           mechanism: 'B2B 파트너',
           detail:
-            '디자이너 브랜드 · 편집숍 신상을 디지털 시드로 입점하고 가상 피팅 프리뷰 위젯을 공급해 온라인 반품 부담을 낮춥니다.',
+            '디자이너 브랜드 · 편집숍 신상품에 가상 피팅 위젯을 제공해 온라인 반품 부담을 낮춥니다.',
         },
       ],
       businessModel: {
-        eyebrow: 'CIRCULAR WARDROBE ECOSYSTEM',
-        headline: '구독 × 갭 커머스 × 인증 리셀 × B2B 4중 수익 엔진',
-        funnelTitle: '순환 라이프사이클 구조',
+        eyebrow: 'CIRCULAR WARDROBE LOOP',
+        headline: '구독 · 맞춤 쇼핑 · 인증 리셀 · 브랜드 제휴로 이어지는 수익 구조',
+        funnelTitle: '옷이 순환하는 4단계',
         funnelSteps: [
-          { step: '01', label: '온디바이스 유입', value: '로컬 처리' },
-          { step: '02', label: '일상 옷장 정착', value: '데일리 습관' },
-          { step: '03', label: 'Pro · 갭 코디', value: '구독 전환' },
-          { step: '04', label: '순환 리셀 확장', value: '생태계 순환' },
+          { step: '01', label: '기기 내 촬영 · 정리', value: '로컬 처리' },
+          { step: '02', label: '매일 쓰는 옷장', value: '데일리 습관' },
+          { step: '03', label: '구독 · 맞춤 코디', value: '구독 전환' },
+          { step: '04', label: '안 입는 옷 리셀', value: '옷장 순환' },
         ],
-        costTitle: '3중 아키텍처 원가 효율화',
+        costTitle: '서버 비용을 줄이는 3가지 구조',
         marginValue: 'IR 공개',
         marginLabel: '단위 경제성',
         costDefenses: [
           {
-            title: '온디바이스 WASM 추론',
+            title: '온디바이스 WASM 처리',
             metric: '클라이언트 우선',
-            detail: '의류 배경 제거 · EXIF 제거 · 피부톤 분석을 기기 내에서 처리해 서버 연산 부담을 줄입니다.',
+            detail: '의류 배경 제거 · EXIF 제거 · 피부톤 분석을 기기 안에서 처리해 서버 연산 부담을 줄입니다.',
           },
           {
             title: 'WebP 초경량 전송 압축',
@@ -2888,9 +2888,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
             detail: '경량화 포맷과 IndexedDB 로컬 캐시로 멀티 디바이스 열람 속도와 전송 효율을 높입니다.',
           },
           {
-            title: '착장 해시 캐시 · 쿼터 제어',
+            title: '같은 코디 캐시 재사용 · 사용량 관리',
             metric: '스마트 캐시',
-            detail: '동일 착장 재조회 시 기존 멀티앵글 결과를 재활용하고 등급별 사용량 정책을 적용합니다.',
+            detail: '이미 입어본 코디는 저장된 결과를 다시 불러와 AI 비용을 줄이고, 요금제별 월 사용 한도를 둡니다.',
           },
         ],
         footnote: '* 상세 요금 · 수수료율 · 단위 경제성은 아래 투자자 접근 코드 인증 후 공개됩니다.',
@@ -2905,12 +2905,12 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'faq-vton',
           question: '2D VTON과 Three.js 3D의 역할 차이는 무엇인가요?',
-          answer: '실사 4겹+ 멀티앵글 가상 피팅은 8방향 2D VTON이 담당하고, 인터랙티브 의류 모션과 실시간 날씨 우산 연출은 Three.js 3D 엔진이 구동합니다.',
+          answer: '여러 겹을 실사로 입어보는 8방향 피팅은 2D VTON이 맡고, 옷감의 움직임과 실시간 날씨 우산 연출은 Three.js 3D가 처리합니다.',
         },
         {
           id: 'faq-platform',
           question: '어떤 기기에서 사용할 수 있나요?',
-          answer: 'React 19 · Capacitor 8 단일 코드베이스로 웹 · iOS · Android를 모두 지원하며, 오프라인에서도 IndexedDB 옷장을 열람할 수 있습니다.',
+          answer: 'React 19 · Capacitor 8 단일 코드베이스로 웹 · Android를 우선 지원하며 iOS로 확장 예정입니다. 오프라인에서도 IndexedDB 옷장을 열람할 수 있습니다.',
         },
         {
           id: 'faq-partner',
@@ -2938,7 +2938,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
     newsletter: {
       kicker: '뉴스레터',
       title: 'iNVTRY 뉴스레터 받기',
-      subtitle: '프라이빗 베타 초대, 새로운 기능 업데이트 및 제품 소식을 이메일로 받아 보세요.',
+      subtitle: '프라이빗 베타 초대와 새 기능 소식을 이메일로 보내 드립니다.',
       inlineTitle: '뉴스레터 받기',
       inlineSubtitle: '프라이빗 베타 초대 · 주요 업데이트 소식.',
       emailLabel: '이메일 주소',

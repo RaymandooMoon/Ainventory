@@ -789,8 +789,8 @@ export function AboutStageHud({
           <>
             <p className="hud-pain-detail">
               {isKo
-                ? '상세 요금 · 수수료율 · 단위 경제성이 열렸습니다. 18장 사업계획서(/ir/)도 12시간 동안 바로 열람하실 수 있습니다.'
-                : 'Detailed pricing, take rates, and unit economics are unlocked. Your 12-hour session also unlocks the 18-slide Business Plan (/ir/).'}
+                ? '상세 요금 · 수수료율 · 단위 경제성이 열렸습니다. 22장 사업계획서(/ir/)도 12시간 동안 바로 열람하실 수 있습니다.'
+                : 'Detailed pricing, take rates, and unit economics are unlocked. Your 12-hour session also unlocks the 22-slide Business Plan (/ir/).'}
             </p>
             <div className="hud-ir-unlock-actions">
               <a
@@ -818,11 +818,11 @@ export function AboutStageHud({
             <p className="hud-pain-detail">
               {investorGateConfigured
                 ? isKo
-                  ? '전달받으신 투자자 접근 코드를 입력하면 상세 요금 · 수수료율 · 단위 경제성과 18장 사업계획서가 함께 열립니다.'
-                  : 'Enter your investor passcode to unlock detailed pricing, take rates, unit economics, and the 18-slide Business Plan.'
+                  ? '전달받으신 투자자 접근 코드를 입력하면 상세 요금 · 수수료율 · 단위 경제성과 22장 사업계획서가 함께 열립니다.'
+                  : 'Enter your investor passcode to unlock detailed pricing, take rates, unit economics, and the 22-slide Business Plan.'
                 : isKo
-                  ? '상세 단위 경제성과 18장 사업계획서는 창업자 직접 초대를 통해서만 제공됩니다.'
-                  : 'Detailed unit economics and the 18-slide Business Plan are shared privately by founder invitation.'}
+                  ? '상세 단위 경제성과 22장 사업계획서는 창업자 직접 초대를 통해서만 제공됩니다.'
+                  : 'Detailed unit economics and the 22-slide Business Plan are shared privately by founder invitation.'}
             </p>
 
             {investorGateConfigured && (
