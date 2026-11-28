@@ -23,12 +23,12 @@
         <option value="0" data-ir-bind="hero.tocCover">01 · 표지 — 어서 오세요, 당신의 인벤토리에 · iNVTRY</option>
         <option value="1">02 · 목차 — 한눈에 보는 사업계획서</option>
         <option value="2">03 · 핵심 요약 — 쇼핑부터 중고 판매까지</option>
-        <option value="3">04 · Painpoints — 지금 옷장이 겪는 4 Painpoints</option>
-        <option value="4">05 · Painpoint 01 — 매장 중복 구매 · 온라인 반품 손실</option>
-        <option value="5">06 · Painpoint 02 — 기존 AI 피팅 앱의 구조적 한계</option>
-        <option value="6">07 · Painpoint 03 — 아침 코디 피로 · 생체·EXIF 유출 불안</option>
-        <option value="7">08 · Painpoint 04 — 세탁·중고 판매 피로 · EU ESPR 순환 단절</option>
-        <option value="8">09 · Solution — 4 Painpoints, 1 Solution</option>
+        <option value="3">04 · Painpoints — 지금 옷장이 겪는 6 Painpoints</option>
+        <option value="4">05 · Painpoint 01 + 02 — 매장 중복 구매 · 온라인 반품 손실</option>
+        <option value="5">06 · Painpoint 03 — 기존 AI 피팅 앱의 구조적 한계</option>
+        <option value="6">07 · Painpoint 04 + 05 — 아침 코디 피로 · 생체·EXIF 유출 불안</option>
+        <option value="7">08 · Painpoint 06 — 세탁·중고 판매 피로 · EU ESPR 순환 단절</option>
+        <option value="8">09 · Solution — 6 Painpoints, 1 Solution</option>
         <option value="9">10 · 서비스 흐름 — 옷을 사고, 입고, 되파는 6단계</option>
         <option value="10">11 · 실제 앱 화면 — 핵심 화면 5가지 (Live Demo)</option>
         <option value="11">12 · 핵심 기술 — Three.js 3D · AI 피팅 · On-Device</option>
@@ -161,14 +161,14 @@
                 </div>
                 <div class="s02-act-head">
                   <div class="s02-act-kicker">PART 01</div>
-                  <div class="s02-act-title">4 Painpoints &amp; 1 Solution</div>
+                  <div class="s02-act-title">6 Painpoints &amp; 1 Solution</div>
                 </div>
                 <div class="s02-items">
                   <button type="button" class="s02-item" data-jump-slide="2">
                     <span class="s02-item-left"><span class="s02-num">03</span><span class="s02-label">서비스 핵심 요약</span></span>
                   </button>
                   <button type="button" class="s02-item" data-jump-slide="3">
-                    <span class="s02-item-left"><span class="s02-num">04–08</span><span class="s02-label">4 Painpoints 심층 리서치</span></span>
+                    <span class="s02-item-left"><span class="s02-num">04–08</span><span class="s02-label">6 Painpoints 심층 리서치</span></span>
                   </button>
                   <button type="button" class="s02-item" data-jump-slide="8">
                     <span class="s02-item-left"><span class="s02-num">09</span><span class="s02-label">Solution</span></span>
@@ -565,35 +565,39 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 04 — PROBLEM (4 CONSOLIDATED PAINPOINTS · 2x2 INFOGRAPHICS)  -->
+      <!-- SLIDE 04 — PROBLEM (6 PAINPOINTS · 3x2 INFOGRAPHICS → SLIDES 05-08)-->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-04" class="ir-slide" data-slide="4">
           <header class="s-head">
             <div class="s-head-left">
               <span class="s-eyebrow">PART 01 · Painpoints</span>
-              <h2 class="s-title" data-i18n-rich="s04-h2">지금 옷장이 겪는 <span class="serif-accent">4 Painpoints</span></h2>
+              <h2 class="s-title" data-i18n-rich="s04-h2">지금 옷장이 겪는 <span class="serif-accent">6 Painpoints</span></h2>
             </div>
           </header>
 
           <div class="s-body">
             <div class="panel s04-chain">
-              <span>구매 (중복·반품)</span>
+              <span>옷 구매</span>
               <span class="s04-x">✕</span>
-              <span>가상 피팅 (2D 한계)</span>
+              <span>옷장 정리</span>
               <span class="s04-x">✕</span>
-              <span>아침 코디 (피로·보안 불안)</span>
+              <span>미리 입어보기</span>
               <span class="s04-x">✕</span>
-              <span>관리·처분 (세탁·중고 이탈)</span>
-              <span class="badge badge--danger">옷의 전 생애주기가 4중 마찰로 단절</span>
+              <span>날씨별 코디</span>
+              <span class="s04-x">✕</span>
+              <span>사진 보안</span>
+              <span class="s04-x">✕</span>
+              <span>중고 판매</span>
+              <span class="badge badge--danger">앱이 6개로 나뉘어 매일 쓰기 불편함</span>
             </div>
 
             <div class="s04-grid">
-              <!-- Painpoint 01 (Merged 1 + 2) -->
+              <!-- Painpoint 01 → Slide 05 (1 + 2) -->
               <article class="panel s04-card" data-jump-slide="4" role="button" tabindex="0">
                 <div class="s04-card-head">
-                  <span class="s04-card-title">01. 매장 중복 구매 · 온라인 반품 손실</span>
-                  <span class="badge badge--danger">구매 손실</span>
+                  <span class="s04-card-title">01. 매장 중복 구매</span>
+                  <span class="badge badge--danger">오프라인 쇼핑</span>
                 </div>
                 <div class="s04-card-mid">
                   <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
@@ -623,26 +627,74 @@
                       transform="rotate(-90 50 50)"
                     />
                     <circle cx="50" cy="50" r="24" fill="var(--svg-node-bg)" stroke="var(--hairline)" stroke-width="1" />
-                    <text x="50" y="49" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="11.5" font-weight="800">24.4%</text>
-                    <text x="50" y="60" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="5.3" font-weight="700" letter-spacing="0.5">RETURN</text>
+                    <text x="50" y="50" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="12.5" font-weight="800">82%</text>
+                    <text x="50" y="60" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="5.5" font-weight="700" letter-spacing="0.6">IDLE</text>
                     <circle cx="15.6" cy="56.5" r="3.4" fill="var(--accent-danger)" />
                     <circle cx="15.6" cy="56.5" r="1.4" fill="var(--svg-node-bg)" />
                   </svg>
                   <div class="s04-stat-col">
-                    <span class="s04-stat danger-accent">$849.9B</span>
-                    <span class="s04-sub">미국 반품 · 의류 24.4% · 장롱 방치 22~82%</span>
+                    <span class="s04-stat danger-accent">25% · 82%</span>
+                    <span class="s04-sub">학술 실측 휴면 25% · 설문 82%</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>매장 내 옷장 조회 불가 + 핏 불일치·브래케팅 63%</span>
-                  <span class="s04-cause-cta">심층 05 →</span>
+                  <span>매장에서 내 옷장 즉시 조회 불가</span>
+                  <span class="s04-cause-cta">심층 05 (1+2) →</span>
                 </div>
               </article>
 
-              <!-- Painpoint 02 (Standalone 3) -->
+              <!-- Painpoint 02 → Slide 05 (1 + 2) -->
+              <article class="panel s04-card" data-jump-slide="4" role="button" tabindex="0">
+                <div class="s04-card-head">
+                  <span class="s04-card-title">02. 온라인 쇼핑 반품</span>
+                  <span class="badge badge--danger">반품 손실</span>
+                </div>
+                <div class="s04-card-mid">
+                  <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="s04-g02-bar4" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="var(--accent-danger)" stop-opacity="0.95" />
+                        <stop offset="100%" stop-color="var(--accent-danger)" stop-opacity="0.18" />
+                      </linearGradient>
+                      <linearGradient id="s04-g02-bar3" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="var(--accent-gold)" stop-opacity="0.72" />
+                        <stop offset="100%" stop-color="var(--accent-gold)" stop-opacity="0.14" />
+                      </linearGradient>
+                      <linearGradient id="s04-g02-area" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="var(--accent-danger)" stop-opacity="0.22" />
+                        <stop offset="100%" stop-color="var(--accent-danger)" stop-opacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <line x1="10" y1="84" x2="92" y2="84" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <line x1="10" y1="58" x2="92" y2="58" stroke="var(--hairline)" stroke-dasharray="2 2.5" stroke-width="0.8" />
+                    <line x1="10" y1="32" x2="92" y2="32" stroke="var(--hairline)" stroke-dasharray="2 2.5" stroke-width="0.8" />
+                    <path d="M 21 66 Q 40 54 59 38 T 78 18 L 78 84 L 21 84 Z" fill="url(#s04-g02-area)" />
+                    <rect x="15" y="66" width="12" height="18" rx="2" fill="var(--svg-track)" stroke="var(--hairline-strong)" stroke-width="0.7" />
+                    <rect x="34" y="54" width="12" height="30" rx="2" fill="var(--hairline-strong)" stroke="var(--hairline-strong)" stroke-width="0.7" />
+                    <rect x="53" y="38" width="12" height="46" rx="2" fill="url(#s04-g02-bar3)" stroke="var(--accent-gold)" stroke-width="0.8" />
+                    <rect x="72" y="18" width="12" height="66" rx="2" fill="url(#s04-g02-bar4)" stroke="var(--accent-danger)" stroke-width="0.9" />
+                    <path d="M 21 66 Q 40 54 59 38 T 78 18" fill="none" stroke="var(--accent-danger)" stroke-width="1.8" stroke-linecap="round" />
+                    <circle cx="21" cy="66" r="2" fill="var(--ink-secondary)" />
+                    <circle cx="40" cy="54" r="2" fill="var(--ink-secondary)" />
+                    <circle cx="59" cy="38" r="2.2" fill="var(--accent-gold)" />
+                    <circle cx="78" cy="18" r="3.4" fill="var(--accent-danger)" />
+                    <circle cx="78" cy="18" r="1.3" fill="var(--svg-node-bg)" />
+                  </svg>
+                  <div class="s04-stat-col">
+                    <span class="s04-stat danger-accent">$849.9B</span>
+                    <span class="s04-sub">미국 리테일 반품 · 의류 24.4% (NRF)</span>
+                  </div>
+                </div>
+                <div class="s04-cause">
+                  <span>핏 불일치 53~56% · 브래케팅 63%</span>
+                  <span class="s04-cause-cta">심층 05 (1+2) →</span>
+                </div>
+              </article>
+
+              <!-- Painpoint 03 → Slide 06 (3) -->
               <article class="panel s04-card" data-jump-slide="5" role="button" tabindex="0">
                 <div class="s04-card-head">
-                  <span class="s04-card-title">02. 기존 AI 피팅 앱의 구조적 한계</span>
+                  <span class="s04-card-title">03. 기존 AI 피팅 앱들의 한계</span>
                   <span class="badge badge--neutral">KR·글로벌 Peer</span>
                 </div>
                 <div class="s04-card-mid">
@@ -674,20 +726,55 @@
                   </svg>
                   <div class="s04-stat-col">
                     <span class="s04-stat gold-accent">0 / 8 (0%)</span>
-                    <span class="s04-sub">실측 8종 360° 0% · Doppl 10개월 만 종료</span>
+                    <span class="s04-sub">실측 8종 360° 0% · Doppl 종료</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>0° 단품 정면·30초 대기·레이어드 불가 → 단발 이탈</span>
-                  <span class="s04-cause-cta">심층 06 →</span>
+                  <span>30초 대기 · 2D 단품 · 레이어드 불가</span>
+                  <span class="s04-cause-cta">심층 06 (3) →</span>
                 </div>
               </article>
 
-              <!-- Painpoint 03 (Merged 4 + 5) -->
+              <!-- Painpoint 04 → Slide 07 (4 + 5) -->
               <article class="panel s04-card" data-jump-slide="6" role="button" tabindex="0">
                 <div class="s04-card-head">
-                  <span class="s04-card-title">03. 아침 코디 피로 · 사진 유출 불안</span>
-                  <span class="badge badge--danger">피로 · 프라이버시</span>
+                  <span class="s04-card-title">04. 날씨·옷장 따로 확인</span>
+                  <span class="badge badge--neutral">앱 분산</span>
+                </div>
+                <div class="s04-card-mid">
+                  <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
+                    <circle cx="26" cy="26" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="26" y="29" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-sans)" font-size="7.2" font-weight="700">날씨</text>
+                    <circle cx="74" cy="26" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="74" y="29" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-sans)" font-size="7.2" font-weight="700">옷장</text>
+                    <circle cx="26" cy="74" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="26" y="77" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-sans)" font-size="7.2" font-weight="700">피팅</text>
+                    <circle cx="74" cy="74" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="74" y="77" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-sans)" font-size="7.2" font-weight="700">지도</text>
+                    <path d="M 42 26 L 47 29 L 50 23 L 54 29 L 58 26" fill="none" stroke="var(--accent-danger)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M 26 42 L 29 47 L 23 50 L 29 54 L 26 58" fill="none" stroke="var(--accent-danger)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M 74 42 L 71 47 L 77 50 L 71 54 L 74 58" fill="none" stroke="var(--accent-danger)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M 42 74 L 47 71 L 50 77 L 54 71 L 58 74" fill="none" stroke="var(--accent-danger)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                    <circle cx="50" cy="50" r="6.5" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-width="1.3" />
+                    <line x1="47.2" y1="47.2" x2="52.8" y2="52.8" stroke="var(--accent-danger)" stroke-width="1.5" stroke-linecap="round" />
+                    <line x1="52.8" y1="47.2" x2="47.2" y2="52.8" stroke="var(--accent-danger)" stroke-width="1.5" stroke-linecap="round" />
+                  </svg>
+                  <div class="s04-stat-col">
+                    <span class="s04-stat">17분/일</span>
+                    <span class="s04-sub">아침 코디 스트레스 62% (M&amp;S)</span>
+                  </div>
+                </div>
+                <div class="s04-cause">
+                  <span>실시간 기온·강수·목적지와 옷장 단절</span>
+                  <span class="s04-cause-cta">심층 07 (4+5) →</span>
+                </div>
+              </article>
+
+              <!-- Painpoint 05 → Slide 07 (4 + 5) -->
+              <article class="panel s04-card" data-jump-slide="6" role="button" tabindex="0">
+                <div class="s04-card-head">
+                  <span class="s04-card-title">05. 얼굴·집 사진 유출</span>
+                  <span class="badge badge--danger">보안 불안</span>
                 </div>
                 <div class="s04-card-mid">
                   <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
@@ -707,20 +794,20 @@
                     <text x="50" y="59.5" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.5" font-weight="800">!</text>
                   </svg>
                   <div class="s04-stat-col">
-                    <span class="s04-stat danger-accent">17분 · 62%</span>
-                    <span class="s04-sub">아침 코디 스트레스 62% · EXIF 고지 준수 10.4%</span>
+                    <span class="s04-stat danger-accent">10.4%</span>
+                    <span class="s04-sub">EXIF 고지 준수 (MetaLeak) · GPS 노출</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>4개 앱 분절 피로 + 셀카·집 배경·GPS 서버 업로드 거부감</span>
-                  <span class="s04-cause-cta">심층 07 →</span>
+                  <span>셀카·집 배경 외부 서버 업로드 침해감</span>
+                  <span class="s04-cause-cta">심층 07 (4+5) →</span>
                 </div>
               </article>
 
-              <!-- Painpoint 04 (Standalone 6) -->
+              <!-- Painpoint 06 → Slide 08 (6) -->
               <article class="panel s04-card" data-jump-slide="7" role="button" tabindex="0">
                 <div class="s04-card-head">
-                  <span class="s04-card-title">04. 세탁·중고 판매 피로 · 순환 단절</span>
+                  <span class="s04-card-title">06. 세탁·중고 판매 번거로움</span>
                   <span class="badge badge--gold">순환 단절</span>
                 </div>
                 <div class="s04-card-mid">
@@ -753,19 +840,19 @@
                   </svg>
                   <div class="s04-stat-col">
                     <span class="s04-stat gold-accent">2/3 · 75%</span>
-                    <span class="s04-sub">수명 전 조기 폐기 2/3 · 방치 75% 재사용 가능</span>
+                    <span class="s04-sub">수명 전 폐기 2/3 · 휴면 75% 재사용</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>재촬영·실측·채팅 이탈 + 품질·위생 불신 · EU ESPR ’26.07</span>
-                  <span class="s04-cause-cta">심층 08 →</span>
+                  <span>품질·위생 불신 · EU ESPR ’26.07 시행</span>
+                  <span class="s04-cause-cta">심층 08 (6) →</span>
                 </div>
               </article>
             </div>
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>Painpoints — 각 카드를 누르면 논문·실측 기반 심층 리서치 슬라이드(05–08)로 이동합니다</span>
+            <span>Painpoints — 각 카드를 누르면 논문·실측 심층 슬라이드(05: 1+2 · 06: 3 · 07: 4+5 · 08: 6)로 이동합니다</span>
             <span class="s-foot-num">04 / 22</span>
           </footer>
         </section>
@@ -778,7 +865,7 @@
         <section id="slide-04a" class="ir-slide" data-slide="5">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">PART 01 · Painpoint 01 심층 리서치</span>
+              <span class="s-eyebrow">PART 01 · Painpoint 01 + 02 심층 리서치</span>
               <h2 class="s-title" data-i18n-rich="s04a-h2">매장 중복 구매와 <span class="serif-accent">온라인 의류 반품 손실</span></h2>
             </div>
           </header>
@@ -788,12 +875,12 @@
               <div class="pp-left">
                 <div class="pp-kpi-row">
                   <div class="panel pp-kpi-card">
-                    <span class="pp-kpi-label">장롱 방치 · 미착용 자산</span>
+                    <span class="pp-kpi-label">PP 01 · 장롱 방치 · 매장 중복</span>
                     <span class="pp-kpi-val danger-accent">25% · £30B</span>
                     <span class="pp-kpi-sub">실측 22~25% 휴면(학술) · 설문 82% · 영국 16억 벌(WRAP)</span>
                   </div>
                   <div class="panel pp-kpi-card">
-                    <span class="pp-kpi-label">미국 리테일 반품 · 의류율</span>
+                    <span class="pp-kpi-label">PP 02 · 미국 리테일 반품 · 의류율</span>
                     <span class="pp-kpi-val gold-accent">$849.9B</span>
                     <span class="pp-kpi-sub">의류 온라인 반품 24.4% · Gen Z 브래케팅 51% (NRF ’25)</span>
                   </div>
@@ -801,7 +888,7 @@
 
                 <div class="panel pp-viz-panel">
                   <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">구매 전·후 이중 손실 · 오프라인 방치 × 온라인 반품 급등</span>
+                    <span class="pp-panel-kicker">PP 01 오프라인 방치 × PP 02 온라인 반품 급등</span>
                     <span class="pp-panel-meta">학술 실측 · NRF ’25</span>
                   </div>
                   <div class="pp-viz-wrap">
@@ -985,7 +1072,7 @@
         <section id="slide-04b" class="ir-slide" data-slide="6">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">PART 01 · Painpoint 02 심층 리서치</span>
+              <span class="s-eyebrow">PART 01 · Painpoint 03 심층 리서치</span>
               <h2 class="s-title" data-i18n-rich="s04b-h2">기존 AI 피팅 앱의 <span class="serif-accent">기술·리텐션 한계</span></h2>
             </div>
           </header>
@@ -1200,7 +1287,7 @@
         <section id="slide-04c" class="ir-slide" data-slide="7">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">PART 01 · Painpoint 03 심층 리서치</span>
+              <span class="s-eyebrow">PART 01 · Painpoint 04 + 05 심층 리서치</span>
               <h2 class="s-title" data-i18n-rich="s04c-h2">아침 코디 결정 피로와 <span class="serif-accent">생체·EXIF 사진 유출 불안</span></h2>
             </div>
           </header>
@@ -1210,12 +1297,12 @@
               <div class="pp-left">
                 <div class="pp-kpi-row">
                   <div class="panel pp-kpi-card">
-                    <span class="pp-kpi-label">아침 코디 피로 · 스트레스</span>
+                    <span class="pp-kpi-label">PP 04 · 아침 코디 피로 · 스트레스</span>
                     <span class="pp-kpi-val danger-accent">17분 · 62%</span>
                     <span class="pp-kpi-sub">여성 17분/일(평생 6개월) · 62% 옷장 스트레스 (M&amp;S, n=2,000)</span>
                   </div>
                   <div class="panel pp-kpi-card">
-                    <span class="pp-kpi-label">이미지 앱 EXIF 고지 준수율</span>
+                    <span class="pp-kpi-label">PP 05 · 이미지 앱 EXIF 고지 준수율</span>
                     <span class="pp-kpi-val gold-accent">10.4%</span>
                     <span class="pp-kpi-sub">안드로이드 앱 10.4%만 준수(MetaLeak) · 62.3% 삭제법 모름</span>
                   </div>
@@ -1223,13 +1310,13 @@
 
                 <div class="panel pp-viz-panel">
                   <div class="pp-panel-head">
-                    <span class="pp-panel-kicker">일상 착용의 이중 장벽 · 4개 앱 분절 × 원본 서버 유출</span>
+                    <span class="pp-panel-kicker">PP 04 아침 4개 앱 분절 × PP 05 원본 서버 유출</span>
                     <span class="pp-panel-meta">UX·프라이버시 감사</span>
                   </div>
                   <div class="pp-viz-wrap">
                     <svg class="pp-viz-svg" viewBox="0 0 460 184" role="img" aria-label="매일 아침 4개 앱 분절 피로와 기존 앱의 얼굴·집 배경·GPS 외부 서버 전송 경로">
-                      <!-- Top Row: Friction A (4 Siloed Morning Apps) -->
-                      <text x="14" y="15" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.3" font-weight="750">장벽 A · 매일 아침 4개 앱 단절 (13~17분/일 · 연 103시간 소모)</text>
+                      <!-- Top Row: Painpoint 04 (4 Siloed Morning Apps) -->
+                      <text x="14" y="15" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.3" font-weight="750">PP 04 · 매일 아침 4개 앱 단절 (13~17분/일 · 연 103시간 소모)</text>
 
                       <rect x="14" y="23" width="92" height="48" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
                       <text x="60" y="42" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">01 날씨 앱</text>
@@ -1256,8 +1343,8 @@
                       <!-- Divider -->
                       <line x1="14" y1="88" x2="446" y2="88" stroke="var(--hairline)" stroke-width="1" />
 
-                      <!-- Bottom Row: Friction B (Raw Biometric & EXIF Cloud Exposure) -->
-                      <text x="14" y="106" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8.3" font-weight="750">장벽 B · 기존 AI·옷장 앱 이용 시 원본 생체·위치 데이터 외부 서버 유출</text>
+                      <!-- Bottom Row: Painpoint 05 (Raw Biometric & EXIF Cloud Exposure) -->
+                      <text x="14" y="106" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8.3" font-weight="750">PP 05 · 기존 AI·옷장 앱 이용 시 원본 생체·위치 데이터 외부 서버 유출</text>
 
                       <rect x="14" y="116" width="122" height="54" rx="6" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-opacity="0.55" stroke-width="1" />
                       <text x="75" y="137" text-anchor="middle" fill="var(--ink-primary)" font-size="9.8" font-weight="750">셀카 · 집 거울 사진</text>
@@ -1411,7 +1498,7 @@
         <section id="slide-04d" class="ir-slide" data-slide="8">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">PART 01 · Painpoint 04 심층 리서치</span>
+              <span class="s-eyebrow">PART 01 · Painpoint 06 심층 리서치</span>
               <h2 class="s-title" data-i18n-rich="s04d-h2">세탁·중고 판매 피로와 <span class="serif-accent">EU ESPR 순환 단절</span></h2>
             </div>
           </header>
@@ -1609,14 +1696,14 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- SLIDE 09 (05) — SOLUTION (4 PAINPOINTS, 1 SOLUTION)                -->
+      <!-- SLIDE 09 (05) — SOLUTION (6 PAINPOINTS, 1 SOLUTION)                -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
         <section id="slide-05" class="ir-slide" data-slide="9">
           <header class="s-head">
             <div class="s-head-left">
               <span class="s-eyebrow">PART 01 · Solution</span>
-              <h2 class="s-title" data-i18n-rich="s05-h2">4 Painpoints, <span class="serif-accent">1 Solution</span></h2>
+              <h2 class="s-title" data-i18n-rich="s05-h2">6 Painpoints, <span class="serif-accent">1 Solution</span></h2>
             </div>
           </header>
 
@@ -1652,22 +1739,32 @@
 
               <div class="s05-pairs">
                 <div class="panel s05-pair">
-                  <span class="s05-pair-before">01 매장 중복 · 온라인 반품</span>
+                  <span class="s05-pair-before">01 매장 중복 구매</span>
                   <span class="s05-pair-arrow">→</span>
-                  <strong class="s05-pair-after">3초 내 옷 비교 · 구매 전 AI 코디</strong>
+                  <strong class="s05-pair-after">3초 만에 내 옷과 비교</strong>
                 </div>
                 <div class="panel s05-pair">
-                  <span class="s05-pair-before">02 기존 2D AI 피팅 한계</span>
+                  <span class="s05-pair-before">02 온라인 반품 손실</span>
                   <span class="s05-pair-arrow">→</span>
-                  <strong class="s05-pair-after gold-accent">360° 8방향 레이어드 · Three.js 3D</strong>
+                  <strong class="s05-pair-after">구매 전 내 옷과 AI 코디</strong>
+                </div>
+                <div class="panel s05-pair">
+                  <span class="s05-pair-before">03 기존 AI 피팅 앱 한계</span>
+                  <span class="s05-pair-arrow">→</span>
+                  <strong class="s05-pair-after gold-accent">360° 레이어드 · Three.js 3D</strong>
+                </div>
+                <div class="panel s05-pair">
+                  <span class="s05-pair-before">04 날씨·옷장 따로 확인</span>
+                  <span class="s05-pair-arrow">→</span>
+                  <strong class="s05-pair-after">실시간 날씨·거리 배경 반영</strong>
                 </div>
                 <div class="panel panel--live s05-pair">
-                  <span class="s05-pair-before">03 아침 피로 · 사진 유출 불안</span>
+                  <span class="s05-pair-before">05 얼굴·위치 유출 불안</span>
                   <span class="s05-pair-arrow">→</span>
-                  <strong class="s05-pair-after live-accent">날씨·거리뷰 × 얼굴 0B 기기 내 처리</strong>
+                  <strong class="s05-pair-after live-accent">얼굴 0B · 기기 내 안전 처리</strong>
                 </div>
                 <div class="panel s05-pair">
-                  <span class="s05-pair-before">04 세탁·중고 판매 순환 단절</span>
+                  <span class="s05-pair-before">06 번거로운 세탁·중고 판매</span>
                   <span class="s05-pair-arrow">→</span>
                   <strong class="s05-pair-after">세탁·착용 이력 인증 · 30초 판매·기부</strong>
                 </div>
@@ -1676,7 +1773,7 @@
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>Solution — 4가지 옷장 문제를 비교·피팅·보안·순환까지 iNVTRY 하나로</span>
+            <span>Solution — 6가지 옷장 문제를 비교·피팅·보안·순환까지 iNVTRY 하나로</span>
             <span class="s-foot-num">09 / 22</span>
           </footer>
         </section>
