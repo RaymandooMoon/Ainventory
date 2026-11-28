@@ -10,17 +10,19 @@ import {
 import { LAYERED_10_CATALOG } from '../src/shared/layered10Catalog.js';
 import { LUXURY_STREET_CATALOG } from '../src/shared/luxuryStreetCatalog.js';
 import { SEASONAL_120_CATALOG } from '../src/shared/seasonal120Catalog.js';
-import {
-  generateStatisticalWardrobeForUser,
-  getStudioSeedImageForGarment,
-  seedWardrobeBenchmarks,
-} from './wardrobeStatsAndGenerator.js';
+import { createDatabaseAdapter } from './dbAdapter.js';
 import {
   SITE_DEMO_ROLE_CODE,
   SITE_DEMO_USERNAME,
   assignUserRole,
   ensureRbacSchemaAndSeeds,
 } from './rbac.js';
+import { createStorageAdapter } from './storageAdapter.js';
+import {
+  generateStatisticalWardrobeForUser,
+  getStudioSeedImageForGarment,
+  seedWardrobeBenchmarks,
+} from './wardrobeStatsAndGenerator.js';
 
 const SITE_DEMO_LOCKED_HASH = '!locked_site_demo_secret_unset!';
 
@@ -39,203 +41,21 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 fs.mkdirSync(OUTBOX_DIR, { recursive: true });
 
-async function createDatabase(dbPath) {
-  if (!process.env.FORCE_SQLJS) {
-    try {
-      const { DatabaseSync } = await import('node:sqlite');
-      const nativeDb = new DatabaseSync(dbPath);
-      nativeDb.exec('PRAGMA journal_mode = WAL;');
-      nativeDb.exec('PRAGMA foreign_keys = ON;');
+export const storage = createStorageAdapter({
+  uploadsDir: UPLOADS_DIR,
+  vtonCacheDir: path.join(DATA_DIR, 'vton-cache'),
+  privateBucket: process.env.GCS_PRIVATE_BUCKET || '',
+  scratchBucket: process.env.GCS_SCRATCH_BUCKET || '',
+});
 
-      let txDepth = 0;
-      nativeDb.transaction = (fn) => {
-        if (typeof fn !== 'function') {
-          throw new TypeError('db.transaction requires a callback function');
-        }
-        if (txDepth === 0) {
-          nativeDb.exec('BEGIN IMMEDIATE;');
-          txDepth += 1;
-          try {
-            const result = fn();
-            txDepth -= 1;
-            nativeDb.exec('COMMIT;');
-            return result;
-          } catch (err) {
-            txDepth = Math.max(0, txDepth - 1);
-            try {
-              nativeDb.exec('ROLLBACK;');
-            } catch {
-              // ignore rollback error if already rolled back
-            }
-            throw err;
-          }
-        }
+const { db, driver, dialect, closeAndFlush } = await createDatabaseAdapter({
+  databaseUrl: process.env.DATABASE_URL || '',
+  dbPath: DB_PATH,
+  forceSqlJs: Boolean(process.env.FORCE_SQLJS),
+});
 
-        const spName = `sp_${txDepth}`;
-        nativeDb.exec(`SAVEPOINT ${spName};`);
-        txDepth += 1;
-        try {
-          const result = fn();
-          txDepth -= 1;
-          nativeDb.exec(`RELEASE SAVEPOINT ${spName};`);
-          return result;
-        } catch (err) {
-          txDepth -= 1;
-          try {
-            nativeDb.exec(`ROLLBACK TO SAVEPOINT ${spName};`);
-            nativeDb.exec(`RELEASE SAVEPOINT ${spName};`);
-          } catch {
-            // ignore savepoint cleanup error
-          }
-          throw err;
-        }
-      };
-
-      let closed = false;
-      const closeAndFlush = () => {
-        if (closed) return;
-        closed = true;
-        try {
-          nativeDb.exec('PRAGMA wal_checkpoint(TRUNCATE);');
-        } catch {
-          // ignore checkpoint error during shutdown
-        }
-        try {
-          if (typeof nativeDb.close === 'function') {
-            nativeDb.close();
-          }
-        } catch {
-          // ignore close error if already closed
-        }
-      };
-
-      return { db: nativeDb, driver: 'node:sqlite', closeAndFlush };
-    } catch {
-      // Fall through to pure-WASM sql.js for environments without node:sqlite
-    }
-  }
-
-  const initSqlJs = (await import('sql.js')).default;
-  const SQL = await initSqlJs();
-  const initialBuf = fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : undefined;
-  const wasmDb = initialBuf ? new SQL.Database(initialBuf) : new SQL.Database();
-  wasmDb.exec('PRAGMA foreign_keys = ON;');
-
-  let txDepth = 0;
-  let closed = false;
-  const flushToDiskAtomically = () => {
-    if (closed) return;
-    const buf = Buffer.from(wasmDb.export());
-    const tmpPath = `${dbPath}.tmp.${process.pid}.${Date.now()}-${crypto.randomInt(1000, 9999)}`;
-    fs.writeFileSync(tmpPath, buf);
-    fs.renameSync(tmpPath, dbPath);
-  };
-
-  const persist = () => {
-    if (txDepth > 0 || closed) return;
-    flushToDiskAtomically();
-  };
-
-  const wasmWrapper = {
-    exec(sql) {
-      wasmDb.exec(sql);
-      persist();
-    },
-    prepare(sql) {
-      return {
-        get(...params) {
-          const stmt = wasmDb.prepare(sql);
-          try {
-            stmt.bind(params);
-            return stmt.step() ? stmt.getAsObject() : undefined;
-          } finally {
-            stmt.free();
-          }
-        },
-        all(...params) {
-          const stmt = wasmDb.prepare(sql);
-          const rows = [];
-          try {
-            stmt.bind(params);
-            while (stmt.step()) rows.push(stmt.getAsObject());
-            return rows;
-          } finally {
-            stmt.free();
-          }
-        },
-        run(...params) {
-          wasmDb.run(sql, params);
-          const lastId = wasmDb.exec('SELECT last_insert_rowid()')[0]?.values?.[0]?.[0] ?? 0;
-          persist();
-          return { lastInsertRowid: Number(lastId) };
-        },
-      };
-    },
-    transaction(fn) {
-      if (typeof fn !== 'function') {
-        throw new TypeError('db.transaction requires a callback function');
-      }
-      if (txDepth === 0) {
-        wasmDb.exec('BEGIN IMMEDIATE;');
-        txDepth += 1;
-        try {
-          const result = fn();
-          txDepth -= 1;
-          wasmDb.exec('COMMIT;');
-          flushToDiskAtomically();
-          return result;
-        } catch (err) {
-          txDepth = Math.max(0, txDepth - 1);
-          try {
-            wasmDb.exec('ROLLBACK;');
-          } catch {
-            // ignore rollback error
-          }
-          throw err;
-        }
-      }
-
-      const spName = `sp_${txDepth}`;
-      wasmDb.exec(`SAVEPOINT ${spName};`);
-      txDepth += 1;
-      try {
-        const result = fn();
-        txDepth -= 1;
-        wasmDb.exec(`RELEASE SAVEPOINT ${spName};`);
-        return result;
-      } catch (err) {
-        txDepth -= 1;
-        try {
-          wasmDb.exec(`ROLLBACK TO SAVEPOINT ${spName};`);
-          wasmDb.exec(`RELEASE SAVEPOINT ${spName};`);
-        } catch {
-          // ignore savepoint cleanup error
-        }
-        throw err;
-      }
-    },
-  };
-
-  const closeAndFlush = () => {
-    if (closed) return;
-    try {
-      flushToDiskAtomically();
-    } catch {
-      // ignore flush error during shutdown
-    }
-    closed = true;
-    try {
-      wasmDb.close();
-    } catch {
-      // ignore close error
-    }
-  };
-
-  return { db: wasmWrapper, driver: 'sql.js', closeAndFlush };
-}
-
-const { db, driver, closeAndFlush } = await createDatabase(DB_PATH);
 export const SQLITE_DRIVER = driver;
+export const DB_DIALECT = dialect;
 export function closeAndFlushDatabase() {
   closeAndFlush();
 }
@@ -311,10 +131,10 @@ const SUBCATEGORY_MATERIAL_SEED_ALIASES = Object.freeze({
  * has zero existing items in a closet, automatically seed 5 studio items
  * differentiated by material (leather, fabric, wool, cashmere, gold, silver, bronze, etc.).
  */
-export function ensureNewSubcategoryMaterialSeeds(closetOwner = 'sample') {
+export async function ensureNewSubcategoryMaterialSeeds(closetOwner = 'sample') {
   if (!closetOwner || closetOwner === 'all') return 0;
 
-  const existingRows = db
+  const existingRows = await db
     .prepare('SELECT category, subcategory, image_url FROM garments WHERE closet_owner = ?')
     .all(closetOwner);
   const existingUrls = new Set(existingRows.map((r) => r.image_url));
@@ -355,7 +175,7 @@ export function ensureNewSubcategoryMaterialSeeds(closetOwner = 'sample') {
       const wearCount = ((item.idOffset * 3) % 16) + 1;
       const lastWornDate = fmtDate(((item.idOffset * 2) % 24) + 1);
       const isFav = item.idOffset % 5 === 1 ? 1 : 0;
-      insertSeed.run(
+      await insertSeed.run(
         closetOwner,
         item.name,
         item.category,
@@ -387,15 +207,13 @@ export function ensureNewSubcategoryMaterialSeeds(closetOwner = 'sample') {
   return insertedCount;
 }
 
-export function ensureLayered10Seeds(closetOwner = 'sample') {
+export async function ensureLayered10Seeds(closetOwner = 'sample') {
   if (!closetOwner || closetOwner === 'all') return 0;
 
-  const existingUrls = new Set(
-    db
-      .prepare('SELECT image_url FROM garments WHERE closet_owner = ?')
-      .all(closetOwner)
-      .map((r) => r.image_url)
-  );
+  const existingRows = await db
+    .prepare('SELECT image_url FROM garments WHERE closet_owner = ?')
+    .all(closetOwner);
+  const existingUrls = new Set(existingRows.map((r) => r.image_url));
 
   const today = new Date();
   const fmtDate = (daysAgo) => {
@@ -420,7 +238,7 @@ export function ensureLayered10Seeds(closetOwner = 'sample') {
     const wearCount = ((item.idOffset * 3) % 14) + 2;
     const lastWornDate = fmtDate(((item.idOffset * 2) % 20) + 1);
     const isFav = item.idOffset % 3 === 1 ? 1 : 0;
-    insertSeed.run(
+    await insertSeed.run(
       closetOwner,
       item.name,
       item.category,
@@ -449,15 +267,13 @@ export function ensureLayered10Seeds(closetOwner = 'sample') {
   return insertedCount;
 }
 
-export function ensureLuxuryStreetSeeds(closetOwner = 'sample') {
+export async function ensureLuxuryStreetSeeds(closetOwner = 'sample') {
   if (!closetOwner || closetOwner === 'all') return 0;
 
-  const existingUrls = new Set(
-    db
-      .prepare('SELECT image_url FROM garments WHERE closet_owner = ?')
-      .all(closetOwner)
-      .map((r) => r.image_url)
-  );
+  const existingRows = await db
+    .prepare('SELECT image_url FROM garments WHERE closet_owner = ?')
+    .all(closetOwner);
+  const existingUrls = new Set(existingRows.map((r) => r.image_url));
 
   const today = new Date();
   const fmtDate = (daysAgo) => {
@@ -482,7 +298,7 @@ export function ensureLuxuryStreetSeeds(closetOwner = 'sample') {
     const wearCount = ((item.idOffset * 3) % 16) + 2;
     const lastWornDate = fmtDate(((item.idOffset * 2) % 24) + 1);
     const isFav = item.idOffset % 5 === 1 ? 1 : 0;
-    insertSeed.run(
+    await insertSeed.run(
       closetOwner,
       item.name,
       item.category,
@@ -752,11 +568,11 @@ const UNDERWEAR_SOCKS_SEED_CATALOG = Object.freeze([
   },
 ]);
 
-export function ensureUnderwearAndSocksSeeds(closetOwner = 'sample') {
+export async function ensureUnderwearAndSocksSeeds(closetOwner = 'sample') {
   if (!closetOwner || closetOwner === 'all') return 0;
 
   // Auto-upgrade any previously seeded .jpg studio underwear/socks URLs to transparent .webp
-  db.prepare(
+  await db.prepare(
     `UPDATE garments
      SET image_url = REPLACE(image_url, '.jpg', '.webp')
      WHERE closet_owner = ?
@@ -770,7 +586,7 @@ export function ensureUnderwearAndSocksSeeds(closetOwner = 'sample') {
        )`
   ).run(closetOwner);
 
-  const existingRows = db
+  const existingRows = await db
     .prepare('SELECT name, image_url FROM garments WHERE closet_owner = ?')
     .all(closetOwner);
   const existingNames = new Set(existingRows.map((r) => String(r.name || '').trim()));
@@ -804,7 +620,7 @@ export function ensureUnderwearAndSocksSeeds(closetOwner = 'sample') {
     const wearCount = ((item.idOffset * 3) % 12) + 2;
     const lastWornDate = fmtDate(((item.idOffset * 2) % 20) + 1);
     const isFav = item.idOffset === 901 || item.idOffset === 903 ? 1 : 0;
-    insertSeed.run(
+    await insertSeed.run(
       closetOwner,
       item.name,
       item.category,
@@ -1035,8 +851,8 @@ const CYBER_DEMO_LOOK_SEEDS = [
   },
 ];
 
-export function ensureCyberDemoLookSeeds(closetOwner = 'sample') {
-  const existingRows = db
+export async function ensureCyberDemoLookSeeds(closetOwner = 'sample') {
+  const existingRows = await db
     .prepare('SELECT name, image_url FROM garments WHERE closet_owner = ?')
     .all(closetOwner);
   const existingNames = new Set(existingRows.map((r) => String(r.name || '')));
@@ -1062,7 +878,7 @@ export function ensureCyberDemoLookSeeds(closetOwner = 'sample') {
   for (const item of CYBER_DEMO_LOOK_SEEDS) {
     if (existingNames.has(item.name) || existingUrls.has(item.image_url)) continue;
     const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
-    insertSeed.run(
+    await insertSeed.run(
       closetOwner,
       item.name,
       item.category,
@@ -1093,25 +909,30 @@ export function ensureCyberDemoLookSeeds(closetOwner = 'sample') {
   return insertedCount;
 }
 
-function ensureSampleClosetSeeded() {
-  const sampleCount = db
-    .prepare("SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample'")
-    .get().cnt;
-  const legacyNonWebp = db
-    .prepare(
-      "SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample' AND image_url NOT LIKE '/seed/%.webp' AND image_url NOT LIKE '/seed/studio-%'"
-    )
-    .get().cnt;
+async function ensureSampleClosetSeeded() {
+  const sampleCount = Number(
+    (await db.prepare("SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample'").get())
+      ?.cnt || 0
+  );
+  const legacyNonWebp = Number(
+    (
+      await db
+        .prepare(
+          "SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample' AND image_url NOT LIKE '/seed/%.webp' AND image_url NOT LIKE '/seed/studio-%'"
+        )
+        .get()
+    )?.cnt || 0
+  );
   if (sampleCount >= 120 && legacyNonWebp === 0) {
-    ensureNewSubcategoryMaterialSeeds('sample');
-    ensureLayered10Seeds('sample');
-    ensureLuxuryStreetSeeds('sample');
-    ensureUnderwearAndSocksSeeds('sample');
-    ensureCyberDemoLookSeeds('sample');
+    await ensureNewSubcategoryMaterialSeeds('sample');
+    await ensureLayered10Seeds('sample');
+    await ensureLuxuryStreetSeeds('sample');
+    await ensureUnderwearAndSocksSeeds('sample');
+    await ensureCyberDemoLookSeeds('sample');
     return;
   }
 
-  db.prepare("DELETE FROM garments WHERE closet_owner = 'sample'").run();
+  await db.prepare("DELETE FROM garments WHERE closet_owner = 'sample'").run();
 
   const today = new Date();
   const fmtDate = (daysAgo) => {
@@ -1134,7 +955,7 @@ function ensureSampleClosetSeeded() {
     const wearCount = ((item.idOffset * 3) % 24) + 2;
     const lastWornDate = fmtDate(((item.idOffset * 2) % 28) + 1);
     const isFav = item.idOffset % 4 === 1 ? 1 : 0;
-    insertSample.run(
+    await insertSample.run(
       item.name,
       item.category,
       item.subcategory,
@@ -1158,14 +979,14 @@ function ensureSampleClosetSeeded() {
     );
   }
 
-  ensureNewSubcategoryMaterialSeeds('sample');
-  ensureLayered10Seeds('sample');
-  ensureLuxuryStreetSeeds('sample');
-  ensureUnderwearAndSocksSeeds('sample');
-  ensureCyberDemoLookSeeds('sample');
+  await ensureNewSubcategoryMaterialSeeds('sample');
+  await ensureLayered10Seeds('sample');
+  await ensureLuxuryStreetSeeds('sample');
+  await ensureUnderwearAndSocksSeeds('sample');
+  await ensureCyberDemoLookSeeds('sample');
 }
 
-function ensureSeasonalHighlightsForDemoClosets() {
+async function ensureSeasonalHighlightsForDemoClosets() {
   const today = new Date();
   const fmtDate = (daysAgo) => {
     const d = new Date(today);
@@ -1193,19 +1014,21 @@ function ensureSeasonalHighlightsForDemoClosets() {
   ]);
 
   for (const owner of ['husband', 'wife']) {
-    const existingSeasonalCnt = db
-      .prepare(
-        "SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = ? AND image_url LIKE '/seed/s4-%'"
-      )
-      .get(owner).cnt;
+    const existingSeasonalCnt = Number(
+      (
+        await db
+          .prepare(
+            "SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = ? AND image_url LIKE '/seed/s4-%'"
+          )
+          .get(owner)
+      )?.cnt || 0
+    );
     if (existingSeasonalCnt >= 48) continue;
 
-    const existingUrls = new Set(
-      db
-        .prepare('SELECT image_url FROM garments WHERE closet_owner = ?')
-        .all(owner)
-        .map((r) => r.image_url)
-    );
+    const existingUrlRows = await db
+      .prepare('SELECT image_url FROM garments WHERE closet_owner = ?')
+      .all(owner);
+    const existingUrls = new Set(existingUrlRows.map((r) => r.image_url));
 
     for (const item of SEASONAL_120_CATALOG) {
       if (existingUrls.has(item.image_url)) continue;
@@ -1221,7 +1044,7 @@ function ensureSeasonalHighlightsForDemoClosets() {
       const wearCount = ((item.idOffset * 5) % 18) + 2;
       const lastWornDate = fmtDate(((item.idOffset * 3) % 25) + 1);
       const isFav = item.idOffset % 6 === 1 ? 1 : 0;
-      insertDemoSeasonal.run(
+      await insertDemoSeasonal.run(
         owner,
         item.name,
         item.category,
@@ -1248,18 +1071,18 @@ function ensureSeasonalHighlightsForDemoClosets() {
     }
   }
 
-  ensureNewSubcategoryMaterialSeeds('husband');
-  ensureNewSubcategoryMaterialSeeds('wife');
-  ensureLayered10Seeds('husband');
-  ensureLayered10Seeds('wife');
-  ensureLuxuryStreetSeeds('husband');
-  ensureLuxuryStreetSeeds('wife');
-  ensureUnderwearAndSocksSeeds('husband');
-  ensureUnderwearAndSocksSeeds('wife');
+  await ensureNewSubcategoryMaterialSeeds('husband');
+  await ensureNewSubcategoryMaterialSeeds('wife');
+  await ensureLayered10Seeds('husband');
+  await ensureLayered10Seeds('wife');
+  await ensureLuxuryStreetSeeds('husband');
+  await ensureLuxuryStreetSeeds('wife');
+  await ensureUnderwearAndSocksSeeds('husband');
+  await ensureUnderwearAndSocksSeeds('wife');
 }
 
-export function initDb() {
-  db.exec(`
+export async function initDb() {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
@@ -1296,6 +1119,20 @@ export function initDb() {
       verify_fail_count INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS user_identities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      provider TEXT NOT NULL,
+      provider_sub TEXT NOT NULL,
+      provider_email TEXT DEFAULT NULL,
+      email_verified INTEGER NOT NULL DEFAULT 0,
+      linked_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(provider, provider_sub),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities(user_id);
 
     CREATE TABLE IF NOT EXISTS profile_configs (
       profile_key TEXT PRIMARY KEY,
@@ -1495,34 +1332,44 @@ export function initDb() {
 
   for (const stmt of alterStatements) {
     try {
-      db.exec(stmt);
+      await db.exec(stmt);
     } catch {
       // Column already exists
     }
   }
 
+  // Idempotent backfill of legacy users.apple_sub rows into normalized user_identities table
+  try {
+    await db.exec(`
+      INSERT OR IGNORE INTO user_identities (user_id, provider, provider_sub, provider_email, email_verified)
+      SELECT id, auth_provider, apple_sub, email, 1
+      FROM users
+      WHERE apple_sub IS NOT NULL AND apple_sub != '' AND auth_provider IN ('google', 'apple');
+    `);
+  } catch {
+    // ignore backfill warning
+  }
+
   // Sweep expired sessions on startup
   try {
-    db.exec(
-      "DELETE FROM sessions WHERE datetime(expires_at) <= datetime('now') OR expires_at <= datetime('now');"
-    );
+    await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(new Date().toISOString());
   } catch {
     // ignore session sweep error
   }
 
-  seedWardrobeBenchmarks(db);
-  seedIfEmpty();
+  await seedWardrobeBenchmarks(db);
+  await seedIfEmpty();
 
   // Ensure signature 3D Jiggle Physics items (Briefcase, Shopper Tote, Fringed Muffler) exist on demo closets
   if (shouldSeedDemoAccounts(false)) {
     try {
-      const ensureSignatureItem = (owner, category, subcat, fabric, rowArgs) => {
-        const found = db
+      const ensureSignatureItem = async (owner, category, subcat, fabric, rowArgs) => {
+        const found = await db
           .prepare('SELECT id FROM garments WHERE closet_owner = ? AND subcategory = ? LIMIT 1')
           .get(owner, subcat);
         if (!found) {
           const spec = resolveManifestSlotAndGlb(category, subcat);
-          db.prepare(`
+          await db.prepare(`
             INSERT INTO garments (
               closet_owner, name, category, subcategory, color_name, color_hex,
               seasons, min_temp, max_temp, water_resistant, formality,
@@ -1533,7 +1380,7 @@ export function initDb() {
         }
       };
       const todayStr = new Date().toISOString().slice(0, 10);
-      ensureSignatureItem('husband', 'accessory', 'briefcase', 'leather', [
+      await ensureSignatureItem('husband', 'accessory', 'briefcase', 'leather', [
         'husband',
         '이탈리안 풀그레인 레더 서류가방',
         'accessory',
@@ -1552,7 +1399,7 @@ export function initDb() {
         '/seed/studio-briefcase.jpg',
         '이탈리안 풀그레인 레더 비스포크 서류가방',
       ]);
-      ensureSignatureItem('wife', 'accessory', 'tote', 'leather', [
+      await ensureSignatureItem('wife', 'accessory', 'tote', 'leather', [
         'wife',
         '페블 레더 쇼퍼 토트백',
         'accessory',
@@ -1571,7 +1418,7 @@ export function initDb() {
         '/seed/studio-tote.jpg',
         '데일리로 들기 좋은 미니멀 페블 레더 쇼퍼 토트백',
       ]);
-      ensureSignatureItem('husband', 'neckwear', 'scarf', 'wool', [
+      await ensureSignatureItem('husband', 'neckwear', 'scarf', 'wool', [
         'husband',
         '퓨어 캐시미어 프린지 머플러',
         'neckwear',
@@ -1597,7 +1444,7 @@ export function initDb() {
 
   // One-time migration: replace any SVG or blacklisted store-terracotta-cardigan.jpg garment images with studio packshots
   try {
-    const legacyGarments = db
+    const legacyGarments = await db
       .prepare(
         "SELECT id, category, subcategory FROM garments WHERE image_url LIKE 'data:image/svg+xml%' OR image_url = '/seed/store-terracotta-cardigan.jpg'"
       )
@@ -1605,7 +1452,7 @@ export function initDb() {
     if (legacyGarments.length > 0) {
       const updateImg = db.prepare('UPDATE garments SET image_url = ? WHERE id = ?');
       for (const g of legacyGarments) {
-        updateImg.run(getStudioSeedImageForGarment(g.category, g.subcategory), g.id);
+        await updateImg.run(getStudioSeedImageForGarment(g.category, g.subcategory), g.id);
       }
     }
     const glbFixes = [
@@ -1619,11 +1466,11 @@ export function initDb() {
       'UPDATE garments SET base_glb = ?, physics_preset = ? WHERE base_glb = ?'
     );
     for (const [legacyGlb, nextGlb, nextPreset] of glbFixes) {
-      updateGlbStmt.run(nextGlb, nextPreset, legacyGlb);
+      await updateGlbStmt.run(nextGlb, nextPreset, legacyGlb);
     }
 
     // Backfill has_strap and bag_carry_style for all existing bag rows missing explicit metadata
-    const bagCandidates = db
+    const bagCandidates = await db
       .prepare(
         "SELECT id, name, category, subcategory, notes, has_strap, bag_carry_style FROM garments WHERE (has_strap IS NULL OR bag_carry_style IS NULL) AND (category IN ('accessory', 'bag') OR subcategory IN ('bag', 'tote', 'briefcase', 'backpack', 'messenger', 'clutch', 'duffel', 'hobo'))"
       )
@@ -1635,7 +1482,7 @@ export function initDb() {
       for (const row of bagCandidates) {
         const bagSpec = inferBagCarrySpec(row);
         if (bagSpec.isBag) {
-          updateBagMeta.run(bagSpec.has_strap ? 1 : 0, bagSpec.bag_carry_style, row.id);
+          await updateBagMeta.run(bagSpec.has_strap ? 1 : 0, bagSpec.bag_carry_style, row.id);
         }
       }
     }
@@ -1643,7 +1490,7 @@ export function initDb() {
     // ignore migration error
   }
 
-  ensureRbacSchemaAndSeeds(db);
+  await ensureRbacSchemaAndSeeds(db);
 }
 
 /**
@@ -1653,7 +1500,7 @@ export function initDb() {
  * so direct password login remains locked while POST /api/auth/site-demo issues a
  * short-lived RBAC-scoped session.
  */
-export function ensureSiteDemoAccount() {
+export async function ensureSiteDemoAccount() {
   const nowIso = new Date().toISOString();
   const email = 'site-demo@ainvtry.com';
   const vHash = computeVerificationHash(SITE_DEMO_USERNAME, email, nowIso);
@@ -1664,13 +1511,13 @@ export function ensureSiteDemoAccount() {
   const desiredPasswordHash =
     rawSecret.length > 0 ? hashPassword(rawSecret) : SITE_DEMO_LOCKED_HASH;
 
-  const existing = db
+  const existing = await db
     .prepare('SELECT * FROM users WHERE username = ?')
     .get(SITE_DEMO_USERNAME);
 
   let userId = 0;
   if (!existing) {
-    const inserted = db
+    const inserted = await db
       .prepare(`
         INSERT INTO users (
           username, email, password_hash, display_name, role, auth_provider,
@@ -1710,7 +1557,7 @@ export function ensureSiteDemoAccount() {
       !existing.verification_hash ||
       isLegacyMaleDemoProfile
     ) {
-      db.prepare(`
+      await db.prepare(`
         UPDATE users
         SET password_hash = ?,
             role = ?,
@@ -1745,16 +1592,16 @@ export function ensureSiteDemoAccount() {
   }
 
   if (userId > 0) {
-    assignUserRole(db, userId, SITE_DEMO_ROLE_CODE);
+    await assignUserRole(db, userId, SITE_DEMO_ROLE_CODE);
   }
   return db.prepare('SELECT * FROM users WHERE username = ?').get(SITE_DEMO_USERNAME);
 }
 
-export function seedIfEmpty(forceReset = false) {
-  db.transaction(() => {
+export async function seedIfEmpty(forceReset = false) {
+  await db.transaction(async () => {
     if (forceReset) {
       // Never wipe real users' personal closets; only reset demo/sample closets!
-      db.exec(`
+      await db.exec(`
         DELETE FROM shopping_checks WHERE closet_owner IN ('husband', 'wife', 'sample');
         DELETE FROM wear_logs WHERE closet_owner IN ('husband', 'wife', 'sample');
         DELETE FROM outfits WHERE closet_owner IN ('husband', 'wife', 'sample');
@@ -1764,21 +1611,21 @@ export function seedIfEmpty(forceReset = false) {
     }
 
     // Always keep the isolated 'sample' closet populated for read-only Sample Demo mode
-    ensureSampleClosetSeeded();
+    await ensureSampleClosetSeeded();
 
     // Always ensure RBAC tables/mappings and the dedicated 'site_demo' user exist.
     // Its password is stored exclusively in process.env.SITE_DEMO_PASSWORD (server secret).
     // When SITE_DEMO_PASSWORD is unset, direct password login stays locked (non-matchable sentinel hash),
     // while POST /api/auth/site-demo issues a short-lived RBAC-scoped demo session.
-    ensureRbacSchemaAndSeeds(db);
-    ensureSiteDemoAccount();
+    await ensureRbacSchemaAndSeeds(db);
+    await ensureSiteDemoAccount();
 
     if (!shouldSeedDemoAccounts(forceReset)) {
       return;
     }
 
     const nowIso = new Date().toISOString();
-    const ensureDefaultUser = ({
+    const ensureDefaultUser = async ({
       username,
       password,
       displayName,
@@ -1800,10 +1647,10 @@ export function seedIfEmpty(forceReset = false) {
       hipCm,
       headCm,
     }) => {
-      const existing = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+      const existing = await db.prepare('SELECT * FROM users WHERE username = ?').get(username);
       const vHash = computeVerificationHash(username, email, nowIso);
       if (!existing) {
-        const inserted = db.prepare(`
+        const inserted = await db.prepare(`
           INSERT INTO users (
             username, email, password_hash, display_name, role, default_closet, closet_name,
             verified_at, verification_hash, age_group, age, height_cm, weight_kg, gender,
@@ -1836,7 +1683,7 @@ export function seedIfEmpty(forceReset = false) {
         );
         const insertedId = Number(inserted?.lastInsertRowid || 0);
         if (insertedId > 0) {
-          assignUserRole(db, insertedId, role);
+          await assignUserRole(db, insertedId, role);
         }
       } else if (
         !existing.verified_at ||
@@ -1844,7 +1691,7 @@ export function seedIfEmpty(forceReset = false) {
         !existing.profile_completed ||
         !existing.personal_color
       ) {
-        db.prepare(`
+        await db.prepare(`
           UPDATE users
           SET email = COALESCE(email, ?),
               closet_name = COALESCE(closet_name, ?),
@@ -1888,7 +1735,7 @@ export function seedIfEmpty(forceReset = false) {
       }
     };
 
-    ensureDefaultUser({
+    await ensureDefaultUser({
       username: 'admin',
       password: process.env.ADMIN_INITIAL_PASSWORD || 'admin',
       displayName: '관리자 (남편)',
@@ -1911,7 +1758,7 @@ export function seedIfEmpty(forceReset = false) {
       headCm: 57.5,
     });
 
-    ensureDefaultUser({
+    await ensureDefaultUser({
       username: 'husband',
       password: 'husband1234',
       displayName: '남편',
@@ -1934,7 +1781,7 @@ export function seedIfEmpty(forceReset = false) {
       headCm: 57.5,
     });
 
-    ensureDefaultUser({
+    await ensureDefaultUser({
       username: 'wife',
       password: 'wife1234',
       displayName: '아내',
@@ -1957,32 +1804,44 @@ export function seedIfEmpty(forceReset = false) {
       headCm: 54.8,
     });
 
-    const demoGarmentCount = db
-      .prepare("SELECT COUNT(*) as cnt FROM garments WHERE closet_owner IN ('husband', 'wife')")
-      .get().cnt;
+    const demoGarmentCount = Number(
+      (
+        await db
+          .prepare("SELECT COUNT(*) as cnt FROM garments WHERE closet_owner IN ('husband', 'wife')")
+          .get()
+      )?.cnt || 0
+    );
     if (demoGarmentCount > 0) {
       // Ensure all wear slots exist for husband and wife so 3D inventory is fully populated
-      const husbandSlots = db
-        .prepare("SELECT COUNT(DISTINCT category) as c FROM garments WHERE closet_owner = 'husband'")
-        .get().c;
+      const husbandSlots = Number(
+        (
+          await db
+            .prepare("SELECT COUNT(DISTINCT category) as c FROM garments WHERE closet_owner = 'husband'")
+            .get()
+        )?.c || 0
+      );
       if (husbandSlots < 8) {
-        generateStatisticalWardrobeForUser(db, 'husband', {
+        await generateStatisticalWardrobeForUser(db, 'husband', {
           age_group: '30s',
           gender: 'male',
           personal_color: 'autumn_warm',
         });
       }
-      const wifeSlots = db
-        .prepare("SELECT COUNT(DISTINCT category) as c FROM garments WHERE closet_owner = 'wife'")
-        .get().c;
+      const wifeSlots = Number(
+        (
+          await db
+            .prepare("SELECT COUNT(DISTINCT category) as c FROM garments WHERE closet_owner = 'wife'")
+            .get()
+        )?.c || 0
+      );
       if (wifeSlots < 8) {
-        generateStatisticalWardrobeForUser(db, 'wife', {
+        await generateStatisticalWardrobeForUser(db, 'wife', {
           age_group: '30s',
           gender: 'female',
           personal_color: 'spring_warm',
         });
       }
-      ensureSeasonalHighlightsForDemoClosets();
+      await ensureSeasonalHighlightsForDemoClosets();
       return;
     }
 
@@ -2109,22 +1968,22 @@ export function seedIfEmpty(forceReset = false) {
       const category = g[2];
       const subcategory = g[3];
       const spec = resolveManifestSlotAndGlb(category, subcategory);
-      const res = insertGarment.run(...g, spec.slotKey, spec.baseGlb, spec.physicsPreset);
+      const res = await insertGarment.run(...g, spec.slotKey, spec.baseGlb, spec.physicsPreset);
       insertedIds.push(Number(res.lastInsertRowid));
     }
 
     // Also populate all 11 wear slots for husband and wife based on age/personal color benchmarks
-    generateStatisticalWardrobeForUser(db, 'husband', {
+    await generateStatisticalWardrobeForUser(db, 'husband', {
       age_group: '30s',
       gender: 'male',
       personal_color: 'autumn_warm',
     });
-    generateStatisticalWardrobeForUser(db, 'wife', {
+    await generateStatisticalWardrobeForUser(db, 'wife', {
       age_group: '30s',
       gender: 'female',
       personal_color: 'spring_warm',
     });
-    ensureSeasonalHighlightsForDemoClosets();
+    await ensureSeasonalHighlightsForDemoClosets();
 
     const commuteItemIds = [insertedIds[0], insertedIds[4], insertedIds[6], insertedIds[9]].filter(Boolean);
     const weekendNavyIds = [insertedIds[2], insertedIds[7], insertedIds[8]].filter(Boolean);
@@ -2137,39 +1996,45 @@ export function seedIfEmpty(forceReset = false) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const outfit1Id = Number(
-      insertOutfit.run(
-        'husband',
-        '단정한 간절기 트렌치 출근룩',
-        '출근룩',
-        '봄/가을',
-        JSON.stringify(commuteItemIds),
-        '일교차 큰 날 실패 없는 베이지 트렌치 + 화이트 셔츠 + 차콜 슬랙스 조합',
-        5,
-        fmtDate(5)
+      (
+        await insertOutfit.run(
+          'husband',
+          '단정한 간절기 트렌치 출근룩',
+          '출근룩',
+          '봄/가을',
+          JSON.stringify(commuteItemIds),
+          '일교차 큰 날 실패 없는 베이지 트렌치 + 화이트 셔츠 + 차콜 슬랙스 조합',
+          5,
+          fmtDate(5)
+        )
       ).lastInsertRowid
     );
     const outfit2Id = Number(
-      insertOutfit.run(
-        'husband',
-        '주말 미니멀 네이비 & 데님',
-        '주말 데이트',
-        '봄/가을',
-        JSON.stringify(weekendNavyIds),
-        '깔끔하고 편안한 주말 브런치 코디',
-        8,
-        fmtDate(2)
+      (
+        await insertOutfit.run(
+          'husband',
+          '주말 미니멀 네이비 & 데님',
+          '주말 데이트',
+          '봄/가을',
+          JSON.stringify(weekendNavyIds),
+          '깔끔하고 편안한 주말 브런치 코디',
+          8,
+          fmtDate(2)
+        )
       ).lastInsertRowid
     );
     const outfit3Id = Number(
-      insertOutfit.run(
-        'wife',
-        '어텀 올리브 & 크림 산책룩',
-        '주말 데이트',
-        '봄/가을',
-        JSON.stringify(wifeWalkIds),
-        '올리브 퀼팅 자켓에 포근한 크림 니트 매치',
-        4,
-        fmtDate(3)
+      (
+        await insertOutfit.run(
+          'wife',
+          '어텀 올리브 & 크림 산책룩',
+          '주말 데이트',
+          '봄/가을',
+          JSON.stringify(wifeWalkIds),
+          '올리브 퀼팅 자켓에 포근한 크림 니트 매치',
+          4,
+          fmtDate(3)
+        )
       ).lastInsertRowid
     );
 
@@ -2178,13 +2043,13 @@ export function seedIfEmpty(forceReset = false) {
       INSERT INTO wear_logs (closet_owner, worn_date, outfit_id, item_ids, weather_summary, temp_c, note, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'worn')
     `);
-    insertLog.run('husband', fmtDate(1), null, JSON.stringify(casualCafeIds), '맑음', 15, '가볍게 동네 카페 외출');
-    insertLog.run('husband', fmtDate(2), outfit2Id, JSON.stringify(weekendNavyIds), '구름 조금', 13, '아내와 성수동 쇼핑 데이트');
-    insertLog.run('husband', fmtDate(5), outfit1Id, JSON.stringify(commuteItemIds), '비 조금', 11, '발수 트렌치코트 덕분에 쾌적했던 출근길');
-    insertLog.run('wife', fmtDate(3), outfit3Id, JSON.stringify(wifeWalkIds), '맑음', 14, '올림픽공원 산책 코디');
+    await insertLog.run('husband', fmtDate(1), null, JSON.stringify(casualCafeIds), '맑음', 15, '가볍게 동네 카페 외출');
+    await insertLog.run('husband', fmtDate(2), outfit2Id, JSON.stringify(weekendNavyIds), '구름 조금', 13, '아내와 성수동 쇼핑 데이트');
+    await insertLog.run('husband', fmtDate(5), outfit1Id, JSON.stringify(commuteItemIds), '비 조금', 11, '발수 트렌치코트 덕분에 쾌적했던 출근길');
+    await insertLog.run('wife', fmtDate(3), outfit3Id, JSON.stringify(wifeWalkIds), '맑음', 14, '올림픽공원 산책 코디');
 
     // Seed 1 sample past shopping check showing mindful savings
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO shopping_checks (
         closet_owner, image_url, candidate_name, category, subcategory,
         color_name, color_hex, price, verdict, similar_count, max_similarity, decision
@@ -2252,14 +2117,14 @@ export function resolveProfileConfigKey({ userId = null, profileKey = null } = {
   return cleanedKey || 'default';
 }
 
-export function getServerProfileConfig({ userId = null, profileKey = null } = {}) {
+export async function getServerProfileConfig({ userId = null, profileKey = null } = {}) {
   const numericUserId =
     Number.isInteger(Number(userId)) && Number(userId) > 0 ? Number(userId) : null;
   const resolvedKey = resolveProfileConfigKey({ userId: numericUserId, profileKey });
 
   let configRow = null;
   try {
-    configRow = db
+    configRow = await db
       .prepare('SELECT profile_key, user_id, handedness, updated_at FROM profile_configs WHERE profile_key = ?')
       .get(resolvedKey);
   } catch {
@@ -2269,7 +2134,7 @@ export function getServerProfileConfig({ userId = null, profileKey = null } = {}
   let userRow = null;
   if (numericUserId) {
     try {
-      userRow = db.prepare('SELECT id, handedness FROM users WHERE id = ?').get(numericUserId);
+      userRow = await db.prepare('SELECT id, handedness FROM users WHERE id = ?').get(numericUserId);
     } catch {
       userRow = null;
     }
@@ -2281,7 +2146,7 @@ export function getServerProfileConfig({ userId = null, profileKey = null } = {}
     const guestKey = resolveProfileConfigKey({ userId: null, profileKey });
     if (guestKey && guestKey !== resolvedKey) {
       try {
-        guestConfigRow = db
+        guestConfigRow = await db
           .prepare('SELECT profile_key, user_id, handedness, updated_at FROM profile_configs WHERE profile_key = ?')
           .get(guestKey);
       } catch {
@@ -2307,7 +2172,7 @@ export function getServerProfileConfig({ userId = null, profileKey = null } = {}
   };
 }
 
-export function saveServerProfileConfig({
+export async function saveServerProfileConfig({
   userId = null,
   profileKey = null,
   handedness = 'right',
@@ -2318,8 +2183,8 @@ export function saveServerProfileConfig({
   const normalizedHandedness = normalizeHandednessConfig(handedness, 'right');
   const nowIso = new Date().toISOString();
 
-  db.transaction(() => {
-    db.prepare(
+  await db.transaction(async () => {
+    await db.prepare(
       `INSERT INTO profile_configs (profile_key, user_id, handedness, updated_at)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(profile_key) DO UPDATE SET
@@ -2329,14 +2194,14 @@ export function saveServerProfileConfig({
     ).run(resolvedKey, numericUserId, normalizedHandedness, nowIso);
 
     if (numericUserId) {
-      db.prepare('UPDATE users SET handedness = ? WHERE id = ?').run(
+      await db.prepare('UPDATE users SET handedness = ? WHERE id = ?').run(
         normalizedHandedness,
         numericUserId
       );
       if (profileKey) {
         const guestKey = resolveProfileConfigKey({ userId: null, profileKey });
         if (guestKey && guestKey !== resolvedKey) {
-          db.prepare(
+          await db.prepare(
             `INSERT INTO profile_configs (profile_key, user_id, handedness, updated_at)
              VALUES (?, ?, ?, ?)
              ON CONFLICT(profile_key) DO UPDATE SET

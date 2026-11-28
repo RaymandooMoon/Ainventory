@@ -295,6 +295,31 @@ if (initialBootstrapToken) {
   setOfflineUserScope(initialBootstrapToken.slice(0, 24));
 }
 
+let cookieSessionActive = false;
+
+export function isCookieSessionActive(): boolean {
+  return cookieSessionActive;
+}
+
+export function setCookieSessionActive(active: boolean, userId?: number | string | null): void {
+  cookieSessionActive = Boolean(active);
+  if (isLiveAppEmbedSession()) return;
+  if (active) {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(SAMPLE_DEMO_KEY);
+      } catch {
+        // ignore storage error
+      }
+    }
+    if (!getStoredToken() && userId !== undefined && userId !== null && String(userId).trim()) {
+      setOfflineUserScope(`cookie_${String(userId).trim()}`);
+    }
+  } else if (!getStoredToken()) {
+    setOfflineUserScope(null);
+  }
+}
+
 export function setStoredToken(token: string | null | undefined): void {
   if (isLiveAppEmbedSession()) {
     if (token) {
@@ -306,6 +331,9 @@ export function setStoredToken(token: string | null | undefined): void {
       setOfflineUserScope(null);
     }
     return;
+  }
+  if (!token) {
+    cookieSessionActive = false;
   }
   if (typeof localStorage === 'undefined') return;
   try {
@@ -339,6 +367,9 @@ export function setSampleDemoMode(enabled: boolean): void {
   if (isLiveAppEmbedSession()) {
     inMemoryEmbedSampleDemo = Boolean(enabled);
     return;
+  }
+  if (enabled) {
+    cookieSessionActive = false;
   }
   if (typeof localStorage === 'undefined') return;
   try {
@@ -383,6 +414,8 @@ async function rawNetworkFetch(
       isBackendUnavailable: true,
     });
   }
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const isAuthPath = normalizedPath.startsWith('/auth/');
   const token = getStoredToken();
   const sampleDemo = isSampleDemoMode();
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
@@ -391,14 +424,12 @@ async function rawNetworkFetch(
     ...(options.headers || {}),
   };
   const explicitSampleHeader = headers['X-Demo-Mode'] === 'sample';
-  if (sampleDemo || explicitSampleHeader) {
+  if ((!isAuthPath && sampleDemo) || explicitSampleHeader) {
     headers['X-Demo-Mode'] = 'sample';
     delete headers.Authorization;
   } else if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const { timeoutMs = 12000, signal: externalSignal, ...fetchInit } = options;
   const controller =
     typeof AbortController !== 'undefined' && timeoutMs > 0 ? new AbortController() : null;
@@ -515,7 +546,7 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('online', () => {
     explicitlyOffline = false;
-    if (!isSampleDemoMode() && getStoredToken()) {
+    if (!isSampleDemoMode() && (getStoredToken() || isCookieSessionActive())) {
       flushPendingOfflineSync().catch(() => {});
     }
   });
@@ -608,7 +639,7 @@ export async function apiFetch<T = Record<string, unknown>>(
       path.startsWith('/weather/recommendations?') ||
       path === '/weather-styling' ||
       path.startsWith('/weather-styling?');
-    const skipStaleIdbCache = isLiveStatusEndpoint || isLiveWeatherEndpoint;
+    const skipStaleIdbCache = isAuthEndpoint || isLiveStatusEndpoint || isLiveWeatherEndpoint;
     const cacheKey = sampleDemo ? `demo:${path}` : path;
     const isSampleGarmentsRequest = path === '/garments?closet=sample';
     if (sampleDemo && isSampleDemoMutated() && !isProfileConfigEndpoint && !skipStaleIdbCache) {
@@ -663,7 +694,7 @@ export async function apiFetch<T = Record<string, unknown>>(
     try {
       // Flush any queued offline mutations BEFORE fetching & overwriting GET cache
       // (skip in read-only live embed sessions so IndexedDB never stalls initial studio loading)
-      if (!sampleDemo && !isLiveAppEmbedSession() && getStoredToken()) {
+      if (!sampleDemo && !isLiveAppEmbedSession() && (getStoredToken() || isCookieSessionActive())) {
         const queuedCount = await getQueuedMutationCount().catch(() => 0);
         if (queuedCount > 0) {
           await flushPendingOfflineSync().catch(() => 0);

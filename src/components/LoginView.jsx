@@ -1,7 +1,10 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
+  Copy,
+  ExternalLink,
   Globe,
   KeyRound,
   Loader2,
@@ -14,14 +17,23 @@ import {
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
   apiFetch,
+  getConfiguredApiBaseUrl,
   isLiveAppEmbedSession,
   prefetchSampleGarments,
   setSampleDemoMode,
   setStoredToken,
 } from '../utils/api.ts';
+import {
+  buildExternalBrowserUrl,
+  buildGoogleOAuthStartUrl,
+  detectInAppBrowser,
+  formatOAuthErrorMessage,
+  isMountedUnderAppRoute,
+} from '../utils/appRouter.ts';
 import { localizeApiMessage, tr } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { scheduleAfterFirstPaint, scheduleIdleTask } from '../utils/resourcePriority.ts';
+import AccountEmailConflictModal from './auth/AccountEmailConflictModal.tsx';
 import AuthFieldInput from './auth/AuthFieldInput.tsx';
 import BrandLogo from './auth/BrandLogo.tsx';
 import GoogleSignInButton from './auth/GoogleSignInButton.tsx';
@@ -94,6 +106,7 @@ export default function LoginView({
   onToggleTheme,
   portalPhase = 'idle',
   onPortalTargetResolved,
+  initialAuthError = '',
 }) {
   const isEn = lang === 'en';
   const isLocalHost =
@@ -103,7 +116,9 @@ export default function LoginView({
   const hasAppleClientId = Boolean(import.meta.env.VITE_APPLE_CLIENT_ID);
 
   const [authStage, setAuthStage] = useState(() =>
-    resolveInitialAuthStage(typeof window !== 'undefined' ? window.location.search : '')
+    initialAuthError
+      ? 'auth'
+      : resolveInitialAuthStage(typeof window !== 'undefined' ? window.location.search : '')
   ); // 'intro' | 'auth'
   const [loginMotionVariant, setLoginMotionVariant] = useState(() => {
     if (typeof window === 'undefined') return 'luxury';
@@ -131,12 +146,21 @@ export default function LoginView({
 
   // Exception UX States: Loading Action, Inline Validation Errors, Server Alert & Micro-Shake
   const [loadingAction, setLoadingAction] = useState(null); // 'login' | 'google' | 'apple' | 'otp-send' | 'otp-verify' | 'register' | 'sample' | null
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() =>
+    initialAuthError ? formatOAuthErrorMessage(initialAuthError, lang) : ''
+  );
   const [lastAttempt, setLastAttempt] = useState(null); // 'login' | 'google' | 'apple' | 'otp-send' | 'otp-verify' | 'register' | null
   const [fieldErrors, setFieldErrors] = useState({});
   const [isShaking, setIsShaking] = useState(false);
   const [legalModalDoc, setLegalModalDoc] = useState(null); // null | 'privacy' | 'terms'
   const [googleFallbackOpen, setGoogleFallbackOpen] = useState(false);
+  const [emailConflictOpen, setEmailConflictOpen] = useState(
+    () => String(initialAuthError || '').toLowerCase() === 'account_email_conflict'
+  );
+  const [serverAuthConfig, setServerAuthConfig] = useState(null);
+  const [inAppBrowser] = useState(() => detectInAppBrowser());
+  const [copiedInAppUrl, setCopiedInAppUrl] = useState(false);
+  const copyResetTimerRef = useRef(null);
 
   const usernameRef = useRef(null);
   const passwordRef = useRef(null);
@@ -149,6 +173,20 @@ export default function LoginView({
   const uiAlphaRef = useRef(0.5);
 
   const loading = Boolean(loadingAction);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch('/auth/config', { timeoutMs: 3500 })
+      .then((cfg) => {
+        if (!cancelled && cfg && typeof cfg === 'object') {
+          setServerAuthConfig(cfg);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const triggerValidationShake = () => {
     triggerHaptic('light');
@@ -171,6 +209,9 @@ export default function LoginView({
     return () => {
       if (shakeTimerRef.current) {
         clearTimeout(shakeTimerRef.current);
+      }
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
       }
     };
   }, []);
@@ -519,6 +560,24 @@ export default function LoginView({
     setError('');
     setFieldErrors({});
 
+    // Production same-origin OAuth 2.0 Authorization Code + PKCE flow (Safari ITP & iOS/Android safe)
+    if (
+      typeof window !== 'undefined' &&
+      !isLiveAppEmbedSession() &&
+      serverAuthConfig?.googleOAuthCodeFlowEnabled &&
+      (isMountedUnderAppRoute() || !isGoogleSignInConfigured())
+    ) {
+      setLastAttempt('google');
+      setLoadingAction('google');
+      triggerHaptic('light');
+      const startUrl = buildGoogleOAuthStartUrl({
+        returnTo: '/app',
+        apiBaseUrl: getConfiguredApiBaseUrl() || '/api',
+      });
+      window.location.assign(startUrl);
+      return;
+    }
+
     // If Google Client ID is not configured (e.g. GitHub Pages static demo), surface fallback modal
     if (!isGoogleSignInConfigured()) {
       setGoogleFallbackOpen(true);
@@ -538,14 +597,58 @@ export default function LoginView({
       capturePendingLogoFlight(brandLogoRef.current);
       onLoginSuccess(data.user);
     } catch (err) {
+      const errCode = String(err?.data?.code || err?.code || '').toUpperCase();
       if (err?.reason === 'not_configured') {
         setGoogleFallbackOpen(true);
+      } else if (errCode === 'ACCOUNT_EMAIL_CONFLICT' || err?.status === 409) {
+        setError(formatOAuthErrorMessage('account_email_conflict', lang));
+        setEmailConflictOpen(true);
       } else if (err?.reason !== 'dismissed') {
         setError(localizeApiMessage(err.message, lang));
         triggerValidationShake();
       }
     } finally {
       setLoadingAction(null);
+    }
+  };
+
+  const externalBrowserUrl =
+    !isEmbedMode && inAppBrowser.isInApp && typeof window !== 'undefined'
+      ? buildExternalBrowserUrl(window.location.href)
+      : null;
+
+  const handleCopyInAppUrl = async () => {
+    if (typeof window === 'undefined') return;
+    const href = window.location.href;
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(href);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    if (!copied && typeof document !== 'undefined') {
+      try {
+        const area = document.createElement('textarea');
+        area.value = href;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(area);
+      } catch {
+        copied = false;
+      }
+    }
+    if (copied) {
+      triggerHaptic('light');
+      setCopiedInAppUrl(true);
+      if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+      copyResetTimerRef.current = setTimeout(() => setCopiedInAppUrl(false), 2400);
     }
   };
 
@@ -918,6 +1021,66 @@ export default function LoginView({
               className={`atelier-monolith ${isShaking ? 'is-shaking' : ''}`}
               aria-label={isEn ? 'Authentication panel' : '로그인 및 회원가입 패널'}
             >
+            {/* In-App Browser (KakaoTalk / Instagram / Naver) External Browser Guard */}
+            {!isEmbedMode && inAppBrowser.isInApp && (
+              <div
+                id="inapp-browser-warning-banner"
+                role="region"
+                aria-label={isEn ? 'External browser guidance' : '외부 브라우저 안내'}
+                className="atelier-inapp-banner"
+              >
+                <div className="atelier-inapp-banner-head">
+                  <AlertCircle size={15} className="atelier-inapp-banner-icon" aria-hidden="true" />
+                  <div className="atelier-inapp-banner-copy">
+                    <p className="atelier-inapp-banner-title">
+                      {isEn
+                        ? `Google Sign-In may be blocked inside ${inAppBrowser.appName || 'this in-app browser'}.`
+                        : `${inAppBrowser.appName || '인앱'} 브라우저에서는 Google 로그인이 제한될 수 있습니다.`}
+                    </p>
+                    <p className="atelier-inapp-banner-desc">
+                      {externalBrowserUrl
+                        ? isEn
+                          ? 'Open this page in Chrome or Safari to sign in with Google.'
+                          : 'Chrome 또는 Safari 등 외부 브라우저에서 열면 Google 로그인을 바로 이용할 수 있습니다.'
+                        : isEn
+                          ? 'Tap the menu (⋯) to open in Safari, or copy the link below.'
+                          : '우측 상단 ⋯ 메뉴에서 Safari · Chrome으로 열거나 아래에서 링크를 복사해 주세요.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="atelier-inapp-banner-actions">
+                  {externalBrowserUrl && (
+                    <a
+                      id="inapp-open-external-btn"
+                      href={externalBrowserUrl}
+                      className="atelier-inapp-action-btn is-primary"
+                    >
+                      <ExternalLink size={14} aria-hidden="true" />
+                      <span>{isEn ? 'Open in Browser' : '외부 브라우저로 열기'}</span>
+                    </a>
+                  )}
+                  <button
+                    id="inapp-copy-link-btn"
+                    type="button"
+                    className={`atelier-inapp-action-btn ${externalBrowserUrl ? '' : 'is-primary'}`}
+                    onClick={handleCopyInAppUrl}
+                  >
+                    {copiedInAppUrl ? (
+                      <>
+                        <Check size={14} aria-hidden="true" />
+                        <span>{isEn ? 'Link Copied' : '링크 복사됨'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} aria-hidden="true" />
+                        <span>{isEn ? 'Copy Link' : '링크 복사'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Top Priority: Google Sign-in and Apple Sign-in Stack */}
             <div className="atelier-social-stack">
               <GoogleSignInButton
@@ -1464,6 +1627,17 @@ export default function LoginView({
         onSampleDemo={handleEnterSampleDemo}
         onContinueWithEmail={() => {
           setAuthMode('login');
+          usernameRef.current?.focus();
+        }}
+        lang={lang}
+      />
+
+      <AccountEmailConflictModal
+        open={emailConflictOpen}
+        onClose={() => setEmailConflictOpen(false)}
+        onContinueWithEmail={() => {
+          setAuthMode('login');
+          setAuthStage('auth');
           usernameRef.current?.focus();
         }}
         lang={lang}

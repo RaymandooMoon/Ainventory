@@ -1287,6 +1287,33 @@ export async function handleStandaloneApiFallback(
     return { ok: true, token: `standalone_reg_${newId}`, user: clean };
   }
 
+  if (pathname === '/auth/config' && method === 'GET') {
+    return {
+      ok: true,
+      googleEnabled: false,
+      googleClientId: null,
+      googleOAuthCodeFlowEnabled: false,
+      appleEnabled: false,
+      dbDialect: 'standalone',
+      storageMode: 'local',
+    };
+  }
+
+  if (pathname === '/auth/providers' && method === 'GET') {
+    const u = getActiveSessionUser();
+    if (!u) {
+      throw createHttpError('로그인이 필요합니다.', 401);
+    }
+    const authProvider = String(u.authProvider || 'email');
+    return {
+      ok: true,
+      authProvider,
+      hasPassword: authProvider === 'email',
+      canUnlinkGoogle: false,
+      providers: [],
+    };
+  }
+
   if (pathname === '/auth/me' && method === 'GET') {
     const u = getActiveSessionUser();
     if (!u) {

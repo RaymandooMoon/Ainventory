@@ -5,12 +5,12 @@
  * - Silently pre-caches `/minigame/` HTML and its referenced JS/CSS chunks on install & warm.
  * - Uses Network-First for HTML navigations (always fresh when online, cached offline).
  * - Uses Cache-First for immutable `/assets/*` bundles & icons.
- * - Strictly bypasses `/api/*`, `/ir`, `/ir/*`, and `/uploads/*` to preserve security & freshness.
+ * - Strictly bypasses `/api/*`, `/app`, `/app/*`, `/ir`, `/ir/*`, and `/uploads/*` to preserve security & freshness.
  */
 
-const CACHE_NAME = 'ainvtry-minigame-offline-v1';
+const CACHE_NAME = 'ainvtry-minigame-offline-v2';
 
-const EXCLUDED_SEGMENTS = ['/api', '/ir', '/uploads'];
+const EXCLUDED_SEGMENTS = ['/api', '/app', '/ir', '/uploads'];
 
 function isExcludedPath(pathname) {
   return EXCLUDED_SEGMENTS.some(

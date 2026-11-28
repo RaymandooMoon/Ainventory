@@ -12,6 +12,18 @@
   Cache-Control: no-store, no-cache, must-revalidate
   X-Robots-Tag: noindex, nofollow, noai, noimageai
 
+/app
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob: https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob: data:; worker-src 'self' blob:; frame-src 'self' https://accounts.google.com/gsi/; connect-src 'self' blob: data: https://accounts.google.com/gsi/ https://api.open-meteo.com https://appleid.apple.com https://staticimgly.com https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+  Cache-Control: no-store, no-cache, must-revalidate
+  X-Robots-Tag: noindex, nofollow, noai, noimageai
+
+/app/*
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob: https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob: data:; worker-src 'self' blob:; frame-src 'self' https://accounts.google.com/gsi/; connect-src 'self' blob: data: https://accounts.google.com/gsi/ https://api.open-meteo.com https://appleid.apple.com https://staticimgly.com https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+  Cache-Control: no-store, no-cache, must-revalidate
+  X-Robots-Tag: noindex, nofollow, noai, noimageai
+
 /ir
   X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noai, noimageai
   Cache-Control: private, no-store, no-cache, must-revalidate

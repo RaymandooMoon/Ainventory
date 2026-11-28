@@ -213,6 +213,12 @@ export interface UserProfile {
   closetName?: string | null;
   isSampleDemo?: boolean;
   isSiteDemo?: boolean;
+  authProvider?: string | null;
+  linkedProviders?: Array<{
+    provider: string;
+    email?: string | null;
+    linkedAt?: string | null;
+  }>;
   profileCompleted?: boolean;
   emailVerified?: boolean;
   ageGroup?: string | null;

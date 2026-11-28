@@ -5,8 +5,8 @@ import zlib from 'node:zlib';
 import db, {
   DATA_DIR,
   ROOT_DIR,
-  UPLOADS_DIR,
   getServerProfileConfig,
+  storage,
 } from './db.js';
 import { getServerGeminiApiKey, getServerGeminiClient } from './geminiClient.js';
 import {
@@ -878,7 +878,7 @@ export function decodeValidatedDataUrl(dataUrl, maxBytes = MAX_DATA_URL_BYTES) {
  *   own a garment row referencing `/uploads/<basename>`, <= 4MB, prefix + magic bytes checked.
  * - `data:image/(png|jpeg|jpg|webp);base64,...`: <= 5MB, magic bytes checked.
  */
-export function loadGarmentPackshot(
+export async function loadGarmentPackshot(
   rawImageUrl,
   { authorizedClosets = [], isSampleGuest = false, isAuthenticated } = {}
 ) {
@@ -972,16 +972,10 @@ export function loadGarmentPackshot(
       return null;
     }
 
-    const uploadsRoot = path.resolve(UPLOADS_DIR);
-    const fullPath = path.resolve(UPLOADS_DIR, basename);
-    if (!fullPath.startsWith(`${uploadsRoot}${path.sep}`)) {
-      return null;
-    }
-
     const normalizedUrl = `/uploads/${basename}`;
     try {
       const placeholders = cleanClosets.map(() => '?').join(', ');
-      const owned = db
+      const owned = await db
         .prepare(
           `SELECT 1 FROM garments WHERE closet_owner IN (${placeholders}) AND image_url = ? LIMIT 1`
         )
@@ -990,12 +984,9 @@ export function loadGarmentPackshot(
         return null;
       }
 
-      const stat = fs.statSync(fullPath);
-      if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_PACKSHOT_FILE_BYTES) {
-        return null;
-      }
-      const buffer = fs.readFileSync(fullPath);
-      if (buffer.length <= 0 || buffer.length > MAX_PACKSHOT_FILE_BYTES) {
+      const loaded = await storage.readUploadBuffer(basename);
+      const buffer = loaded?.buffer;
+      if (!buffer || buffer.length <= 0 || buffer.length > MAX_PACKSHOT_FILE_BYTES) {
         return null;
       }
       const mimeType = detectImageMimeType(buffer);
@@ -1354,7 +1345,7 @@ function sanitizeText(raw, maxLen = 80, fallback = '') {
   return cleaned || fallback;
 }
 
-function lookupAuthorizedGarmentById(garmentId, authorizedClosets = []) {
+async function lookupAuthorizedGarmentById(garmentId, authorizedClosets = []) {
   const numericId = Number(garmentId);
   if (!Number.isInteger(numericId) || numericId <= 0) return null;
   const validClosets = Array.isArray(authorizedClosets)
@@ -1365,14 +1356,14 @@ function lookupAuthorizedGarmentById(garmentId, authorizedClosets = []) {
   try {
     const placeholders = validClosets.map(() => '?').join(', ');
     return (
-      db
+      (await db
         .prepare(
           `SELECT id, closet_owner, name, category, subcategory, color_name, color_hex, fabric, formality, brand, image_url, back_image_url, slot_key, fit, texture_feel, fit_note, garment_details_json
            FROM garments
            WHERE id = ? AND closet_owner IN (${placeholders})
            LIMIT 1`
         )
-        .get(numericId, ...validClosets) || null
+        .get(numericId, ...validClosets)) || null
     );
   } catch {
     return null;
@@ -1383,7 +1374,7 @@ function lookupAuthorizedGarmentById(garmentId, authorizedClosets = []) {
  * Resolves equipped VTON slots from flexible payload shapes (`slots`, `equipped`, `garments`, `items`, `itemIds`)
  * and loads security-validated packshot reference images.
  */
-export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
+export async function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
   const {
     authorizedClosets = [],
     isSampleGuest = false,
@@ -1393,11 +1384,11 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
   const activeHandedness = normalizeHandedness(rawAuthHandedness, 'right');
   const rawCandidateBySlot = new Map();
 
-  const assignCandidate = (slotHint, entry) => {
+  const assignCandidate = async (slotHint, entry) => {
     if (entry === null || entry === undefined || entry === false) return;
     let itemObj = null;
     if (typeof entry === 'number' || (typeof entry === 'string' && /^\d+$/.test(entry.trim()))) {
-      itemObj = lookupAuthorizedGarmentById(Number(entry), authorizedClosets);
+      itemObj = await lookupAuthorizedGarmentById(Number(entry), authorizedClosets);
     } else if (typeof entry === 'object' && !Array.isArray(entry)) {
       itemObj = entry;
     }
@@ -1409,7 +1400,7 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
       itemObj.id &&
       (!itemObj.name || (!itemObj.image_url && !itemObj.imageUrl && !itemObj.dataUrl))
     ) {
-      dbFallback = lookupAuthorizedGarmentById(itemObj.id, authorizedClosets);
+      dbFallback = await lookupAuthorizedGarmentById(itemObj.id, authorizedClosets);
     }
     const merged = dbFallback ? { ...dbFallback, ...itemObj } : itemObj;
 
@@ -1427,14 +1418,14 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
   const rawIds = rawInput.itemIds ?? rawInput.item_ids;
   if (Array.isArray(rawIds)) {
     for (const id of rawIds.slice(0, 28)) {
-      assignCandidate(null, id);
+      await assignCandidate(null, id);
     }
   }
 
   const rawArray = rawInput.garments ?? rawInput.items;
   if (Array.isArray(rawArray)) {
     for (const item of rawArray.slice(0, 28)) {
-      assignCandidate(null, item);
+      await assignCandidate(null, item);
     }
   }
 
@@ -1452,7 +1443,7 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
           const norm = normalizeSlotName(key);
           if (norm) rawCandidateBySlot.delete(norm);
         } else {
-          assignCandidate(key, val);
+          await assignCandidate(key, val);
         }
       }
     }
@@ -1482,7 +1473,7 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
       rawItem.image_url ??
       '';
 
-    const packshot = loadGarmentPackshot(rawImageRef, {
+    const packshot = await loadGarmentPackshot(rawImageRef, {
       authorizedClosets,
       isSampleGuest,
       isAuthenticated,
@@ -3400,7 +3391,7 @@ export async function synthesizeVtonLook(params = {}) {
     params.profile ?? params.bodyProfile ?? params.userProfile ?? params;
 
   // Step 0: Explicitly check server-side profile configuration (`handedness`, default: `'right'`) before rendering!
-  const serverProfileConfig = getServerProfileConfig({
+  const serverProfileConfig = await getServerProfileConfig({
     userId: params.userId ?? null,
     profileKey: params.profileKey ?? rawProfile?.profileKey ?? null,
   });
@@ -3455,7 +3446,7 @@ export async function synthesizeVtonLook(params = {}) {
     handedness: normalizedProfile.dominantHand,
   };
 
-  const resolvedSlots = resolveEquippedVtonSlots(params, authContext);
+  const resolvedSlots = await resolveEquippedVtonSlots(params, authContext);
   const equippedBagSlot =
     Object.values(resolvedSlots).find((item) => Boolean(item?.isBag)) || null;
   const hasEquippedBag = Boolean(equippedBagSlot);
