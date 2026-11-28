@@ -711,12 +711,12 @@ export async function assignUserRole(db, userId, roleCode) {
   }
 
   await db.transaction(async () => {
+    await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(cleanRole, numericUserId);
     await db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(numericUserId);
     await db.prepare('INSERT INTO user_roles (user_id, role_code) VALUES (?, ?)').run(
       numericUserId,
       cleanRole
     );
-    await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(cleanRole, numericUserId);
   });
 
   return {

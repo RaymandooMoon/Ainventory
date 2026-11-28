@@ -145,4 +145,89 @@ describe('server/dbAdapter.js — SQLite & PostgreSQL Dual Adapter', () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('retries top-level PostgreSQL transaction on transient 40P01 deadlock and succeeds', async () => {
+    let attempts = 0;
+    let releases = 0;
+    const queries: string[] = [];
+
+    const fakePool = {
+      async connect() {
+        attempts += 1;
+        const attemptNum = attempts;
+        return {
+          async query(sql: string) {
+            queries.push(`A${attemptNum}:${sql}`);
+            if (attemptNum === 1 && sql.startsWith('UPDATE users')) {
+              const deadlockErr = new Error('deadlock detected') as Error & { code?: string };
+              deadlockErr.code = '40P01';
+              throw deadlockErr;
+            }
+            return { rows: [], rowCount: 1 };
+          },
+          release() {
+            releases += 1;
+          },
+        };
+      },
+      async query() {
+        return { rows: [], rowCount: 0 };
+      },
+      async end() {},
+    };
+
+    const { db } = createPostgresAdapterFromPool(fakePool);
+    const out = await db.transaction(async () => {
+      await db.prepare('UPDATE users SET handedness = ? WHERE id = ?').run('left', 7);
+      return 'saved';
+    });
+
+    assert.equal(out, 'saved');
+    assert.equal(attempts, 2);
+    assert.equal(releases, 2);
+    assert.deepEqual(queries, [
+      'A1:BEGIN',
+      'A1:UPDATE users SET handedness = $1 WHERE id = $2',
+      'A1:ROLLBACK',
+      'A2:BEGIN',
+      'A2:UPDATE users SET handedness = $1 WHERE id = $2',
+      'A2:COMMIT',
+    ]);
+    await db.close();
+  });
+
+  it('does not retry non-retryable PostgreSQL errors such as 23505 unique violations', async () => {
+    let attempts = 0;
+    const fakePool = {
+      async connect() {
+        attempts += 1;
+        return {
+          async query(sql: string) {
+            if (sql.startsWith('INSERT')) {
+              const err = new Error('duplicate key value') as Error & { code?: string };
+              err.code = '23505';
+              throw err;
+            }
+            return { rows: [], rowCount: 0 };
+          },
+          release() {},
+        };
+      },
+      async query() {
+        return { rows: [], rowCount: 0 };
+      },
+      async end() {},
+    };
+
+    const { db } = createPostgresAdapterFromPool(fakePool);
+    await assert.rejects(
+      () =>
+        db.transaction(async () => {
+          await db.prepare('INSERT INTO users (username) VALUES (?)').run('dup');
+        }),
+      /duplicate key value/
+    );
+    assert.equal(attempts, 1);
+    await db.close();
+  });
 });

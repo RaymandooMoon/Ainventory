@@ -661,6 +661,7 @@ export default function App() {
                 handedness: getAvatarSpecSnapshot().spec.dominantHand,
               }),
             });
+            setUser((prev) => (prev ? { ...prev, profileCompleted: true } : prev));
           } catch (err) {
             if (options?.throwOnError) throw err;
           }
@@ -736,6 +737,7 @@ export default function App() {
                 handedness: getAvatarSpecSnapshot().spec.dominantHand,
               }),
             });
+            setUser((prev) => (prev ? { ...prev, profileCompleted: true } : prev));
           } catch (err) {
             if (options?.throwOnError) throw err;
           }

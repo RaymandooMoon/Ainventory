@@ -282,21 +282,31 @@ export function createPostgresAdapterFromPool(pool) {
         }
       }
 
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const result = await txStore.run({ client, depth: 1 }, () => fn(adapter));
-        await client.query('COMMIT');
-        return result;
-      } catch (err) {
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const client = await pool.connect();
         try {
-          await client.query('ROLLBACK');
-        } catch {
-          // ignore rollback error
+          await client.query('BEGIN');
+          const result = await txStore.run({ client, depth: 1 }, () => fn(adapter));
+          await client.query('COMMIT');
+          return result;
+        } catch (err) {
+          try {
+            await client.query('ROLLBACK');
+          } catch {
+            // ignore rollback error
+          }
+          const pgCode = String(err?.code || '');
+          const isRetryablePgConflict = pgCode === '40P01' || pgCode === '40001';
+          if (isRetryablePgConflict && attempt < maxAttempts) {
+            const delayMs = 20 * attempt + crypto.randomInt(5, 25);
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            continue;
+          }
+          throw err;
+        } finally {
+          client.release();
         }
-        throw err;
-      } finally {
-        client.release();
       }
     },
     async close() {

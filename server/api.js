@@ -3328,15 +3328,15 @@ export function createApiRouter(options = {}) {
       }
 
       await db.transaction(async () => {
-        await db
-          .prepare("DELETE FROM user_identities WHERE user_id = ? AND provider = 'google'")
-          .run(req.user.id);
         if (userRow.auth_provider === 'google') {
           const fallbackProvider = otherProviders[0]?.provider || 'email';
           await db
             .prepare('UPDATE users SET auth_provider = ?, apple_sub = NULL WHERE id = ?')
             .run(fallbackProvider, req.user.id);
         }
+        await db
+          .prepare("DELETE FROM user_identities WHERE user_id = ? AND provider = 'google'")
+          .run(req.user.id);
       });
 
       return res.json({ ok: true, unlinked: 'google' });
@@ -3906,6 +3906,7 @@ export function createApiRouter(options = {}) {
         userId: req.user.id,
         profileKey: req.headers['x-profile-key'] || body.profileKey || null,
         handedness: nextHandedness,
+        skipUsersUpdate: true,
       });
 
       const userAfter = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
@@ -5875,7 +5876,7 @@ export function createApiRouter(options = {}) {
     }
   );
 
-  router.use((err, _req, res, _next) => {
+  router.use((err, req, res, _next) => {
     const status = Number(err?.status || err?.statusCode) || 500;
     if (status === 400 && (err?.type === 'entity.parse.failed' || err instanceof SyntaxError)) {
       res.status(400).json({ error: '잘못된 JSON 요청 본문입니다.', code: 'INVALID_JSON' });
@@ -5889,7 +5890,11 @@ export function createApiRouter(options = {}) {
       return;
     }
     if (status >= 500) {
-      console.error('[API] Unhandled route error:', err?.message || err);
+      const errCode = err?.code ? ` code=${err.code}` : '';
+      console.error(
+        `[API] Unhandled route error (${req.method} ${req.originalUrl || req.path}${errCode}):`,
+        err?.message || err
+      );
     }
     res.status(status).json({
       error:

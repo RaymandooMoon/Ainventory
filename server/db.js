@@ -2176,6 +2176,7 @@ export async function saveServerProfileConfig({
   userId = null,
   profileKey = null,
   handedness = 'right',
+  skipUsersUpdate = false,
 } = {}) {
   const numericUserId =
     Number.isInteger(Number(userId)) && Number(userId) > 0 ? Number(userId) : null;
@@ -2184,33 +2185,33 @@ export async function saveServerProfileConfig({
   const nowIso = new Date().toISOString();
 
   await db.transaction(async () => {
-    await db.prepare(
-      `INSERT INTO profile_configs (profile_key, user_id, handedness, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(profile_key) DO UPDATE SET
-         user_id = COALESCE(excluded.user_id, profile_configs.user_id),
-         handedness = excluded.handedness,
-         updated_at = excluded.updated_at`
-    ).run(resolvedKey, numericUserId, normalizedHandedness, nowIso);
-
-    if (numericUserId) {
+    // Canonical lock order: always acquire row lock on `users` BEFORE `profile_configs`
+    // so concurrent `PUT /api/profile/config` and `POST /api/auth/profile` never AB/BA deadlock on PostgreSQL.
+    if (numericUserId && !skipUsersUpdate) {
       await db.prepare('UPDATE users SET handedness = ? WHERE id = ?').run(
         normalizedHandedness,
         numericUserId
       );
-      if (profileKey) {
-        const guestKey = resolveProfileConfigKey({ userId: null, profileKey });
-        if (guestKey && guestKey !== resolvedKey) {
-          await db.prepare(
-            `INSERT INTO profile_configs (profile_key, user_id, handedness, updated_at)
-             VALUES (?, ?, ?, ?)
-             ON CONFLICT(profile_key) DO UPDATE SET
-               user_id = excluded.user_id,
-               handedness = excluded.handedness,
-               updated_at = excluded.updated_at`
-          ).run(guestKey, numericUserId, normalizedHandedness, nowIso);
-        }
+    }
+
+    const keysToUpsert = [resolvedKey];
+    if (numericUserId && profileKey) {
+      const guestKey = resolveProfileConfigKey({ userId: null, profileKey });
+      if (guestKey && guestKey !== resolvedKey) {
+        keysToUpsert.push(guestKey);
       }
+    }
+    keysToUpsert.sort();
+
+    for (const key of keysToUpsert) {
+      await db.prepare(
+        `INSERT INTO profile_configs (profile_key, user_id, handedness, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(profile_key) DO UPDATE SET
+           user_id = COALESCE(excluded.user_id, profile_configs.user_id),
+           handedness = excluded.handedness,
+           updated_at = excluded.updated_at`
+      ).run(key, numericUserId, normalizedHandedness, nowIso);
     }
   });
 

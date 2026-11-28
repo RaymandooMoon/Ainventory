@@ -1089,23 +1089,31 @@ function ProfileModalContent({
       setAvatarSpec(cleanedSpec, { throwOnStorageError: true });
       setStoredVtonStylePreference(resolvedStyleToSave);
 
-      const pendingTasks = [saveServerHandednessConfig(cleanedSpec.dominantHand)];
+      // Execute profile persistence steps sequentially so `PUT /api/profile/config` and
+      // `POST /api/auth/profile` never race on the same user row or overwrite concurrent fields.
+      const saveSteps = [() => saveServerHandednessConfig(cleanedSpec.dominantHand)];
       if (primarySource === 'body') {
         if (skinChanged) {
-          pendingTasks.push(
+          saveSteps.push(() =>
             Promise.resolve(onApplySkinProfile?.(skinPayload, { throwOnError: true }))
           );
         }
-        pendingTasks.push(Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true })));
+        saveSteps.push(() =>
+          Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true }))
+        );
       } else {
         if (bodyChanged) {
-          pendingTasks.push(Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true })));
+          saveSteps.push(() =>
+            Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true }))
+          );
         }
-        pendingTasks.push(
+        saveSteps.push(() =>
           Promise.resolve(onApplySkinProfile?.(skinPayload, { throwOnError: true }))
         );
       }
-      await Promise.all(pendingTasks);
+      for (const runStep of saveSteps) {
+        await runStep();
+      }
 
       triggerHaptic('medium');
       onClose?.();

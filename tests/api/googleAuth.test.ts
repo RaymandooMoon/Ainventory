@@ -423,4 +423,101 @@ describe('Google OAuth 2.0 / OIDC (PKCE + ID Token + Account Linking) API Integr
     });
     assert.equal(missingFileRes.status, 404);
   });
+
+  it('persists profile config and skin/body profile cleanly for a brand-new Google PKCE user', async () => {
+    process.env.GOOGLE_CLIENT_ID = mockClientId;
+    process.env.GOOGLE_CLIENT_SECRET = mockClientSecret;
+    mockVerifierOutcome = 'success';
+    mockSub = 'google_onboard_profile_sub_777';
+    mockEmail = 'onboard_profile_tester@gmail.com';
+    mockName = 'Onboarding Tester';
+
+    // 1. Complete PKCE start + callback to obtain HttpOnly session cookie
+    const startRes = await fetch(`${baseUrl}/api/auth/google/start?returnTo=%2Fapp`, {
+      redirect: 'manual',
+    });
+    assert.equal(startRes.status, 302);
+    const state = new URL(startRes.headers.get('location') || '').searchParams.get('state') || '';
+    const oauthCookie = getCookiePair(extractCookies(startRes), 'ainv_google_oauth');
+
+    const cbRes = await fetch(
+      `${baseUrl}/api/auth/google/callback?code=onboard_code&state=${encodeURIComponent(state)}`,
+      { redirect: 'manual', headers: { Cookie: oauthCookie } }
+    );
+    assert.equal(cbRes.status, 302);
+    const sessionCookie = getCookiePair(extractCookies(cbRes), 'ainventory_token');
+    assert.ok(sessionCookie.startsWith('ainventory_token='));
+
+    // 2. Execute profile config + skin + body saves (both sequential and concurrent bursts)
+    const profileKey = 'client_onboard_test_key';
+    const [cfgRes, skinRes, bodyRes] = await Promise.all([
+      fetch(`${baseUrl}/api/profile/config`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: sessionCookie,
+          'X-Profile-Key': profileKey,
+        },
+        body: JSON.stringify({ profileKey, handedness: 'left' }),
+      }),
+      fetch(`${baseUrl}/api/auth/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: sessionCookie,
+        },
+        body: JSON.stringify({
+          personal_color: 'winter_cool',
+          skin_tone_hex: '#DFC1A6',
+          gender: 'male',
+          handedness: 'left',
+        }),
+      }),
+      fetch(`${baseUrl}/api/auth/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: sessionCookie,
+        },
+        body: JSON.stringify({
+          gender: 'male',
+          height_cm: 178,
+          weight_kg: 72,
+          body_shape: 'inverted_triangle',
+          handedness: 'left',
+        }),
+      }),
+    ]);
+
+    assert.equal(cfgRes.status, 200);
+    assert.equal(skinRes.status, 200);
+    assert.equal(bodyRes.status, 200);
+
+    // 3. Follow up with canonical sequential save and verify persisted user payload
+    const finalSkinRes = await fetch(`${baseUrl}/api/auth/profile`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: sessionCookie,
+      },
+      body: JSON.stringify({
+        personal_color: 'winter_cool',
+        skin_tone_hex: '#DFC1A6',
+        gender: 'male',
+        handedness: 'left',
+      }),
+    });
+    assert.equal(finalSkinRes.status, 200);
+
+    const meRes = await fetch(`${baseUrl}/api/auth/me`, {
+      headers: { Cookie: sessionCookie },
+    });
+    assert.equal(meRes.status, 200);
+    const meBody = await meRes.json();
+    assert.equal(meBody.user.profileCompleted, true);
+    assert.equal(meBody.user.personalColor, 'winter_cool');
+    assert.equal(meBody.user.skinToneHex, '#DFC1A6');
+    assert.equal(meBody.user.heightCm, 178);
+    assert.equal(meBody.user.handedness, 'left');
+  });
 });

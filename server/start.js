@@ -276,7 +276,11 @@ app.use((err, req, res, _next) => {
       return;
     }
     if (status >= 500) {
-      console.error('[Server] Unhandled API error:', err?.message || err);
+      const errCode = err?.code ? ` code=${err.code}` : '';
+      console.error(
+        `[Server] Unhandled API error (${req.method} ${req.originalUrl || req.path}${errCode}):`,
+        err?.message || err
+      );
     }
     res.status(status).json({
       error: status >= 500 ? '서버 내부 오류가 발생했습니다.' : String(err?.message || '요청을 처리할 수 없습니다.'),

@@ -1007,6 +1007,24 @@ const API_ERROR_KO_TO_EN: Readonly<Record<string, string>> = {
   '새 비밀번호는 6자 이상 128자 이하로 입력해 주세요.': 'New password must be 6–128 characters.',
   '새 비밀번호는 현재 비밀번호와 다르게 설정해 주세요.':
     'New password must differ from current password.',
+  '서버 내부 오류가 발생했습니다.': 'A temporary server error occurred. Please try again.',
+  '정식 로그인 계정에서만 사용할 수 있는 기능입니다.': 'This feature requires a signed-in account.',
+  '현재 계정의 권한으로는 이 작업을 수행할 수 없습니다.':
+    'Your account does not have permission to perform this action.',
+  '사이트 데모 권한에서는 조회·피팅 체험만 가능합니다.':
+    'Site demo accounts are limited to read-only preview mode.',
+  '사이트 데모 권한에서는 서버 프로필 설정을 변경할 수 없습니다.':
+    'Site demo accounts cannot modify server profile settings.',
+  '숫자 형식의 올바른 신장(cm)을 입력해 주세요. (100cm ~ 230cm)':
+    'Please enter a valid height in cm (100 cm – 230 cm).',
+  '입력 가능한 신장 범위(100cm ~ 230cm)를 벗어났습니다.':
+    'Height must be between 100 cm and 230 cm.',
+  "유효하지 않은 손잡이(handedness) 설정입니다. ('right' 또는 'left'만 허용)":
+    "Invalid handedness value. Please choose 'right' or 'left'.",
+  '서버 응답 시간이 초과되었습니다.': 'The server took too long to respond. Please try again.',
+  '업스트림 API에 연결할 수 없습니다.': 'Unable to reach the server right now. Please try again.',
+  '유일한 로그인 수단인 Google 계정은 연결을 해제할 수 없습니다.':
+    'Cannot unlink Google while it is your only sign-in method.',
 };
 
 export function localizeApiMessage(
