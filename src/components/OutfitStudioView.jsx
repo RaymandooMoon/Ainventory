@@ -4215,7 +4215,11 @@ export default function OutfitStudioView({
               )}
             </button>
 
-            {freeDailyDrawAvailable && (
+            {freeDailyDrawAvailable &&
+              garments.length > 0 &&
+              user?.onboarding?.status !== 'not_started' &&
+              user?.onboarding?.status !== 'in_progress' &&
+              user?.onboarding?.status !== 'deferred' && (
               <button
                 type="button"
                 data-store-free-draw-bubble="true"

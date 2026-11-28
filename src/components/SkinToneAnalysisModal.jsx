@@ -1462,10 +1462,12 @@ function ProfileModalContent({
                 type="button"
                 data-profile-gender-toggle="male"
                 aria-pressed={fallbackGender === 'male'}
+                disabled={Boolean(user?.genderLocked)}
                 className={`profile-vton-style-btn ${
                   fallbackGender === 'male' ? 'is-active' : ''
                 }`}
                 onClick={() => {
+                  if (user?.genderLocked) return;
                   triggerHaptic('selection');
                   setDraftSpec((prev) =>
                     sanitizeAvatarSpec({
@@ -1488,10 +1490,12 @@ function ProfileModalContent({
                 type="button"
                 data-profile-gender-toggle="female"
                 aria-pressed={fallbackGender === 'female'}
+                disabled={Boolean(user?.genderLocked)}
                 className={`profile-vton-style-btn ${
                   fallbackGender === 'female' ? 'is-active' : ''
                 }`}
                 onClick={() => {
+                  if (user?.genderLocked) return;
                   triggerHaptic('selection');
                   setDraftSpec((prev) =>
                     sanitizeAvatarSpec({
@@ -1513,11 +1517,17 @@ function ProfileModalContent({
             </div>
 
             <p className="profile-ai-style-hint">
-              {tx(
-                lang,
-                '남성·여성 모델을 전환해 새깅 팬츠 핏과 얇은 원피스 속옷 비침·라인(VPL) 시뮬레이션을 모두 테스트할 수 있습니다.',
-                'Switch between Male & Female models to test sagging pants fit and sheer dress underwear show-through / VPL simulation.'
-              )}
+              {user?.genderLocked
+                ? tx(
+                    lang,
+                    '초기 온보딩에서 확정한 성별은 변경할 수 없습니다. 체형 세부 비율과 피부톤은 언제든 수정할 수 있습니다.',
+                    'Gender is locked once confirmed during onboarding. Body proportions and skin tone remain editable anytime.'
+                  )
+                : tx(
+                    lang,
+                    '남성·여성 모델을 전환해 새깅 팬츠 핏과 얇은 원피스 속옷 비침·라인(VPL) 시뮬레이션을 모두 테스트할 수 있습니다.',
+                    'Switch between Male & Female models to test sagging pants fit and sheer dress underwear show-through / VPL simulation.'
+                  )}
             </p>
           </div>
 
@@ -2439,6 +2449,7 @@ function ProfileModalContent({
               onHeightInputChange={setHeightInputText}
               onHeightValidationError={handleHeightValidationError}
               heightInputRef={heightInputRef}
+              genderLocked={Boolean(user?.genderLocked)}
             />
           </div>
         )}

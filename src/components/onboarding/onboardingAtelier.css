@@ -1,0 +1,858 @@
+/* ==========================================================================
+ * iNVTRY Onboarding 2.0 — Variant A: Apple Setup Sheet & Slim Resume Banner
+ * Strictly adheres to .stitch/DESIGN.md (Haute Atelier Editorial System v5)
+ * Monochrome Apple HIG · Pure OLED Dark (#000000) / Atelier Daylight (#FFFFFF)
+ * ========================================================================== */
+
+.ob-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, 0.56);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  animation: obFadeIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root[data-theme='light'] .ob-backdrop {
+  background: rgba(29, 29, 31, 0.28);
+}
+
+@keyframes obFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ob-sheet {
+  --ob-canvas: #000000;
+  --ob-surface: #121214;
+  --ob-elevated: #1c1c1e;
+  --ob-tertiary: #2c2c2e;
+  --ob-ink: #f5f5f7;
+  --ob-ink-2: #aeaeb2;
+  --ob-ink-3: #8e8e93;
+  --ob-hairline: rgba(255, 255, 255, 0.11);
+  --ob-hairline-strong: rgba(255, 255, 255, 0.24);
+  --ob-primary: #f5f5f7;
+  --ob-on-primary: #000000;
+  --ob-sheet-bg: rgba(18, 18, 20, 0.94);
+
+  width: 100%;
+  max-width: 460px;
+  max-height: min(92vh, 840px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 28px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-sheet-bg);
+  color: var(--ob-ink);
+  overflow: hidden;
+  animation: obSheetRise 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ob-sheet[data-theme='light'],
+:root[data-theme='light'] .ob-sheet {
+  --ob-canvas: #ffffff;
+  --ob-surface: #f5f5f7;
+  --ob-elevated: #ffffff;
+  --ob-tertiary: #ededf0;
+  --ob-ink: #1d1d1f;
+  --ob-ink-2: #515154;
+  --ob-ink-3: #6e6e73;
+  --ob-hairline: rgba(29, 29, 31, 0.09);
+  --ob-hairline-strong: rgba(29, 29, 31, 0.22);
+  --ob-primary: #1d1d1f;
+  --ob-on-primary: #ffffff;
+  --ob-sheet-bg: rgba(255, 255, 255, 0.96);
+}
+
+@keyframes obSheetRise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ob-header {
+  padding: 20px 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.ob-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+}
+
+.ob-brand-wrap {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+}
+
+.ob-brand-wrap img {
+  height: 22px;
+  width: auto;
+  display: block;
+}
+
+.ob-ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 8px;
+  margin: 0 -8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ob-ink-3);
+  font-size: 0.8125rem;
+  font-weight: 540;
+  cursor: pointer;
+  transition: color 150ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ob-ghost-btn:hover {
+  color: var(--ob-ink);
+}
+
+.ob-ghost-btn:active {
+  transform: scale(0.97);
+}
+
+.ob-progress-rail {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+
+.ob-progress-seg {
+  height: 2.5px;
+  border-radius: 999px;
+  background: var(--ob-tertiary);
+  overflow: hidden;
+}
+
+.ob-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ob-ink);
+  transition: width 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ob-body {
+  padding: 20px 24px 12px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ob-step-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ob-kicker {
+  font-size: 0.6875rem;
+  font-weight: 640;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ob-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-title {
+  margin: 0;
+  font-size: 1.4375rem;
+  font-weight: 680;
+  letter-spacing: -0.028em;
+  line-height: 1.2;
+  color: var(--ob-ink);
+}
+
+.ob-subtitle {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.48;
+  color: var(--ob-ink-2);
+}
+
+/* Compact Live Silhouette Stage */
+.ob-silhouette-stage {
+  border-radius: 20px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-surface);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.ob-silhouette-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ob-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ob-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-elevated);
+  color: var(--ob-ink);
+  font-size: 0.75rem;
+  font-weight: 540;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Field Section */
+.ob-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ob-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ob-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ob-ink-2);
+}
+
+.ob-micro-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--ob-ink-3);
+}
+
+/* Apple Segmented Control */
+.ob-segmented {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--ob-tertiary);
+}
+
+.ob-seg-btn {
+  height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ob-ink-2);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 160ms ease, color 160ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ob-seg-btn.is-active {
+  background: var(--ob-primary);
+  color: var(--ob-on-primary);
+}
+
+.ob-seg-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.ob-seg-btn.is-active:disabled {
+  opacity: 1;
+}
+
+.ob-seg-btn:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+/* Age Group Pills */
+.ob-age-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.ob-pill-choice {
+  min-height: 40px;
+  padding: 0 6px;
+  border-radius: 12px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-surface);
+  color: var(--ob-ink-2);
+  font-size: 0.78rem;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ob-pill-choice:hover {
+  border-color: var(--ob-hairline-strong);
+  color: var(--ob-ink);
+}
+
+.ob-pill-choice.is-selected {
+  border-color: var(--ob-ink);
+  background: var(--ob-elevated);
+  color: var(--ob-ink);
+  box-shadow: inset 0 0 0 1px var(--ob-ink);
+  font-weight: 640;
+}
+
+.ob-pill-choice:active {
+  transform: scale(0.97);
+}
+
+/* Twin Steppers (Height / Weight) */
+.ob-stepper-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.ob-stepper-card {
+  border-radius: 16px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-surface);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ob-stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ob-stepper-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-elevated);
+  color: var(--ob-ink);
+  font-size: 1rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 140ms ease, transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ob-stepper-btn:hover {
+  border-color: var(--ob-hairline-strong);
+}
+
+.ob-stepper-btn:active {
+  transform: scale(0.94);
+}
+
+.ob-stepper-val {
+  font-size: 1.05rem;
+  font-weight: 660;
+  font-variant-numeric: tabular-nums;
+  color: var(--ob-ink);
+  letter-spacing: -0.02em;
+}
+
+.ob-stepper-unit {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--ob-ink-3);
+  margin-left: 2px;
+}
+
+/* Silhouette 4-Card Row */
+.ob-sil-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+/* Selectable Hero Card (Step 2 Face Photo / Step 3 Starter Capsule) */
+.ob-hero-card {
+  width: 100%;
+  border-radius: 20px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-surface);
+  color: var(--ob-ink);
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ob-hero-card:hover {
+  border-color: var(--ob-hairline-strong);
+}
+
+.ob-hero-card.is-selected {
+  border-color: var(--ob-ink);
+  background: var(--ob-elevated);
+  box-shadow: inset 0 0 0 1px var(--ob-ink);
+}
+
+.ob-hero-card:active {
+  transform: scale(0.985);
+}
+
+.ob-hero-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ob-hero-icon-circle {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid var(--ob-hairline-strong);
+  background: var(--ob-tertiary);
+  color: var(--ob-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.ob-hero-icon-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ob-badge-mono {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ob-primary);
+  color: var(--ob-on-primary);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.ob-palette-bar {
+  border-radius: 16px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-surface);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ob-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ob-swatch-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--ob-hairline-strong);
+  flex-shrink: 0;
+}
+
+/* Season 4-Grid Fallback */
+.ob-season-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.ob-season-btn {
+  padding: 10px 6px;
+  border-radius: 14px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-surface);
+  color: var(--ob-ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 560;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ob-season-btn.is-selected {
+  border-color: var(--ob-ink);
+  background: var(--ob-elevated);
+  box-shadow: inset 0 0 0 1px var(--ob-ink);
+}
+
+/* 6-Piece Starter Capsule Packshot Grid */
+.ob-capsule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ob-capsule-tile {
+  border-radius: 12px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-canvas);
+  padding: 8px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.ob-capsule-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ob-capsule-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ob-capsule-slot {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ob-ink-3);
+}
+
+/* Apple Settings Grouped List (Secondary Choices) */
+.ob-grouped-list {
+  border-radius: 16px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-surface);
+  overflow: hidden;
+}
+
+.ob-list-row {
+  width: 100%;
+  padding: 13px 16px;
+  border: none;
+  border-bottom: 1px solid var(--ob-hairline);
+  background: transparent;
+  color: var(--ob-ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.ob-list-row:last-child {
+  border-bottom: none;
+}
+
+.ob-list-row.is-selected {
+  background: var(--ob-elevated);
+}
+
+.ob-radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1.5px solid var(--ob-hairline-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ob-radio.is-checked {
+  border-color: var(--ob-primary);
+  background: var(--ob-primary);
+  color: var(--ob-on-primary);
+}
+
+/* Summary Card (Step 4) */
+.ob-summary-card {
+  border-radius: 18px;
+  border: 1px solid var(--ob-hairline);
+  background: var(--ob-surface);
+  padding: 4px 16px;
+}
+
+.ob-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ob-hairline);
+  font-size: 0.82rem;
+}
+
+.ob-summary-row:last-child {
+  border-bottom: none;
+}
+
+.ob-error-note {
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  border: 1px solid rgba(255, 105, 97, 0.35);
+  background: rgba(255, 105, 97, 0.1);
+  color: #ff6961;
+}
+
+:root[data-theme='light'] .ob-error-note {
+  border-color: rgba(180, 35, 24, 0.25);
+  background: rgba(180, 35, 24, 0.06);
+  color: #b42318;
+}
+
+.ob-footer {
+  padding: 12px 24px 22px;
+  flex-shrink: 0;
+}
+
+.ob-primary-cta {
+  width: 100%;
+  min-height: 48px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ob-primary);
+  color: var(--ob-on-primary);
+  font-size: 0.9375rem;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: opacity 150ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ob-primary-cta:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.ob-primary-cta:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.ob-primary-cta:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+ * Top Slim Inline Resume Banner (Deferred / Legacy 0-Item Accounts)
+ * ========================================================================== */
+
+.ob-resume-banner-wrap {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 6px 16px 2px;
+  position: relative;
+  z-index: 25;
+}
+
+.ob-resume-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(24, 24, 27, 0.82);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  color: #f5f5f7;
+}
+
+:root[data-theme='light'] .ob-resume-banner {
+  border-color: rgba(29, 29, 31, 0.1);
+  background: rgba(255, 255, 255, 0.88);
+  color: #1d1d1f;
+}
+
+.ob-resume-left {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.ob-resume-ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+:root[data-theme='light'] .ob-resume-ring {
+  background: rgba(29, 29, 31, 0.07);
+}
+
+.ob-resume-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ob-resume-title {
+  font-size: 0.8125rem;
+  font-weight: 640;
+  line-height: 1.25;
+}
+
+.ob-resume-desc {
+  font-size: 0.75rem;
+  color: #aeaeb2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:root[data-theme='light'] .ob-resume-desc {
+  color: #6e6e73;
+}
+
+.ob-resume-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: #f5f5f7;
+  color: #000000;
+  font-size: 0.78rem;
+  font-weight: 640;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 150ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root[data-theme='light'] .ob-resume-btn {
+  background: #1d1d1f;
+  color: #ffffff;
+}
+
+.ob-resume-btn:active {
+  transform: scale(0.97);
+}
+
+@media (max-width: 639px) {
+  .ob-backdrop {
+    align-items: flex-end;
+    padding: 12px 10px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .ob-sheet {
+    max-width: 100%;
+    max-height: 91vh;
+    border-radius: 26px;
+  }
+
+  .ob-header {
+    padding: 16px 18px 0;
+  }
+
+  .ob-body {
+    padding: 16px 18px 10px;
+    gap: 14px;
+  }
+
+  .ob-footer {
+    padding: 10px 18px 18px;
+  }
+
+  .ob-title {
+    font-size: 1.28rem;
+  }
+
+  .ob-age-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .ob-resume-banner {
+    padding: 9px 12px;
+  }
+
+  .ob-resume-desc {
+    display: none;
+  }
+}

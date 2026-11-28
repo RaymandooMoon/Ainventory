@@ -1025,6 +1025,8 @@ const API_ERROR_KO_TO_EN: Readonly<Record<string, string>> = {
   '업스트림 API에 연결할 수 없습니다.': 'Unable to reach the server right now. Please try again.',
   '유일한 로그인 수단인 Google 계정은 연결을 해제할 수 없습니다.':
     'Cannot unlink Google while it is your only sign-in method.',
+  '성별은 최초 확정 이후 변경할 수 없습니다.':
+    'Gender cannot be changed once confirmed during setup.',
 };
 
 export function localizeApiMessage(

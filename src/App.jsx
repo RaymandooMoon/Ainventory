@@ -77,6 +77,13 @@ import {
   runCircularThemeTransition,
 } from './utils/themeTransition.ts';
 import LoginPortalParticleWave from './components/auth/LoginPortalParticleWave.tsx';
+import OnboardingResumeBanner from './components/onboarding/OnboardingResumeBanner.tsx';
+import {
+  clearOnboardingStarterCapsule,
+  resetOnboardingFlow,
+  resolveInitialOnboardingStep,
+  resolveOnboardingPresentation,
+} from './services/onboardingService.ts';
 import {
   attachAntiGravityField,
   createAntiGravityState,
@@ -93,6 +100,9 @@ const StatsView = lazy(() => import('./components/StatsView.jsx'));
 const SkinToneAnalysisModal = lazy(() => import('./components/SkinToneAnalysisModal.jsx'));
 const AccountSettingsSheet = lazy(() => import('./components/AccountSettingsSheet.jsx'));
 const AdminManagementView = lazy(() => import('./components/AdminManagementView.jsx'));
+const OnboardingWizardModal = lazy(
+  () => import('./components/onboarding/OnboardingWizardModal.tsx')
+);
 const AdminMegascansLabModal = lazy(() => import('./components/three/AdminMegascansLabModal.tsx'));
 
 const DEFAULT_LOCAL_USER = {
@@ -218,6 +228,8 @@ export default function App() {
   const [bodySpec, setBodySpec] = useState(() => getStoredBodySpec());
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalTab, setProfileModalTab] = useState('skin');
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState('identity_body');
 
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
   const [megascansLabOpen, setMegascansLabOpen] = useState(false);
@@ -382,17 +394,17 @@ export default function App() {
           setShowAuthScreen(false);
           syncAccountToAvatar(data.user);
 
-          // Confirmed Option B onboarding: newly signed-up Google user lands on empty Closet + auto-opens onboarding modal once
+          const presentation = resolveOnboardingPresentation(
+            data.user,
+            data.user.garmentCount,
+            initialLoc.authResult
+          );
           const shouldAutoOnboard =
-            !onboardingAutoPromptedRef.current &&
-            !data.user.isSampleDemo &&
-            !isSiteDemoUser(data.user) &&
-            (initialLoc.authResult === 'google_new' || data.user.profileCompleted === false);
+            !onboardingAutoPromptedRef.current && presentation === 'wizard';
           if (shouldAutoOnboard) {
             onboardingAutoPromptedRef.current = true;
-            setActiveTab('closet');
-            setProfileModalTab('skin');
-            setProfileModalOpen(true);
+            setOnboardingStep(resolveInitialOnboardingStep(data.user, data.user.garmentCount));
+            setOnboardingOpen(true);
           }
 
           if (initialLoc.authResult === 'google_linked') {
@@ -413,7 +425,7 @@ export default function App() {
               initialLoc.authResult ||
               initialLoc.authError
             ) {
-              const targetSub = shouldAutoOnboard ? '/closet' : subPath === '/login' ? '/' : subPath;
+              const targetSub = subPath === '/login' ? '/' : subPath;
               window.history.replaceState({}, '', toAppPath(targetSub, appBasePath));
             }
           }
@@ -601,11 +613,16 @@ export default function App() {
 
   const handleApplySkinProfile = useCallback(
     async (nextProfile, options = {}) => {
+      const lockedUserGender =
+        user?.genderLocked && (user.gender === 'female' || user.gender === 'male')
+          ? user.gender
+          : null;
       const explicitGender =
         nextProfile?.gender === 'female' || nextProfile?.gender === 'male'
           ? nextProfile.gender
           : null;
       const resolvedGender =
+        lockedUserGender ??
         explicitGender ??
         (user && !user.isSampleDemo
           ? user.gender === 'female'
@@ -652,7 +669,7 @@ export default function App() {
           }
         } else {
           try {
-            await apiFetch('/auth/profile', {
+            const profileRes = await apiFetch('/auth/profile', {
               method: 'POST',
               body: JSON.stringify({
                 personal_color: saved.personalColor,
@@ -661,7 +678,9 @@ export default function App() {
                 handedness: getAvatarSpecSnapshot().spec.dominantHand,
               }),
             });
-            setUser((prev) => (prev ? { ...prev, profileCompleted: true } : prev));
+            if (profileRes?.user) {
+              setUser((prev) => (prev ? { ...prev, ...profileRes.user } : profileRes.user));
+            }
           } catch (err) {
             if (options?.throwOnError) throw err;
           }
@@ -679,11 +698,16 @@ export default function App() {
 
   const handleUpdateBodySpec = useCallback(
     async (nextSpec, options = {}) => {
+      const lockedUserGender =
+        user?.genderLocked && (user.gender === 'female' || user.gender === 'male')
+          ? user.gender
+          : null;
       const explicitGender =
         nextSpec?.gender === 'female' || nextSpec?.gender === 'male'
           ? nextSpec.gender
           : null;
       const resolvedGender =
+        lockedUserGender ??
         explicitGender ??
         (user && !user.isSampleDemo
           ? user.gender === 'female'
@@ -727,7 +751,7 @@ export default function App() {
           }
         } else {
           try {
-            await apiFetch('/auth/profile', {
+            const profileRes = await apiFetch('/auth/profile', {
               method: 'POST',
               body: JSON.stringify({
                 gender: resolvedGender,
@@ -737,7 +761,9 @@ export default function App() {
                 handedness: getAvatarSpecSnapshot().spec.dominantHand,
               }),
             });
-            setUser((prev) => (prev ? { ...prev, profileCompleted: true } : prev));
+            if (profileRes?.user) {
+              setUser((prev) => (prev ? { ...prev, ...profileRes.user } : profileRes.user));
+            }
           } catch (err) {
             if (options?.throwOnError) throw err;
           }
@@ -1130,6 +1156,7 @@ export default function App() {
   const antiGravityModalPaused = Boolean(
     selectedItemId !== null ||
       profileModalOpen ||
+      onboardingOpen ||
       accountSheetOpen ||
       megascansLabOpen ||
       sampleImportOpen ||
@@ -1182,11 +1209,13 @@ export default function App() {
   const handleLoginSuccess = useCallback(
     (loggedInUser) => {
       const demoAccount = isDemoVtonAccount(loggedInUser);
+      const presentation = resolveOnboardingPresentation(
+        loggedInUser,
+        loggedInUser?.garmentCount,
+        null
+      );
       const shouldAutoOnboard =
-        !demoAccount &&
-        !loggedInUser?.isSampleDemo &&
-        loggedInUser?.profileCompleted === false &&
-        !onboardingAutoPromptedRef.current;
+        !demoAccount && presentation === 'wizard' && !onboardingAutoPromptedRef.current;
       if (demoAccount) {
         void prefetchSampleGarments();
         void import('./services/vton2DService.ts')
@@ -1213,30 +1242,132 @@ export default function App() {
           // Ignore storage restrictions inside sandboxed embed iframes
         }
         setSelectedItemId(null);
-        const landingTab = shouldAutoOnboard ? 'closet' : 'outfits';
-        setActiveTab(landingTab);
+        setActiveTab('outfits');
         if (shouldAutoOnboard) {
           onboardingAutoPromptedRef.current = true;
-          setProfileModalTab('skin');
-          setProfileModalOpen(true);
+          setOnboardingStep(
+            resolveInitialOnboardingStep(loggedInUser, loggedInUser?.garmentCount)
+          );
+          setOnboardingOpen(true);
         }
         setRefreshKey((k) => k + 1);
         if (!isEmbedMode && typeof window !== 'undefined') {
-          window.history.replaceState(
-            {},
-            '',
-            toAppPath(landingTab === 'closet' ? '/closet' : '/', appBasePath)
-          );
+          window.history.replaceState({}, '', toAppPath('/', appBasePath));
         }
       });
     },
     [appBasePath, isEmbedMode, startLoginPortalTransition, syncAccountToAvatar]
   );
 
+  const handleOnboardingUserUpdated = useCallback(
+    (nextUser) => {
+      if (!nextUser) return;
+      setUser(nextUser);
+      try {
+        syncAccountToAvatar(nextUser);
+      } catch {
+        // Ignore storage errors
+      }
+    },
+    [syncAccountToAvatar]
+  );
+
+  const handleOpenOnboardingGuide = useCallback(
+    async ({ resetIfCompleted = false } = {}) => {
+      if (!user || user.isSampleDemo || isSiteDemoUser(user)) return;
+      if (resetIfCompleted && user.onboarding?.status === 'completed') {
+        try {
+          const res = await resetOnboardingFlow();
+          if (res?.user) {
+            setUser(res.user);
+            setOnboardingStep('identity_body');
+            setOnboardingOpen(true);
+            return;
+          }
+        } catch {
+          // Open locally at step 1 even if reset call failed transiently
+        }
+        setOnboardingStep('identity_body');
+        setOnboardingOpen(true);
+        return;
+      }
+      setOnboardingStep(resolveInitialOnboardingStep(user, garments.length));
+      setOnboardingOpen(true);
+    },
+    [garments.length, user]
+  );
+
+  const handleOnboardingDeferred = useCallback(
+    (nextUser) => {
+      if (nextUser) setUser(nextUser);
+      setOnboardingOpen(false);
+      showToast(
+        tx(
+          lang,
+          '상단 배너에서 언제든 설정을 이어서 완료할 수 있어요',
+          'You can resume setup anytime from the top banner'
+        )
+      );
+    },
+    [lang, showToast]
+  );
+
+  const handleOnboardingCompleted = useCallback(
+    ({ user: nextUser, nextAction }) => {
+      if (nextUser) {
+        setUser(nextUser);
+        try {
+          syncAccountToAvatar(nextUser);
+        } catch {
+          // Ignore storage errors
+        }
+      }
+      setOnboardingOpen(false);
+      setRefreshKey((k) => k + 1);
+      if (nextAction === 'open_add_garment') {
+        setActiveTab('closet');
+        if (!isEmbedMode && typeof window !== 'undefined') {
+          window.history.replaceState({}, '', toAppPath('/closet', appBasePath));
+        }
+      } else {
+        setActiveTab('outfits');
+        if (!isEmbedMode && typeof window !== 'undefined') {
+          window.history.replaceState({}, '', toAppPath('/', appBasePath));
+        }
+      }
+      showToast(
+        tx(lang, '아틀리에 초기 설정이 완료되었습니다', 'Your atelier setup is complete')
+      );
+    },
+    [appBasePath, isEmbedMode, lang, showToast, syncAccountToAvatar]
+  );
+
+  const handleClearStarterCapsule = useCallback(async () => {
+    try {
+      const res = await clearOnboardingStarterCapsule();
+      if (res?.user) setUser(res.user);
+      setRefreshKey((k) => k + 1);
+      showToast(
+        tx(
+          lang,
+          `스타터 캡슐 ${res?.removedCount ?? 0}벌을 정리했습니다`,
+          `Removed ${res?.removedCount ?? 0} starter capsule items`
+        )
+      );
+    } catch (err) {
+      showToast(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '스타터 캡슐 정리에 실패했습니다', 'Failed to clear starter capsule')
+      );
+    }
+  }, [lang, showToast]);
+
   const handleLogout = useCallback(async () => {
     clearPortalTimers();
     setLoginPortal(null);
     setMegascansLabOpen(false);
+    setOnboardingOpen(false);
+    onboardingAutoPromptedRef.current = false;
     try {
       if (!user?.isSampleDemo) {
         await apiFetch('/auth/logout', { method: 'POST' });
@@ -1456,6 +1587,17 @@ export default function App() {
             </div>
           }
         >
+          {!onboardingOpen &&
+            (activeTab === 'outfits' || activeTab === 'closet') &&
+            resolveOnboardingPresentation(user, garments.length, null) === 'banner' && (
+              <OnboardingResumeBanner
+                user={user}
+                garmentCount={garments.length}
+                lang={lang}
+                onResume={() => void handleOpenOnboardingGuide({ resetIfCompleted: false })}
+              />
+            )}
+
           {activeTab === 'closet' && (
             <WardrobeView
               user={user}
@@ -1570,6 +1712,23 @@ export default function App() {
         </Suspense>
       )}
 
+      {/* Onboarding 2.0: Variant A Apple Setup Sheet */}
+      {onboardingOpen && user && (
+        <Suspense fallback={null}>
+          <OnboardingWizardModal
+            open={onboardingOpen}
+            initialStep={onboardingStep}
+            user={user}
+            theme={resolvedTheme}
+            lang={lang}
+            onUserUpdated={handleOnboardingUserUpdated}
+            onClosetSeeded={handleClosetUpdated}
+            onDeferred={handleOnboardingDeferred}
+            onCompleted={handleOnboardingCompleted}
+          />
+        </Suspense>
+      )}
+
       {/* Unified Portrait Skin-Tone Analyzer & Body Profile Modal */}
       {profileModalOpen && (
         <Suspense fallback={null}>
@@ -1600,6 +1759,8 @@ export default function App() {
             lang={lang}
             onChangeLang={handleChangeLang}
             onOpenProfile={handleOpenProfileModal}
+            onOpenOnboarding={() => void handleOpenOnboardingGuide({ resetIfCompleted: true })}
+            onClearStarterCapsule={handleClearStarterCapsule}
             onOpenSampleImport={handleOpenSampleImport}
             onOpenAdminPage={handleOpenAdminPage}
             onOpenMegascansLab={canOpenMegascansLab ? handleOpenMegascansLab : undefined}

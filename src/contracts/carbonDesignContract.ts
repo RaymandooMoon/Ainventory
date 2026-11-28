@@ -220,6 +220,17 @@ export interface UserProfile {
     linkedAt?: string | null;
   }>;
   profileCompleted?: boolean;
+  genderLocked?: boolean;
+  garmentCount?: number;
+  starterCapsuleCount?: number;
+  onboarding?: {
+    status: 'not_started' | 'in_progress' | 'deferred' | 'completed';
+    currentStep: 'identity_body' | 'skin_face' | 'closet_seed' | 'first_tryon';
+    steps: Record<string, boolean | string>;
+    completedCount: number;
+    totalSteps: number;
+    completedAt?: string | null;
+  };
   emailVerified?: boolean;
   ageGroup?: string | null;
   age?: number | null;

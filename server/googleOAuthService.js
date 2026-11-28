@@ -3,6 +3,8 @@ import crypto from 'node:crypto';
 const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const GOOGLE_PEOPLE_ME_URL =
+  'https://people.googleapis.com/v1/people/me?personFields=genders,birthdays';
 const DEFAULT_JWKS_TTL_MS = 60 * 60 * 1000;
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const ALLOWED_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
@@ -137,7 +139,8 @@ export function buildGoogleAuthorizationUrl({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'openid email profile',
+    scope:
+      'openid email profile https://www.googleapis.com/auth/user.gender.read https://www.googleapis.com/auth/user.birthday.read',
     state,
     nonce,
     code_challenge: codeChallenge,
@@ -315,10 +318,96 @@ export async function exchangeGoogleAuthCode({
   }
   const body = await res.json();
   const idToken = String(body?.id_token || '').trim();
+  const accessToken = String(body?.access_token || '').trim();
   if (!idToken) {
     throw new Error('Google token exchange returned no id_token');
   }
-  return { idToken };
+  return { idToken, accessToken };
+}
+
+function normalizeGoogleGenderValue(rawValue) {
+  const val = String(rawValue || '').trim().toLowerCase();
+  if (val === 'male' || val === 'female') return val;
+  return null;
+}
+
+function inferAgeFromPeopleBirthdays(birthdays) {
+  if (!Array.isArray(birthdays) || birthdays.length === 0) {
+    return { age: null, ageGroup: null };
+  }
+  const sorted = [...birthdays].sort((a, b) => {
+    const aPrim = a?.metadata?.primary ? 1 : 0;
+    const bPrim = b?.metadata?.primary ? 1 : 0;
+    return bPrim - aPrim;
+  });
+  const now = new Date();
+  const currYear = now.getUTCFullYear();
+  const currMonth = now.getUTCMonth() + 1;
+  const currDay = now.getUTCDate();
+
+  for (const entry of sorted) {
+    const year = Number(entry?.date?.year || 0);
+    if (!Number.isInteger(year) || year < 1920 || year > currYear - 8) continue;
+    const month = Number(entry?.date?.month || 1);
+    const day = Number(entry?.date?.day || 1);
+    let age = currYear - year;
+    if (month > currMonth || (month === currMonth && day > currDay)) {
+      age -= 1;
+    }
+    if (age < 8 || age > 105) continue;
+    let ageGroup = '30s';
+    if (age < 20) ageGroup = '10s';
+    else if (age < 30) ageGroup = '20s';
+    else if (age < 40) ageGroup = '30s';
+    else if (age < 50) ageGroup = '40s';
+    else if (age < 60) ageGroup = '50s';
+    else ageGroup = '60s';
+    return { age, ageGroup };
+  }
+  return { age: null, ageGroup: null };
+}
+
+/**
+ * Best-effort lookup of Google account gender & birth-year age group via People API.
+ * Uses the transient OAuth access_token in memory only (zero storage) and never blocks login.
+ */
+export async function fetchGooglePeopleProfile(accessToken, fetchImpl = fetch) {
+  const token = String(accessToken || '').trim();
+  if (!token) {
+    return { gender: null, age: null, ageGroup: null };
+  }
+  try {
+    const res = await fetchImpl(GOOGLE_PEOPLE_ME_URL, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) {
+      return { gender: null, age: null, ageGroup: null };
+    }
+    const payload = await res.json();
+    const genders = Array.isArray(payload?.genders) ? payload.genders : [];
+    const sortedGenders = [...genders].sort((a, b) => {
+      const aPrim = a?.metadata?.primary ? 1 : 0;
+      const bPrim = b?.metadata?.primary ? 1 : 0;
+      return bPrim - aPrim;
+    });
+    let gender = null;
+    for (const g of sortedGenders) {
+      const normalized = normalizeGoogleGenderValue(g?.value);
+      if (normalized) {
+        gender = normalized;
+        break;
+      }
+    }
+    const { age, ageGroup } = inferAgeFromPeopleBirthdays(payload?.birthdays);
+    return { gender, age, ageGroup };
+  } catch {
+    return { gender: null, age: null, ageGroup: null };
+  }
 }
 
 /**
@@ -333,11 +422,21 @@ export async function resolveOrCreateGoogleUser(
     computeVerificationHash,
     assignUserRole,
     linkUserId = null,
+    peopleProfile = null,
   }
 ) {
   const resolvedSub = String(claims?.sub || '').trim();
   const resolvedEmail = String(claims?.email || '').trim().toLowerCase();
   const displayName = String(claims?.name || '').trim().slice(0, 60) || 'Google 사용자';
+  const prefillGender = normalizeGoogleGenderValue(peopleProfile?.gender);
+  const prefillAge =
+    Number.isInteger(Number(peopleProfile?.age)) && Number(peopleProfile?.age) >= 8
+      ? Number(peopleProfile.age)
+      : null;
+  const prefillAgeGroup =
+    typeof peopleProfile?.ageGroup === 'string' && peopleProfile.ageGroup.trim()
+      ? peopleProfile.ageGroup.trim()
+      : null;
 
   if (!resolvedSub || resolvedSub.length > 128) {
     return { ok: false, status: 400, code: 'INVALID_SUB', error: '유효하지 않은 Google 계정 식별자입니다.' };
@@ -406,6 +505,27 @@ export async function resolveOrCreateGoogleUser(
   }
 
   if (user) {
+    // Gently backfill missing gender/ageGroup from Google People API without overwriting locked/user-confirmed values
+    const needsGenderBackfill = !user.gender && !user.gender_locked && Boolean(prefillGender);
+    const needsAgeBackfill =
+      (!user.age_group || user.age_group === 'unspecified') && Boolean(prefillAgeGroup);
+    if (needsGenderBackfill || needsAgeBackfill) {
+      await db
+        .prepare(
+          `UPDATE users
+           SET gender = COALESCE(gender, ?),
+               age_group = CASE WHEN age_group IS NULL OR age_group = 'unspecified' THEN COALESCE(?, age_group) ELSE age_group END,
+               age = COALESCE(age, ?)
+           WHERE id = ?`
+        )
+        .run(
+          needsGenderBackfill ? prefillGender : null,
+          needsAgeBackfill ? prefillAgeGroup : null,
+          needsAgeBackfill ? prefillAge : null,
+          user.id
+        );
+      user = (await db.prepare('SELECT * FROM users WHERE id = ?').get(user.id)) || user;
+    }
     return { ok: true, user, isNewUser: false, linked: false };
   }
 
@@ -435,14 +555,17 @@ export async function resolveOrCreateGoogleUser(
   const vHash = computeVerificationHash(username, resolvedEmail, nowIso);
 
   const createdUser = await db.transaction(async () => {
-    // New Google signups start with profile_completed = 0 so onboarding modal launches once
+    // New Google signups start with onboarding_status='not_started', gender_locked=0
+    // (prefilling gender & ageGroup from Google People API when available so Step 1 is 1-tap confirm).
     const inserted = await db
       .prepare(`
         INSERT INTO users (
           username, email, password_hash, display_name, role, default_closet,
-          closet_name, verified_at, verification_hash, profile_completed,
+          closet_name, verified_at, verification_hash,
+          gender, age_group, age, profile_completed, gender_locked,
+          onboarding_status, onboarding_step, onboarding_steps_json,
           apple_sub, auth_provider
-        ) VALUES (?, ?, ?, ?, 'member', ?, ?, ?, ?, 0, ?, 'google')
+        ) VALUES (?, ?, ?, ?, 'member', ?, ?, ?, ?, ?, ?, ?, 0, 0, 'not_started', 'identity_body', '{}', ?, 'google')
       `)
       .run(
         username,
@@ -453,6 +576,9 @@ export async function resolveOrCreateGoogleUser(
         '내 옷장',
         nowIso,
         vHash,
+        prefillGender,
+        prefillAgeGroup,
+        prefillAge,
         resolvedSub
       );
 

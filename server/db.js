@@ -1105,6 +1105,11 @@ export async function initDb() {
       skin_tone_hex TEXT DEFAULT NULL,
       skin_undertone_lab TEXT DEFAULT NULL,
       profile_completed INTEGER NOT NULL DEFAULT 0,
+      gender_locked INTEGER NOT NULL DEFAULT 0,
+      onboarding_status TEXT NOT NULL DEFAULT 'not_started',
+      onboarding_step TEXT NOT NULL DEFAULT 'identity_body',
+      onboarding_steps_json TEXT NOT NULL DEFAULT '{}',
+      onboarding_completed_at TEXT DEFAULT NULL,
       body_shape TEXT DEFAULT NULL,
       body_fat_pct REAL DEFAULT NULL,
       chest_cm REAL DEFAULT NULL,
@@ -1286,6 +1291,11 @@ export async function initDb() {
     'ALTER TABLE users ADD COLUMN skin_tone_hex TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN skin_undertone_lab TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN profile_completed INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE users ADD COLUMN gender_locked INTEGER NOT NULL DEFAULT 0',
+    "ALTER TABLE users ADD COLUMN onboarding_status TEXT NOT NULL DEFAULT 'not_started'",
+    "ALTER TABLE users ADD COLUMN onboarding_step TEXT NOT NULL DEFAULT 'identity_body'",
+    "ALTER TABLE users ADD COLUMN onboarding_steps_json TEXT NOT NULL DEFAULT '{}'",
+    'ALTER TABLE users ADD COLUMN onboarding_completed_at TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN body_shape TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN body_fat_pct REAL DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN chest_cm REAL DEFAULT NULL',
@@ -1523,8 +1533,8 @@ export async function ensureSiteDemoAccount() {
           username, email, password_hash, display_name, role, auth_provider,
           default_closet, closet_name, verified_at, verification_hash,
           age_group, age, height_cm, weight_kg, gender, personal_color,
-          skin_tone_hex, profile_completed, body_shape, handedness
-        ) VALUES (?, ?, ?, ?, ?, 'site_demo', 'sample', ?, ?, ?, '20s', 23, 170, 52, 'female', 'winter_cool', '#F2DFD3', 1, 'standard_balanced', 'right')
+          skin_tone_hex, profile_completed, onboarding_status, body_shape, handedness
+        ) VALUES (?, ?, ?, ?, ?, 'site_demo', 'sample', ?, ?, ?, '20s', 23, 170, 52, 'female', 'winter_cool', '#F2DFD3', 1, 'completed', 'standard_balanced', 'right')
       `)
       .run(
         SITE_DEMO_USERNAME,
@@ -1555,6 +1565,7 @@ export async function ensureSiteDemoAccount() {
       existing.role !== SITE_DEMO_ROLE_CODE ||
       !existing.verified_at ||
       !existing.verification_hash ||
+      existing.onboarding_status !== 'completed' ||
       isLegacyMaleDemoProfile
     ) {
       await db.prepare(`
@@ -1572,7 +1583,8 @@ export async function ensureSiteDemoAccount() {
             gender = CASE WHEN ? = 1 THEN 'female' ELSE gender END,
             personal_color = CASE WHEN ? = 1 THEN 'winter_cool' ELSE personal_color END,
             skin_tone_hex = CASE WHEN ? = 1 THEN '#F2DFD3' ELSE skin_tone_hex END,
-            profile_completed = 1
+            profile_completed = 1,
+            onboarding_status = 'completed'
         WHERE id = ?
       `).run(
         shouldUpdateHash ? desiredPasswordHash : existing.password_hash,
@@ -1654,9 +1666,9 @@ export async function seedIfEmpty(forceReset = false) {
           INSERT INTO users (
             username, email, password_hash, display_name, role, default_closet, closet_name,
             verified_at, verification_hash, age_group, age, height_cm, weight_kg, gender,
-            personal_color, skin_tone_hex, profile_completed,
+            personal_color, skin_tone_hex, profile_completed, onboarding_status,
             body_shape, body_fat_pct, chest_cm, waist_cm, hip_cm, head_cm
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'completed', ?, ?, ?, ?, ?, ?)
         `).run(
           username,
           email,
@@ -1689,7 +1701,8 @@ export async function seedIfEmpty(forceReset = false) {
         !existing.verified_at ||
         !existing.verification_hash ||
         !existing.profile_completed ||
-        !existing.personal_color
+        !existing.personal_color ||
+        existing.onboarding_status !== 'completed'
       ) {
         await db.prepare(`
           UPDATE users
@@ -1705,6 +1718,7 @@ export async function seedIfEmpty(forceReset = false) {
               personal_color = COALESCE(personal_color, ?),
               skin_tone_hex = COALESCE(skin_tone_hex, ?),
               profile_completed = 1,
+              onboarding_status = 'completed',
               body_shape = COALESCE(body_shape, ?),
               body_fat_pct = COALESCE(body_fat_pct, ?),
               chest_cm = COALESCE(chest_cm, ?),

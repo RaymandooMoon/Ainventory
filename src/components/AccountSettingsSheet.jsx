@@ -72,6 +72,8 @@ function AccountSettingsContent({
   lang = 'ko',
   onChangeLang,
   onOpenProfile,
+  onOpenOnboarding,
+  onClearStarterCapsule,
   onOpenSampleImport,
   onOpenAdminPage,
   onOpenMegascansLab,
@@ -980,20 +982,53 @@ function AccountSettingsContent({
           </button>
         </div>
 
-        {!user?.isSampleDemo && onOpenSampleImport && (
-          <div>
-            <button
-              id="settings-open-sample-import-btn"
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                if (!guardUserPermission(user, 'btn:closet:sample_import')) return;
-                onClose?.();
-                onOpenSampleImport?.();
-              }}
-            >
-              {tx(lang, '샘플 아이템 선택 가져오기', 'Import Sample Closet Items')}
-            </button>
+        {!user?.isSampleDemo && !isSiteDemo && (onOpenOnboarding || onOpenSampleImport || (Number(user?.starterCapsuleCount || 0) > 0 && onClearStarterCapsule)) && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {onOpenOnboarding && (
+              <button
+                id="settings-open-onboarding-btn"
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onClose?.();
+                  onOpenOnboarding?.();
+                }}
+              >
+                {tx(lang, '온보딩 가이드 다시 실행', 'Re-run Setup Guide')}
+              </button>
+            )}
+            {Number(user?.starterCapsuleCount || 0) > 0 && onClearStarterCapsule && (
+              <button
+                id="settings-clear-starter-capsule-btn"
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onClearStarterCapsule?.();
+                }}
+              >
+                {tx(
+                  lang,
+                  `스타터 캡슐 정리 (${user.starterCapsuleCount}벌)`,
+                  `Clear Starter Capsule (${user.starterCapsuleCount})`
+                )}
+              </button>
+            )}
+            {onOpenSampleImport && (
+              <button
+                id="settings-open-sample-import-btn"
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  if (!guardUserPermission(user, 'btn:closet:sample_import')) return;
+                  onClose?.();
+                  onOpenSampleImport?.();
+                }}
+              >
+                {tx(lang, '샘플 아이템 선택 가져오기', 'Import Sample Closet Items')}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1306,6 +1341,8 @@ export default function AccountSettingsSheet({
   lang = 'ko',
   onChangeLang,
   onOpenProfile,
+  onOpenOnboarding,
+  onClearStarterCapsule,
   onOpenSampleImport,
   onOpenAdminPage,
   onOpenMegascansLab,
@@ -1334,6 +1371,8 @@ export default function AccountSettingsSheet({
             lang={lang}
             onChangeLang={onChangeLang}
             onOpenProfile={onOpenProfile}
+            onOpenOnboarding={onOpenOnboarding}
+            onClearStarterCapsule={onClearStarterCapsule}
             onOpenSampleImport={onOpenSampleImport}
             onOpenAdminPage={onOpenAdminPage}
             onOpenMegascansLab={onOpenMegascansLab}

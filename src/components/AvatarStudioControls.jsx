@@ -956,6 +956,7 @@ export function InclusiveBodyMorphControls({
   onHeightInputChange,
   onHeightValidationError,
   heightInputRef,
+  genderLocked = false,
 }) {
   const anthro = draftSpec.anthropometrics;
   const soft = draftSpec.coupledSoftTissue;
@@ -997,6 +998,7 @@ export function InclusiveBodyMorphControls({
   );
 
   const handleSelectFrame = (frameKey) => {
+    if (genderLocked) return;
     triggerHaptic('selection');
     onChangeDraftSpec((prev) =>
       sanitizeAvatarSpec({
@@ -1115,6 +1117,7 @@ export function InclusiveBodyMorphControls({
                 type="button"
                 data-avatar-frame-btn={opt.key}
                 aria-pressed={active}
+                disabled={genderLocked && !active}
                 title={lang === 'en' ? opt.labelEn : opt.labelKo}
                 className={`avatar-frame-card ${active ? 'is-active' : ''}`}
                 onClick={() => handleSelectFrame(opt.key)}
@@ -1126,7 +1129,15 @@ export function InclusiveBodyMorphControls({
           })}
         </div>
         <p className="avatar-studio-hint">
-          {lang === 'en' ? activeFrameMeta.descEn : activeFrameMeta.descKo}
+          {genderLocked
+            ? tx(
+                lang,
+                '초기 설정에서 확정된 성별 프레임은 변경할 수 없습니다. 아래 체형 세부 수치는 자유롭게 조절 가능합니다.',
+                'Base gender frame is locked once confirmed during onboarding. Fine-tune proportions below anytime.'
+              )
+            : lang === 'en'
+              ? activeFrameMeta.descEn
+              : activeFrameMeta.descKo}
         </p>
       </div>
 

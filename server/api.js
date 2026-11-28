@@ -39,6 +39,7 @@ import {
   buildGoogleAuthorizationUrl,
   createPkceChallenge,
   exchangeGoogleAuthCode,
+  fetchGooglePeopleProfile,
   resolveOAuthStateSecret,
   resolveOrCreateGoogleUser,
   resolvePublicOrigin,
@@ -47,6 +48,12 @@ import {
   verifyGoogleIdTokenJwks,
   verifyOAuthStateCookie,
 } from './googleOAuthService.js';
+import {
+  STARTER_CAPSULE_NOTE_TAG,
+  computeOnboardingSummary,
+  parseOnboardingStepsJson,
+} from '../src/shared/onboardingStarterCapsule.js';
+import { mountOnboardingRoutes } from './onboardingRoutes.js';
 import {
   SITE_DEMO_ROLE_CODE,
   assignUserRole,
@@ -566,6 +573,8 @@ export async function formatUserPayload(u) {
   const resolvedBody = computeBodyMetrics(u);
   const rbac = await getUserRbacContext(db, u);
   let linkedProviders = [];
+  let garmentCount = 0;
+  let starterCapsuleCount = 0;
   if (Number.isInteger(Number(u.id)) && Number(u.id) > 0) {
     try {
       const identityRows = await db
@@ -579,7 +588,25 @@ export async function formatUserPayload(u) {
     } catch {
       linkedProviders = [];
     }
+    if (u.default_closet && u.default_closet !== 'sample') {
+      try {
+        const counts = await db
+          .prepare(
+            `SELECT COUNT(*) AS total,
+                    SUM(CASE WHEN notes LIKE ? THEN 1 ELSE 0 END) AS starter
+             FROM garments
+             WHERE closet_owner = ?`
+          )
+          .get(`${STARTER_CAPSULE_NOTE_TAG}%`, u.default_closet);
+        garmentCount = Number(counts?.total || 0);
+        starterCapsuleCount = Number(counts?.starter || 0);
+      } catch {
+        garmentCount = 0;
+        starterCapsuleCount = 0;
+      }
+    }
   }
+  const onboarding = computeOnboardingSummary(u);
 
   return {
     id: u.id,
@@ -603,6 +630,10 @@ export async function formatUserPayload(u) {
     heightCm: u.height_cm !== null && u.height_cm !== undefined ? Number(u.height_cm) : null,
     weightKg: u.weight_kg !== null && u.weight_kg !== undefined ? Number(u.weight_kg) : null,
     gender: u.gender || null,
+    genderLocked: Boolean(u.gender_locked),
+    garmentCount,
+    starterCapsuleCount,
+    onboarding,
     personalColor: u.personal_color || null,
     skinToneHex: u.skin_tone_hex || null,
     skinUndertoneLab,
@@ -654,6 +685,7 @@ async function createGuestDemoUser() {
     personal_color: 'autumn_warm',
     skin_tone_hex: '#DFC1A6',
     profile_completed: 1,
+    onboarding_status: 'completed',
     height_cm: 175,
     weight_kg: 68,
     body_shape: 'standard_balanced',
@@ -1083,6 +1115,7 @@ export function createApiRouter(options = {}) {
   router.use(express.json({ limit: '24mb' }));
   const googleVerifier = options.verifyGoogleIdToken || verifyGoogleIdToken;
   const googleCodeExchanger = options.exchangeGoogleAuthCode || exchangeGoogleAuthCode;
+  const googlePeopleFetcher = options.fetchGooglePeopleProfile || fetchGooglePeopleProfile;
 
   // Health check
   router.get('/health', (_req, res) => {
@@ -2894,6 +2927,7 @@ export function createApiRouter(options = {}) {
     }
 
     let idToken;
+    let accessToken = '';
     try {
       const exchanged = await googleCodeExchanger({
         code: authCode,
@@ -2903,6 +2937,7 @@ export function createApiRouter(options = {}) {
         codeVerifier: oauthState.codeVerifier,
       });
       idToken = exchanged?.idToken;
+      accessToken = String(exchanged?.accessToken || '').trim();
     } catch {
       return res.redirect(
         302,
@@ -2922,11 +2957,22 @@ export function createApiRouter(options = {}) {
       );
     }
 
+    // Best-effort Google People API lookup (transient accessToken in memory only; never blocks sign-in)
+    const peopleProfile =
+      accessToken && !oauthState.linkUserId
+        ? await Promise.resolve(googlePeopleFetcher(accessToken)).catch(() => ({
+            gender: null,
+            age: null,
+            ageGroup: null,
+          }))
+        : null;
+
     const resolved = await resolveOrCreateGoogleUser(db, claims, {
       hashPassword,
       computeVerificationHash,
       assignUserRole,
       linkUserId: oauthState.linkUserId || null,
+      peopleProfile,
     });
     if (!resolved.ok) {
       return res.redirect(
@@ -3827,8 +3873,29 @@ export function createApiRouter(options = {}) {
     }
 
     const ownedUploadsToRemove = [];
-    const { updated, generatedWardrobe } = await db.transaction(async () => {
+    const profileTxResult = await db.transaction(async () => {
       const prevRow = (await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id)) || {};
+      const requestedBinaryGender =
+        body.gender === 'male' || body.gender === 'female' ? body.gender : null;
+      const isMemberGenderLocked =
+        Boolean(prevRow.gender_locked) &&
+        prevRow.role !== 'admin' &&
+        prevRow.role !== 'site_demo' &&
+        prevRow.username !== 'husband' &&
+        prevRow.username !== 'wife';
+      if (
+        isMemberGenderLocked &&
+        requestedBinaryGender &&
+        prevRow.gender &&
+        requestedBinaryGender !== String(prevRow.gender).toLowerCase()
+      ) {
+        return {
+          errorStatus: 403,
+          error: '성별은 최초 확정 이후 변경할 수 없습니다.',
+          code: 'GENDER_LOCKED',
+        };
+      }
+
       const nextAge = age !== null ? Math.round(age) : (prevRow.age ?? null);
       const nextAgeGroup =
         body.age_group || body.ageGroup || age !== null
@@ -3836,8 +3903,9 @@ export function createApiRouter(options = {}) {
           : (prevRow.age_group || 'unspecified');
       const nextHeightCm = heightCm !== null ? heightCm : (prevRow.height_cm ?? null);
       const nextWeightKg = weightKg !== null ? weightKg : (prevRow.weight_kg ?? null);
-      const nextGender =
-        body.gender !== undefined && body.gender !== null && String(body.gender).trim() !== ''
+      const nextGender = isMemberGenderLocked
+        ? prevRow.gender
+        : body.gender !== undefined && body.gender !== null && String(body.gender).trim() !== ''
           ? gender
           : (prevRow.gender || 'male');
       const nextPersonalColor =
@@ -3862,6 +3930,14 @@ export function createApiRouter(options = {}) {
           ? normalizeHandednessConfig(rawHandednessInput, 'right')
           : normalizeHandednessConfig(prevRow.handedness, 'right');
 
+      const nextSteps = { ...parseOnboardingStepsJson(prevRow.onboarding_steps_json) };
+      if (body.personal_color || body.personalColor || body.skin_tone_hex || body.skinToneHex) {
+        nextSteps.skin_face = true;
+      }
+      if (heightCm !== null || weightKg !== null || rawBodyShape !== undefined) {
+        nextSteps.identity_body = true;
+      }
+
       await db
         .prepare(`
           UPDATE users
@@ -3880,6 +3956,7 @@ export function createApiRouter(options = {}) {
               hip_cm = ?,
               head_cm = ?,
               handedness = ?,
+              onboarding_steps_json = ?,
               profile_completed = 1
           WHERE id = ?
         `)
@@ -3899,6 +3976,7 @@ export function createApiRouter(options = {}) {
           nextHip,
           nextHead,
           nextHandedness,
+          JSON.stringify(nextSteps),
           req.user.id
         );
 
@@ -3927,6 +4005,16 @@ export function createApiRouter(options = {}) {
       return { updated: userAfter, generatedWardrobe: generated };
     });
 
+    if (profileTxResult.errorStatus) {
+      return res.status(profileTxResult.errorStatus).json({
+        ok: false,
+        error: profileTxResult.error,
+        code: profileTxResult.code,
+      });
+    }
+
+    const { updated, generatedWardrobe } = profileTxResult;
+
     for (const url of ownedUploadsToRemove) {
       await unlinkUploadIfUnreferenced(url);
     }
@@ -3949,6 +4037,17 @@ export function createApiRouter(options = {}) {
     requirePermission('profile:write'),
     handleProfileSetup
   );
+
+  mountOnboardingRoutes(router, {
+    db,
+    saveServerProfileConfig,
+    formatUserPayload,
+    requireStrictUserAuth,
+    requirePermission,
+    resolveAuthorizedClosets,
+    resolveManifestSlotAndGlb,
+    parseGarmentRow,
+  });
 
   // Statistical wardrobe benchmarks endpoint
   router.get('/wardrobe/benchmarks', async (req, res) => {

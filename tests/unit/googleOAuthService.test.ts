@@ -88,7 +88,7 @@ describe('server/googleOAuthService — PKCE, State Cookie, ReturnTo Sanitizer &
     assert.equal(verifyOAuthStateCookie(expiredCookie, secret), null);
   });
 
-  it('builds Google OAuth authorization URL with PKCE S256 and openid email profile scope', () => {
+  it('builds Google OAuth authorization URL with PKCE S256 and People gender/birthday scopes', () => {
     const url = new URL(
       buildGoogleAuthorizationUrl({
         clientId: CLIENT_ID,
@@ -100,11 +100,41 @@ describe('server/googleOAuthService — PKCE, State Cookie, ReturnTo Sanitizer &
     );
     assert.equal(url.origin, 'https://accounts.google.com');
     assert.equal(url.searchParams.get('response_type'), 'code');
-    assert.equal(url.searchParams.get('scope'), 'openid email profile');
+    assert.equal(
+      url.searchParams.get('scope'),
+      'openid email profile https://www.googleapis.com/auth/user.gender.read https://www.googleapis.com/auth/user.birthday.read'
+    );
     assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
     assert.equal(url.searchParams.get('code_challenge'), 'challenge_123');
     assert.equal(url.searchParams.get('state'), 'state_abc');
     assert.equal(url.searchParams.get('nonce'), 'nonce_xyz');
+  });
+
+  it('extracts gender and birthday age group via Google People API with graceful fallback', async () => {
+    const { fetchGooglePeopleProfile } = await import('../../server/googleOAuthService.js');
+    const yearFor35 = new Date().getUTCFullYear() - 35;
+    const profile = await fetchGooglePeopleProfile(
+      'transient-access-token',
+      async () =>
+        new Response(
+          JSON.stringify({
+            genders: [{ value: 'female', metadata: { primary: true } }],
+            birthdays: [
+              { date: { year: yearFor35, month: 1, day: 1 }, metadata: { primary: true } },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+    );
+    assert.equal(profile.gender, 'female');
+    assert.equal(profile.ageGroup, '30s');
+    assert.ok(typeof profile.age === 'number' && profile.age >= 34 && profile.age <= 35);
+
+    const forbidden = await fetchGooglePeopleProfile(
+      'transient-access-token',
+      async () => new Response(JSON.stringify({ error: 'disabled' }), { status: 403 })
+    );
+    assert.deepEqual(forbidden, { gender: null, age: null, ageGroup: null });
   });
 
   it('cryptographically verifies RS256 Google ID tokens via JWKS cache and refreshes on key rotation', async () => {

@@ -71,6 +71,12 @@ describe('Google OAuth 2.0 / OIDC (PKCE + ID Token + Account Linking) API Integr
     };
   };
 
+  let mockPeopleProfile: { gender: string | null; age: number | null; ageGroup: string | null } = {
+    gender: null,
+    age: null,
+    ageGroup: null,
+  };
+
   const fakeGoogleCodeExchanger = async ({
     code,
     codeVerifier,
@@ -82,8 +88,10 @@ describe('Google OAuth 2.0 / OIDC (PKCE + ID Token + Account Linking) API Integr
     if (code === 'bad_code') {
       throw new Error('Google token exchange failed (400)');
     }
-    return { idToken: 'mock_header.mock_payload.mock_sig' };
+    return { idToken: 'mock_header.mock_payload.mock_sig', accessToken: `mock_access_${code}` };
   };
+
+  const fakeGooglePeopleFetcher = async () => mockPeopleProfile;
 
   before(async () => {
     const app = express();
@@ -93,6 +101,7 @@ describe('Google OAuth 2.0 / OIDC (PKCE + ID Token + Account Linking) API Integr
       createApiRouter({
         verifyGoogleIdToken: fakeGoogleVerifier,
         exchangeGoogleAuthCode: fakeGoogleCodeExchanger,
+        fetchGooglePeopleProfile: fakeGooglePeopleFetcher,
       })
     );
     await new Promise<void>((resolve) => {
@@ -519,5 +528,141 @@ describe('Google OAuth 2.0 / OIDC (PKCE + ID Token + Account Linking) API Integr
     assert.equal(meBody.user.skinToneHex, '#DFC1A6');
     assert.equal(meBody.user.heightCm, 178);
     assert.equal(meBody.user.handedness, 'left');
+    // Partial /auth/profile calls must NOT prematurely complete Onboarding 2.0 status
+    assert.notEqual(meBody.user.onboarding.status, 'completed');
+  });
+
+  it('prefills gender & ageGroup from Google People API, enforces permanent gender lock, and completes Onboarding 2.0 + starter capsule lifecycle', async () => {
+    process.env.GOOGLE_CLIENT_ID = mockClientId;
+    process.env.GOOGLE_CLIENT_SECRET = mockClientSecret;
+    mockVerifierOutcome = 'success';
+    mockSub = 'google_onboarding_v2_sub_888';
+    mockEmail = 'onboarding_v2_member@gmail.com';
+    mockName = 'Atelier V2 Member';
+    mockPeopleProfile = { gender: 'female', age: 28, ageGroup: '20s' };
+
+    // 1. OAuth start requests user.gender.read and user.birthday.read scopes
+    const startRes = await fetch(`${baseUrl}/api/auth/google/start?returnTo=%2Fapp`, {
+      redirect: 'manual',
+    });
+    assert.equal(startRes.status, 302);
+    const authUrl = new URL(startRes.headers.get('location') || '');
+    const scopes = authUrl.searchParams.get('scope') || '';
+    assert.ok(scopes.includes('https://www.googleapis.com/auth/user.gender.read'));
+    assert.ok(scopes.includes('https://www.googleapis.com/auth/user.birthday.read'));
+
+    const state = authUrl.searchParams.get('state') || '';
+    const oauthCookie = getCookiePair(extractCookies(startRes), 'ainv_google_oauth');
+    const cbRes = await fetch(
+      `${baseUrl}/api/auth/google/callback?code=v2_code&state=${encodeURIComponent(state)}`,
+      { redirect: 'manual', headers: { Cookie: oauthCookie } }
+    );
+    assert.equal(cbRes.status, 302);
+    const sessionCookie = getCookiePair(extractCookies(cbRes), 'ainventory_token');
+
+    // 2. /auth/me reflects Google People API prefill (female, 20s) with genderLocked=false & onboarding not_started
+    const me1 = await (await fetch(`${baseUrl}/api/auth/me`, { headers: { Cookie: sessionCookie } })).json();
+    assert.equal(me1.user.gender, 'female');
+    assert.equal(me1.user.ageGroup, '20s');
+    assert.equal(me1.user.age, 28);
+    assert.equal(me1.user.genderLocked, false);
+    assert.equal(me1.user.onboarding.status, 'not_started');
+
+    // 3. Step 1 confirms body + locks gender permanently
+    const step1Res = await fetch(`${baseUrl}/api/auth/onboarding`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({
+        status: 'in_progress',
+        currentStep: 'skin_face',
+        gender: 'female',
+        lockGender: true,
+        ageGroup: '20s',
+        heightCm: 163,
+        weightKg: 53,
+        bodyShape: 'standard_balanced',
+        stepsPatch: { identity_body: true },
+      }),
+    });
+    assert.equal(step1Res.status, 200);
+    const step1Body = await step1Res.json();
+    assert.equal(step1Body.user.genderLocked, true);
+    assert.equal(step1Body.user.onboarding.status, 'in_progress');
+    assert.equal(step1Body.user.onboarding.currentStep, 'skin_face');
+
+    // 4. Attempting to mutate gender after confirmation fails with 403 GENDER_LOCKED on BOTH onboarding and profile endpoints
+    const badOnboardingGender = await fetch(`${baseUrl}/api/auth/onboarding`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ gender: 'male' }),
+    });
+    assert.equal(badOnboardingGender.status, 403);
+    assert.equal((await badOnboardingGender.json()).code, 'GENDER_LOCKED');
+
+    const badProfileGender = await fetch(`${baseUrl}/api/auth/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ gender: 'male', personal_color: 'summer_cool' }),
+    });
+    assert.equal(badProfileGender.status, 403);
+    assert.equal((await badProfileGender.json()).code, 'GENDER_LOCKED');
+
+    // 5. Deferral & Step 3 starter capsule idempotent import (6 items)
+    const deferRes = await fetch(`${baseUrl}/api/auth/onboarding`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ status: 'deferred', currentStep: 'closet_seed' }),
+    });
+    assert.equal((await deferRes.json()).user.onboarding.status, 'deferred');
+
+    const capsuleRes1 = await fetch(`${baseUrl}/api/auth/onboarding/starter-capsule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ personalColor: 'summer_cool', gender: 'female', ageGroup: '20s' }),
+    });
+    assert.equal(capsuleRes1.status, 201);
+    const capsuleBody1 = await capsuleRes1.json();
+    assert.equal(capsuleBody1.insertedCount, 6);
+    assert.equal(capsuleBody1.user.starterCapsuleCount, 6);
+
+    // Second call is idempotent (0 duplicates)
+    const capsuleRes2 = await fetch(`${baseUrl}/api/auth/onboarding/starter-capsule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ personalColor: 'summer_cool', gender: 'female', ageGroup: '20s' }),
+    });
+    assert.equal((await capsuleRes2.json()).insertedCount, 0);
+
+    // 6. Explicit completion & reset preserves genderLocked=true
+    const completeRes = await fetch(`${baseUrl}/api/auth/onboarding/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({}),
+    });
+    assert.equal(completeRes.status, 200);
+    const completedBody = await completeRes.json();
+    assert.equal(completedBody.user.onboarding.status, 'completed');
+    assert.equal(completedBody.user.genderLocked, true);
+
+    const resetRes = await fetch(`${baseUrl}/api/auth/onboarding/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({}),
+    });
+    const resetBody = await resetRes.json();
+    assert.equal(resetBody.user.onboarding.status, 'in_progress');
+    assert.equal(resetBody.user.genderLocked, true);
+
+    // 7. One-tap starter capsule cleanup removes all 6 starter garments
+    const cleanupRes = await fetch(`${baseUrl}/api/auth/onboarding/starter-capsule`, {
+      method: 'DELETE',
+      headers: { Cookie: sessionCookie },
+    });
+    assert.equal(cleanupRes.status, 200);
+    const cleanupBody = await cleanupRes.json();
+    assert.equal(cleanupBody.removedCount, 6);
+    assert.equal(cleanupBody.user.starterCapsuleCount, 0);
+
+    mockPeopleProfile = { gender: null, age: null, ageGroup: null };
   });
 });
