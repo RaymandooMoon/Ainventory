@@ -146,6 +146,14 @@ function collectAssetHashes(repoRoot) {
     'site/public/assets/previews/app-calendar-ko-dark.webp',
     'site/public/assets/previews/app-calendar-en-light.webp',
     'site/public/assets/previews/app-calendar-en-dark.webp',
+    'site/public/assets/previews/app-weather-ko-light.webp',
+    'site/public/assets/previews/app-weather-ko-dark.webp',
+    'site/public/assets/previews/app-weather-en-light.webp',
+    'site/public/assets/previews/app-weather-en-dark.webp',
+    'site/public/assets/previews/s02-part3-market-dark.webp',
+    'site/public/assets/previews/s02-part3-market-light.webp',
+    'site/public/assets/previews/s02-part4-traction-dark.webp',
+    'site/public/assets/previews/s02-part4-traction-light.webp',
     'site/public/assets/previews/site-hero-ko-light.webp',
     'site/public/assets/previews/site-hero-ko-dark.webp',
     'site/public/assets/previews/site-hero-en-light.webp',
@@ -296,7 +304,7 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
     fpsLabel: `${maxFps} FPS`,
     fpsCompact: `${maxFps}FPS`,
     fpsThreeChip: `Three.js 3D · ${maxFps}FPS`,
-    fpsMorphChip: `${maxFps} FPS · 28체형`,
+    fpsMorphChip: `${maxFps} FPS · Three.js 3D 무대`,
   };
   const hero = {
     kicker: ko.hero.kicker,

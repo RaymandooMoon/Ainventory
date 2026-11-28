@@ -566,14 +566,23 @@
     });
   }
 
-  // Clickable Table of Contents jump links
+  // Clickable Table of Contents & Overview Card jump links
   document.querySelectorAll('[data-jump-slide]').forEach((el) => {
-    el.addEventListener('click', () => {
+    const activateJump = () => {
       const target = Number.parseInt(el.getAttribute('data-jump-slide') || '', 10);
       if (Number.isFinite(target)) {
         goToSlide(target);
       }
-    });
+    };
+    el.addEventListener('click', activateJump);
+    if (el.tagName !== 'BUTTON' && el.tagName !== 'A') {
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activateJump();
+        }
+      });
+    }
   });
 
   // Keyboard shortcuts (navigation + L lang, T theme, R ratio, Escape closes sheet)
@@ -630,7 +639,7 @@
         touchStartY = e.touches[0].clientY;
         const targetEl = e.target instanceof Element ? e.target : null;
         touchInsideScrollable = Boolean(
-          targetEl && targetEl.closest('.s07-grid--5, .s11-matrix-card')
+          targetEl && targetEl.closest('.s07-grid--5, .s11-matrix-card, .pp-table-scroll')
         );
       },
       { passive: true }

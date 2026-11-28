@@ -34,7 +34,7 @@
     "fpsLabel": "120 FPS",
     "fpsCompact": "120FPS",
     "fpsThreeChip": "Three.js 3D · 120FPS",
-    "fpsMorphChip": "120 FPS · 28체형"
+    "fpsMorphChip": "120 FPS · Three.js 3D 무대"
   },
   "versions": {
     "react": "19.3.1",
@@ -168,6 +168,14 @@
       "site/public/assets/previews/app-calendar-ko-dark.webp": "eaf5ff134c34",
       "site/public/assets/previews/app-calendar-en-light.webp": "b568daf8bf12",
       "site/public/assets/previews/app-calendar-en-dark.webp": "59ce538ab1b4",
+      "site/public/assets/previews/app-weather-ko-light.webp": "3d8dd4e96a6e",
+      "site/public/assets/previews/app-weather-ko-dark.webp": "fb420ee61607",
+      "site/public/assets/previews/app-weather-en-light.webp": "47d1318019d3",
+      "site/public/assets/previews/app-weather-en-dark.webp": "eafada2ca85f",
+      "site/public/assets/previews/s02-part3-market-dark.webp": "438deccfa805",
+      "site/public/assets/previews/s02-part3-market-light.webp": "a3deeedd8300",
+      "site/public/assets/previews/s02-part4-traction-dark.webp": "7f02f0629ea6",
+      "site/public/assets/previews/s02-part4-traction-light.webp": "47aaf88d7059",
       "site/public/assets/previews/site-hero-ko-light.webp": "d2642e2ed38b",
       "site/public/assets/previews/site-hero-ko-dark.webp": "0988050697eb",
       "site/public/assets/previews/site-hero-en-light.webp": "e5468d33a9c0",

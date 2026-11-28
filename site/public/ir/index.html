@@ -22,22 +22,28 @@
       <select id="ir-slide-jump" class="ir-tb-select" aria-label="슬라이드 바로가기">
         <option value="0" data-ir-bind="hero.tocCover">01 · 표지 — 어서 오세요, 당신의 인벤토리에 · iNVTRY</option>
         <option value="1">02 · 목차 — 한눈에 보는 사업계획서</option>
-        <option value="2">03 · 핵심 요약 — 촬영부터 중고 판매까지</option>
-        <option value="3">04 · 문제 정의 — 지금 옷장이 겪는 6가지 불편</option>
-        <option value="4">05 · 해결 방안 — 6가지 불편, iNVTRY 하나로 끝</option>
-        <option value="5">06 · 서비스 흐름 — 옷을 사고, 입고, 되파는 6단계</option>
-        <option value="6">07 · 실제 앱 화면 — 지금 바로 써볼 수 있는 5가지 화면</option>
-        <option value="7">08 · 핵심 기술 — Three.js 3D · AI 가상 피팅</option>
-        <option value="8">09 · 개인정보 보호 — 4단계 보안 설계</option>
-        <option value="9">10 · 시장 규모 — 글로벌 중고 의류 × AI 가상 피팅</option>
-        <option value="10">11 · 경쟁력 비교 — 유일한 올인원 디지털 옷장</option>
-        <option value="11">12 · 수익 모델 ① — 4가지 수익 모델</option>
-        <option value="12">13 · 수익 모델 ② — 재방문 구조와 비용 절감</option>
-        <option value="13">14 · 개발 현황 — 이미 작동하는 6단계 시스템 구조</option>
-        <option value="14">15 · 성장 전략 — 초기 고객 확보와 18개월 계획</option>
-        <option value="15">16 · 팀 및 보안 계획 — 1인 실행력과 2027 보안 계획</option>
-        <option value="16">17 · 투자 제안 — 18개월 성장을 위한 투자 제안</option>
-        <option value="17">18 · 감사합니다 — 직접 체험해 보세요</option>
+        <option value="2">03 · 핵심 요약 — 쇼핑부터 중고 판매까지</option>
+        <option value="3">04 · Painpoints — 지금 옷장이 겪는 6 Painpoints</option>
+        <option value="4">05 · Painpoint 01 — 매장 중복 구매 · 장롱 방치 실측</option>
+        <option value="5">06 · Painpoint 02 — 온라인 반품 손실 · 브래케팅 분석</option>
+        <option value="6">07 · Painpoint 03 — 기존 AI 피팅 앱 한계 (KR·글로벌 Peer)</option>
+        <option value="7">08 · Painpoint 04 — 아침 코디 피로 · 4개 앱 분절</option>
+        <option value="8">09 · Painpoint 05 — 얼굴·집 사진 생체·EXIF 유출 리스크</option>
+        <option value="9">10 · Painpoint 06 — 중고 판매 피로 · EU ESPR 순환 단절</option>
+        <option value="10">11 · Solution — 6 Painpoints, 1 Solution</option>
+        <option value="11">12 · 서비스 흐름 — 옷을 사고, 입고, 되파는 6단계</option>
+        <option value="12">13 · 실제 앱 화면 — 핵심 화면 5가지 (Live Demo)</option>
+        <option value="13">14 · 핵심 기술 — Three.js 3D · AI 피팅 · On-Device</option>
+        <option value="14">15 · 개인정보 보호 — 4단계 보안 설계</option>
+        <option value="15">16 · 시장 규모 — 글로벌 중고 의류 × AI 가상 피팅</option>
+        <option value="16">17 · 경쟁 비교 — All-in-One 디지털 옷장</option>
+        <option value="17">18 · 비즈니스 모델 ① — 4가지 수익 모델</option>
+        <option value="18">19 · 비즈니스 모델 ② — 재방문 구조 × 서버비 최소화</option>
+        <option value="19">20 · 개발 현황 — 이미 작동하는 6단계 시스템 구조</option>
+        <option value="20">21 · 성장 전략 — 초기 고객 확보와 18개월 로드맵</option>
+        <option value="21">22 · 팀 및 보안 계획 — 1인 실행력과 2027 보안 계획</option>
+        <option value="22">23 · 투자 제안 — 18개월 성장을 위한 투자 제안</option>
+        <option value="23">24 · 감사합니다 — 직접 체험해 보세요</option>
       </select>
     </div>
 
@@ -67,7 +73,7 @@
         <button type="button" data-set-view="scroll" aria-pressed="false">Scroll</button>
       </div>
       <button id="ir-btn-prev" type="button" class="ir-tb-btn" aria-label="이전 슬라이드">←</button>
-      <span id="ir-slide-counter" class="ir-tb-counter">01 / 18</span>
+      <span id="ir-slide-counter" class="ir-tb-counter">01 / 24</span>
       <button id="ir-btn-next" type="button" class="ir-tb-btn" aria-label="다음 슬라이드">→</button>
       <button id="ir-btn-print" type="button" class="ir-tb-btn" data-trigger-print aria-label="PDF 인쇄 저장">PDF</button>
     </div>
@@ -137,7 +143,7 @@
         <section id="slide-02" class="ir-slide" data-slide="2">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">02 / 18 · 목차</span>
+              <span class="s-eyebrow">02 / 24 · 목차</span>
               <h2 class="s-title" data-i18n-rich="s02-h2">한눈에 보는 <span class="serif-accent">사업계획서</span></h2>
             </div>
           </header>
@@ -157,20 +163,17 @@
                 </div>
                 <div class="s02-act-head">
                   <div class="s02-act-kicker">PART 01</div>
-                  <div class="s02-act-title">문제와 해결</div>
+                  <div class="s02-act-title">6 Painpoints &amp; 1 Solution</div>
                 </div>
                 <div class="s02-items">
-                  <button type="button" class="s02-item" data-jump-slide="0">
-                    <span class="s02-item-left"><span class="s02-num">01</span><span class="s02-label" data-ir-bind="hero.tocAgendaItem">어서 오세요, 당신의 인벤토리에</span></span>
-                  </button>
                   <button type="button" class="s02-item" data-jump-slide="2">
                     <span class="s02-item-left"><span class="s02-num">03</span><span class="s02-label">서비스 핵심 요약</span></span>
                   </button>
                   <button type="button" class="s02-item" data-jump-slide="3">
-                    <span class="s02-item-left"><span class="s02-num">04</span><span class="s02-label">지금 옷장의 6가지 불편</span></span>
+                    <span class="s02-item-left"><span class="s02-num">04–10</span><span class="s02-label">6 Painpoints 심층 리서치</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="4">
-                    <span class="s02-item-left"><span class="s02-num">05</span><span class="s02-label">6가지 고민의 해답</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="10">
+                    <span class="s02-item-left"><span class="s02-num">11</span><span class="s02-label">Solution</span></span>
                   </button>
                 </div>
               </div>
@@ -188,82 +191,205 @@
                 </div>
                 <div class="s02-act-head">
                   <div class="s02-act-kicker live-accent">PART 02</div>
-                  <div class="s02-act-title">제품과 기술</div>
+                  <div class="s02-act-title">제품과 핵심 기술</div>
                 </div>
                 <div class="s02-items">
-                  <button type="button" class="s02-item" data-jump-slide="5">
-                    <span class="s02-item-left"><span class="s02-num">06</span><span class="s02-label">쇼핑부터 중고 판매까지 6단계</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="11">
+                    <span class="s02-item-left"><span class="s02-num">12</span><span class="s02-label">쇼핑부터 리셀까지 6단계</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="6">
-                    <span class="s02-item-left"><span class="s02-num">07</span><span class="s02-label">실제 구현된 앱 화면</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="12">
+                    <span class="s02-item-left"><span class="s02-num">13</span><span class="s02-label">실제 앱 화면 (Live Demo)</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="7">
-                    <span class="s02-item-left"><span class="s02-num">08</span><span class="s02-label">Three.js 3D · AI 가상 피팅</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="13">
+                    <span class="s02-item-left"><span class="s02-num">14</span><span class="s02-label">Three.js 3D · AI 피팅</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="8">
-                    <span class="s02-item-left"><span class="s02-num">09</span><span class="s02-label">4단계 개인정보 보호</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="14">
+                    <span class="s02-item-left"><span class="s02-num">15</span><span class="s02-label">4단계 개인정보 보호</span></span>
                   </button>
                 </div>
               </div>
 
               <div class="panel s02-act">
-                <div class="s02-act-visual">
-                  <img
-                    src="/assets/previews/site-about-loop-ko-dark.webp"
-                    data-light-src="/assets/previews/site-about-loop-ko-light.webp"
-                    data-dark-src="/assets/previews/site-about-loop-ko-dark.webp"
-                    data-light-src-en="/assets/previews/site-about-loop-en-light.webp"
-                    data-dark-src-en="/assets/previews/site-about-loop-en-dark.webp"
-                    alt="공식 사이트 순환 옷장 루프 및 비즈니스 모델 라이브 캡처"
-                  />
+                <div class="s02-act-visual s02-stage s02-stage--market" role="img" aria-label="글로벌 리셀 시장 $393B 성장 곡선 및 4가지 수익 모델 인포그래픽">
+                  <div class="s02-stage-top">
+                    <span class="s02-stage-kicker">글로벌 리셀 TAM · 2025–2030</span>
+                    <span class="s02-stage-delta">$23.9B AI 피팅 · +19.5%</span>
+                  </div>
+                  <div class="s02-stage-chart">
+                    <svg viewBox="0 0 380 124" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <defs>
+                        <linearGradient id="s02BarGold" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stop-color="var(--accent-gold)" stop-opacity="0.34" />
+                          <stop offset="100%" stop-color="var(--accent-gold)" stop-opacity="0.04" />
+                        </linearGradient>
+                        <linearGradient id="s02AreaGold" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stop-color="var(--accent-gold)" stop-opacity="0.16" />
+                          <stop offset="100%" stop-color="var(--accent-gold)" stop-opacity="0" />
+                        </linearGradient>
+                      </defs>
+                      <!-- Horizontal hairline grid -->
+                      <line x1="20" y1="18" x2="364" y2="18" stroke="var(--svg-track)" stroke-width="1" />
+                      <line x1="20" y1="46" x2="364" y2="46" stroke="var(--svg-track)" stroke-width="1" />
+                      <line x1="20" y1="74" x2="364" y2="74" stroke="var(--svg-track)" stroke-width="1" />
+                      <line x1="20" y1="102" x2="364" y2="102" stroke="var(--hairline-strong)" stroke-width="1" />
+                      <!-- Vertical dashed guide ticks -->
+                      <line x1="60" y1="14" x2="60" y2="102" stroke="var(--svg-track)" stroke-width="1" stroke-dasharray="2 3" />
+                      <line x1="146" y1="14" x2="146" y2="102" stroke="var(--svg-track)" stroke-width="1" stroke-dasharray="2 3" />
+                      <line x1="232" y1="14" x2="232" y2="102" stroke="var(--svg-track)" stroke-width="1" stroke-dasharray="2 3" />
+                      <line x1="318" y1="14" x2="318" y2="102" stroke="var(--svg-track)" stroke-width="1" stroke-dasharray="2 3" />
+                      <!-- Subtle area wash under trajectory -->
+                      <path d="M 60 77 C 102 72, 122 68, 146 64 C 184 58, 206 52, 232 45 C 268 35, 294 28, 318 22 L 318 102 L 60 102 Z" fill="url(#s02AreaGold)" />
+                      <!-- 4 Architectural rising bars -->
+                      <rect x="49" y="77" width="22" height="25" rx="2" fill="url(#s02BarGold)" stroke="var(--accent-gold)" stroke-opacity="0.38" stroke-width="1" />
+                      <rect x="135" y="64" width="22" height="38" rx="2" fill="url(#s02BarGold)" stroke="var(--accent-gold)" stroke-opacity="0.52" stroke-width="1" />
+                      <rect x="221" y="45" width="22" height="57" rx="2" fill="url(#s02BarGold)" stroke="var(--accent-gold)" stroke-opacity="0.72" stroke-width="1" />
+                      <rect x="307" y="22" width="22" height="80" rx="2" fill="url(#s02BarGold)" stroke="var(--accent-gold)" stroke-opacity="0.95" stroke-width="1.2" />
+                      <!-- Exponential Champagne-Gold trajectory curve -->
+                      <path d="M 60 77 C 102 72, 122 68, 146 64 C 184 58, 206 52, 232 45 C 268 35, 294 28, 318 22" stroke="var(--accent-gold)" stroke-width="2" stroke-linecap="round" />
+                      <!-- Precision node markers -->
+                      <circle cx="60" cy="77" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="1.5" />
+                      <circle cx="146" cy="64" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="1.5" />
+                      <circle cx="232" cy="45" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="1.5" />
+                      <circle cx="318" cy="22" r="7" fill="var(--accent-gold)" fill-opacity="0.18" />
+                      <circle cx="318" cy="22" r="3.6" fill="var(--accent-gold)" />
+                      <!-- Data labels -->
+                      <text x="60" y="70" text-anchor="middle" font-family="var(--font-mono)" font-size="8.5" fill="var(--ink-muted)">$256B</text>
+                      <text x="232" y="38" text-anchor="middle" font-family="var(--font-mono)" font-size="8.5" fill="var(--ink-secondary)">$338B</text>
+                      <text x="318" y="12" text-anchor="middle" font-family="var(--font-mono)" font-size="11" font-weight="800" fill="var(--accent-gold)">$393B</text>
+                      <!-- X-axis years -->
+                      <text x="60" y="116" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="var(--ink-muted)">2025</text>
+                      <text x="146" y="116" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="var(--ink-muted)">2027</text>
+                      <text x="232" y="116" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="var(--ink-muted)">2028</text>
+                      <text x="318" y="116" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" font-weight="700" fill="var(--ink-primary)">2030</text>
+                    </svg>
+                  </div>
+                  <div class="s02-bm-strip">
+                    <div class="s02-bm-cell">
+                      <span class="s02-bm-idx">01</span>
+                      <span class="s02-bm-name">Pro 구독</span>
+                    </div>
+                    <div class="s02-bm-cell">
+                      <span class="s02-bm-idx">02</span>
+                      <span class="s02-bm-name">쇼핑 제휴</span>
+                    </div>
+                    <div class="s02-bm-cell">
+                      <span class="s02-bm-idx">03</span>
+                      <span class="s02-bm-name">리셀·세탁</span>
+                    </div>
+                    <div class="s02-bm-cell">
+                      <span class="s02-bm-idx">04</span>
+                      <span class="s02-bm-name">B2B SDK</span>
+                    </div>
+                  </div>
                 </div>
                 <div class="s02-act-head">
                   <div class="s02-act-kicker">PART 03</div>
-                  <div class="s02-act-title">시장과 수익</div>
+                  <div class="s02-act-title">시장과 비즈니스 모델</div>
                 </div>
                 <div class="s02-items">
-                  <button type="button" class="s02-item" data-jump-slide="9">
-                    <span class="s02-item-left"><span class="s02-num">10</span><span class="s02-label">글로벌 시장 규모</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="15">
+                    <span class="s02-item-left"><span class="s02-num">16</span><span class="s02-label">글로벌 시장 규모 (TAM·SAM)</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="10">
-                    <span class="s02-item-left"><span class="s02-num">11</span><span class="s02-label">경쟁 서비스 비교</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="16">
+                    <span class="s02-item-left"><span class="s02-num">17</span><span class="s02-label">경쟁 서비스 비교</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="11">
-                    <span class="s02-item-left"><span class="s02-num">12</span><span class="s02-label">4가지 수익 모델</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="17">
+                    <span class="s02-item-left"><span class="s02-num">18</span><span class="s02-label">4가지 수익 모델 (BM)</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="12">
-                    <span class="s02-item-left"><span class="s02-num">13</span><span class="s02-label">재방문 구조와 비용 절감</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="18">
+                    <span class="s02-item-left"><span class="s02-num">19</span><span class="s02-label">재방문 구조와 비용 절감</span></span>
                   </button>
                 </div>
               </div>
 
               <div class="panel s02-act">
-                <div class="s02-act-visual">
-                  <img
-                    src="/assets/previews/site-specs-pillars-ko-dark.webp"
-                    data-light-src="/assets/previews/site-specs-pillars-ko-light.webp"
-                    data-dark-src="/assets/previews/site-specs-pillars-ko-dark.webp"
-                    data-light-src-en="/assets/previews/site-specs-pillars-en-light.webp"
-                    data-dark-src-en="/assets/previews/site-specs-pillars-en-dark.webp"
-                    alt="공식 사이트 Three.js 3D 6대 스펙 벤치마크 라이브 캡처"
-                  />
+                <div class="s02-act-visual s02-stage s02-stage--traction" role="img" aria-label="18개월 실행 로드맵 및 자금 배분 45/25/20/10% 인포그래픽">
+                  <div class="s02-kpi-rail">
+                    <span class="s02-kpi-item">SEED · TIPS</span>
+                    <span class="s02-kpi-item s02-kpi-item--live">PRE-A</span>
+                    <span class="s02-kpi-item s02-kpi-item--gold">SERIES A</span>
+                  </div>
+                  <div class="s02-roadmap-box">
+                    <div class="s02-roadmap-head">
+                      <span class="s02-stage-kicker">18개월 실행 로드맵</span>
+                      <span class="s02-roadmap-span">M01 → M18</span>
+                    </div>
+                    <div class="s02-roadmap-track" aria-hidden="true">
+                      <div class="s02-roadmap-bar"></div>
+                    </div>
+                    <div class="s02-roadmap-nodes">
+                      <div class="s02-rm-node">
+                        <span class="s02-rm-dot s02-rm-dot--ink"></span>
+                        <span class="s02-rm-phase">M01–06</span>
+                        <span class="s02-rm-label">Seed · 출시</span>
+                      </div>
+                      <div class="s02-rm-node s02-rm-node--mid">
+                        <span class="s02-rm-dot s02-rm-dot--live"></span>
+                        <span class="s02-rm-phase live-accent">M07–12</span>
+                        <span class="s02-rm-label">Pre-A · 수익화</span>
+                      </div>
+                      <div class="s02-rm-node s02-rm-node--end">
+                        <span class="s02-rm-dot s02-rm-dot--gold"></span>
+                        <span class="s02-rm-phase gold-accent">M13–18</span>
+                        <span class="s02-rm-label">Series A</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="s02-alloc-box">
+                    <div class="s02-alloc-ring">
+                      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <circle cx="40" cy="40" r="36" stroke="var(--svg-track)" stroke-width="1" stroke-dasharray="1.2 8.2" />
+                        <g transform="rotate(-90 40 40)">
+                          <circle cx="40" cy="40" r="28" stroke="var(--svg-track)" stroke-width="7" />
+                          <circle cx="40" cy="40" r="28" stroke="var(--accent-gold)" stroke-width="7" stroke-dasharray="77.2 175.93" stroke-dashoffset="0" />
+                          <circle cx="40" cy="40" r="28" stroke="var(--ink-primary)" stroke-width="7" stroke-dasharray="42.0 175.93" stroke-dashoffset="-79.2" />
+                          <circle cx="40" cy="40" r="28" stroke="var(--accent-live)" stroke-width="7" stroke-dasharray="33.2 175.93" stroke-dashoffset="-123.2" />
+                          <circle cx="40" cy="40" r="28" stroke="var(--ink-muted)" stroke-width="7" stroke-dasharray="15.6 175.93" stroke-dashoffset="-158.4" />
+                        </g>
+                        <text x="40" y="38.5" text-anchor="middle" font-family="var(--font-mono)" font-size="11.5" font-weight="800" fill="var(--ink-primary)">18M</text>
+                        <text x="40" y="48.5" text-anchor="middle" font-family="var(--font-mono)" font-size="6.8" letter-spacing="0.08em" fill="var(--ink-muted)">ALLOC</text>
+                      </svg>
+                    </div>
+                    <div class="s02-alloc-grid">
+                      <div class="s02-alloc-row">
+                        <span class="s02-alloc-sq s02-alloc-sq--gold"></span>
+                        <span class="s02-alloc-pct">45%</span>
+                        <span class="s02-alloc-lbl">AI·개발</span>
+                      </div>
+                      <div class="s02-alloc-row">
+                        <span class="s02-alloc-sq s02-alloc-sq--ink"></span>
+                        <span class="s02-alloc-pct">25%</span>
+                        <span class="s02-alloc-lbl">마케팅·제휴</span>
+                      </div>
+                      <div class="s02-alloc-row">
+                        <span class="s02-alloc-sq s02-alloc-sq--live"></span>
+                        <span class="s02-alloc-pct">20%</span>
+                        <span class="s02-alloc-lbl">보안·인프라</span>
+                      </div>
+                      <div class="s02-alloc-row">
+                        <span class="s02-alloc-sq s02-alloc-sq--muted"></span>
+                        <span class="s02-alloc-pct">10%</span>
+                        <span class="s02-alloc-lbl">운영·특허</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="s02-act-head">
                   <div class="s02-act-kicker">PART 04</div>
-                  <div class="s02-act-title">실적과 투자</div>
+                  <div class="s02-act-title">실적과 투자 제안</div>
                 </div>
                 <div class="s02-items">
-                  <button type="button" class="s02-item" data-jump-slide="13">
-                    <span class="s02-item-left"><span class="s02-num">14</span><span class="s02-label">개발 현황과 시스템 구조</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="19">
+                    <span class="s02-item-left"><span class="s02-num">20</span><span class="s02-label">개발 현황과 시스템 구조</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="14">
-                    <span class="s02-item-left"><span class="s02-num">15</span><span class="s02-label">성장 전략과 18개월 계획</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="20">
+                    <span class="s02-item-left"><span class="s02-num">21</span><span class="s02-label">성장 전략 · 18개월 로드맵</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="15">
-                    <span class="s02-item-left"><span class="s02-num">16</span><span class="s02-label">팀 구성과 보안 계획</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="21">
+                    <span class="s02-item-left"><span class="s02-num">22</span><span class="s02-label">팀 구성과 보안 계획</span></span>
                   </button>
-                  <button type="button" class="s02-item" data-jump-slide="16">
-                    <span class="s02-item-left"><span class="s02-num">17</span><span class="s02-label">투자 제안과 라이브 데모</span></span>
+                  <button type="button" class="s02-item" data-jump-slide="22">
+                    <span class="s02-item-left"><span class="s02-num">23</span><span class="s02-label">투자 제안 (Funding Ask)</span></span>
                   </button>
                 </div>
               </div>
@@ -272,7 +398,7 @@
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
             <span>항목을 누르면 해당 슬라이드로 바로 이동합니다</span>
-            <span class="s-foot-num">02 / 18</span>
+            <span class="s-foot-num">02 / 24</span>
           </footer>
         </section>
       </div>
@@ -284,85 +410,84 @@
         <section id="slide-03" class="ir-slide" data-slide="3">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 01 · 핵심 요약</span>
-              <h2 class="s-title" data-i18n-rich="s03-h2">촬영부터 중고 판매까지 <span class="serif-accent">하나의 옷장으로</span></h2>
+              <span class="s-eyebrow">PART 01 · 핵심 요약</span>
+              <h2 class="s-title" data-i18n-rich="s03-h2">쇼핑부터 중고 판매까지 <span class="serif-accent">하나의 옷장으로</span></h2>
             </div>
           </header>
 
           <div class="s-body">
-            <div class="s03-visual-top">
-              <div class="browser-frame s03-hero-shot">
-                <div class="browser-viewport">
-                  <img
-                    src="/assets/previews/site-live-studio-ko-dark.webp"
-                    data-light-src="/assets/previews/site-live-studio-ko-light.webp"
-                    data-dark-src="/assets/previews/site-live-studio-ko-dark.webp"
-                    data-light-src-en="/assets/previews/site-live-studio-en-light.webp"
-                    data-dark-src-en="/assets/previews/site-live-studio-en-dark.webp"
-                    alt="www.ainvtry.com 실구동 라이브 스튜디오 캡처"
-                  />
-                </div>
-              </div>
-
-              <div class="s03-kpi-grid">
-                <div class="panel s03-kpi-tile">
-                  <span class="s03-kpi-val gold-accent" data-ir-bind="performance.fpsLabel">120 FPS</span>
-                  <span class="s03-kpi-lbl" data-ir-bind="performance.fpsMorphChip">120 FPS · 28체형</span>
-                </div>
-                <div class="panel panel--live s03-kpi-tile">
-                  <span class="s03-kpi-val live-accent">0 Bytes</span>
-                  <span class="s03-kpi-lbl">얼굴 사진 서버 전송 없음</span>
-                </div>
-                <div class="panel s03-kpi-tile">
-                  <span class="s03-kpi-val">8방향 · 4겹</span>
-                  <span class="s03-kpi-lbl">360° 겹쳐 입기 AI 피팅</span>
-                </div>
-                <div class="panel panel--gold s03-kpi-tile">
-                  <span class="s03-kpi-val gold-accent">3개 플랫폼</span>
-                  <span class="s03-kpi-lbl">웹 · iOS · Android 동시 지원</span>
-                </div>
-              </div>
-            </div>
-
             <div class="s03-nodes s03-nodes--photo">
-              <div class="panel s03-node">
-                <div class="s03-node-thumb s03-node-thumb--garments">
-                  <img src="/assets/garments/beige-trench.webp" alt="비식별 WebP 배경 제거 의류" />
-                  <img src="/assets/garments/cream-knit.webp" alt="크림 니트 배경 제거 의류" />
+              <div class="panel s03-node s03-node--buy">
+                <div class="s03-node-thumb s03-node-thumb--photo-fill s03-node-thumb--photo-dup">
+                  <img src="/assets/journey/clay-cut-01-v1.webp" alt="구매 전 3초 중복 옷 체크" />
                 </div>
-                <span class="s03-node-step">01</span>
-                <strong class="s03-node-title">옷장 등록</strong>
+                <div class="s03-node-meta">
+                  <div class="s03-node-head">
+                    <span class="s03-node-step">01</span>
+                    <strong class="s03-node-title">구매 전 중복 체크</strong>
+                  </div>
+                  <span class="s03-node-desc">결제 전 3초 내 옷장 유사 아이템 비교</span>
+                </div>
               </div>
               <div class="panel s03-node">
-                <div class="s03-node-thumb">
+                <div class="s03-node-thumb s03-node-thumb--mobile">
                   <img
-                    src="/assets/previews/site-arch-weather-ko-dark.webp"
-                    data-light-src="/assets/previews/site-arch-weather-ko-light.webp"
-                    data-dark-src="/assets/previews/site-arch-weather-ko-dark.webp"
-                    data-light-src-en="/assets/previews/site-arch-weather-en-light.webp"
-                    data-dark-src-en="/assets/previews/site-arch-weather-en-dark.webp"
-                    alt="실시간 날씨 연동 Three.js 3D 무대 캡처"
+                    src="/assets/previews/app-closet-ko-dark.webp"
+                    data-light-src="/assets/previews/app-closet-ko-light.webp"
+                    data-dark-src="/assets/previews/app-closet-ko-dark.webp"
+                    data-light-src-en="/assets/previews/app-closet-en-light.webp"
+                    data-dark-src-en="/assets/previews/app-closet-en-dark.webp"
+                    alt="모바일 디지털 옷장 등록 및 카테고리 분류 캡처"
                   />
                 </div>
-                <span class="s03-node-step">02</span>
-                <strong class="s03-node-title">날씨 맞춤 코디</strong>
+                <div class="s03-node-meta">
+                  <div class="s03-node-head">
+                    <span class="s03-node-step">02</span>
+                    <strong class="s03-node-title">옷장 등록</strong>
+                  </div>
+                  <span class="s03-node-desc">배경·위치정보 자동 제거 후 WebP 정리</span>
+                </div>
+              </div>
+              <div class="panel s03-node">
+                <div class="s03-node-thumb s03-node-thumb--mobile">
+                  <img
+                    src="/assets/previews/app-weather-ko-dark.webp"
+                    data-light-src="/assets/previews/app-weather-ko-light.webp"
+                    data-dark-src="/assets/previews/app-weather-ko-dark.webp"
+                    data-light-src-en="/assets/previews/app-weather-en-light.webp"
+                    data-dark-src-en="/assets/previews/app-weather-en-dark.webp"
+                    alt="모바일 실시간 날씨 맞춤 코디 설정 캡처"
+                  />
+                </div>
+                <div class="s03-node-meta">
+                  <div class="s03-node-head">
+                    <span class="s03-node-step">03</span>
+                    <strong class="s03-node-title">날씨 맞춤 코디</strong>
+                  </div>
+                  <span class="s03-node-desc">오늘 기온·강수량에 맞는 내 옷 추천</span>
+                </div>
               </div>
               <div class="panel s03-node s03-node--core">
-                <div class="s03-node-thumb">
+                <div class="s03-node-thumb s03-node-thumb--mobile">
                   <img
                     src="/assets/previews/app-fitting-live-ko-dark.webp"
                     data-light-src="/assets/previews/app-fitting-live-ko-light.webp"
                     data-dark-src="/assets/previews/app-fitting-live-ko-dark.webp"
                     data-light-src-en="/assets/previews/app-fitting-live-en-light.webp"
                     data-dark-src-en="/assets/previews/app-fitting-live-en-dark.webp"
-                    alt="360° 7겹 AI 피팅 라이브 캡처"
+                    alt="360° 가상 피팅 및 하단 회전 스크롤 라이브 캡처"
                   />
                 </div>
-                <span class="s03-node-step">03</span>
-                <strong class="s03-node-title gold-accent">360° 가상 피팅</strong>
+                <div class="s03-node-meta">
+                  <div class="s03-node-head">
+                    <span class="s03-node-step">04</span>
+                    <strong class="s03-node-title gold-accent">360° 가상 피팅</strong>
+                  </div>
+                  <span class="s03-node-desc">내 아바타에 360° 레이어드 미리 입어보기</span>
+                </div>
               </div>
               <div class="panel s03-node">
-                <div class="s03-node-thumb">
+                <div class="s03-node-thumb s03-node-thumb--mobile">
                   <img
                     src="/assets/previews/app-stats-ko-dark.webp"
                     data-light-src="/assets/previews/app-stats-ko-light.webp"
@@ -372,22 +497,71 @@
                     alt="CPW · 자산 리포트 라이브 캡처"
                   />
                 </div>
-                <span class="s03-node-step">04</span>
-                <strong class="s03-node-title">착용·세탁 관리</strong>
+                <div class="s03-node-meta">
+                  <div class="s03-node-head">
+                    <span class="s03-node-step">05</span>
+                    <strong class="s03-node-title">착용·세탁 관리</strong>
+                  </div>
+                  <span class="s03-node-desc">착용 횟수 · 회당 착용비(CPW) · 세탁 기록</span>
+                </div>
               </div>
               <div class="panel s03-node s03-node--resale">
-                <div class="s03-node-thumb">
+                <div class="s03-node-thumb s03-node-thumb--photo-fill">
                   <img src="/assets/journey/clay-cut-06-v1.webp" alt="이력 인증 원탭 리셀" />
                 </div>
-                <span class="s03-node-step live-accent">05</span>
-                <strong class="s03-node-title live-accent">중고 판매·기부</strong>
+                <div class="s03-node-meta">
+                  <div class="s03-node-head">
+                    <span class="s03-node-step live-accent">06</span>
+                    <strong class="s03-node-title live-accent">중고 판매·기부</strong>
+                  </div>
+                  <span class="s03-node-desc">잠든 옷 원클릭 현금화 및 기부 연결</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="s03-tech-grid">
+              <div class="panel s03-kpi-tile">
+                <div class="s03-kpi-top">
+                  <span class="s03-kpi-kicker">TECH 01</span>
+                  <span class="s03-kpi-subhead gold-accent">실시간 360° 피팅</span>
+                  <span class="s03-kpi-val gold-accent" data-ir-bind="performance.fpsLabel">120 FPS</span>
+                  <span class="s03-kpi-lbl" data-ir-bind="performance.fpsMorphChip">120 FPS · Three.js 3D 무대</span>
+                </div>
+                <p class="s03-kpi-desc">Three.js 3D WebGL2 셰이더로 8방향 AI 피팅의 360° 연속 회전·조명 합성(리라이팅)과 비·눈·햇살 날씨 무대를 실시간 렌더링합니다.</p>
+              </div>
+              <div class="panel panel--live s03-kpi-tile">
+                <div class="s03-kpi-top">
+                  <span class="s03-kpi-kicker">TECH 02</span>
+                  <span class="s03-kpi-subhead live-accent">On-Device 보안</span>
+                  <span class="s03-kpi-val live-accent">0 Bytes</span>
+                  <span class="s03-kpi-lbl">개인정보 보안</span>
+                </div>
+                <p class="s03-kpi-desc">MediaPipe WASM으로 피부톤 분석과 배경·EXIF 삭제를 기기 안에서 처리해 원본 사진이 외부로 나가지 않습니다.</p>
+              </div>
+              <div class="panel s03-kpi-tile">
+                <div class="s03-kpi-top">
+                  <span class="s03-kpi-kicker">TECH 03</span>
+                  <span class="s03-kpi-subhead">레이어드 AI 피팅</span>
+                  <span class="s03-kpi-val">360° 레이어드</span>
+                  <span class="s03-kpi-lbl">8각도 실사 멀티 레이어 피팅</span>
+                </div>
+                <p class="s03-kpi-desc">이너·상의·아우터·하의를 한 번에 레이어드해, 45° 단위 8각도 실사 뷰로 앞·옆·뒷모습까지 확인합니다.</p>
+              </div>
+              <div class="panel panel--gold s03-kpi-tile">
+                <div class="s03-kpi-top">
+                  <span class="s03-kpi-kicker">TECH 04</span>
+                  <span class="s03-kpi-subhead gold-accent">멀티 플랫폼</span>
+                  <span class="s03-kpi-val gold-accent">3개 플랫폼</span>
+                  <span class="s03-kpi-lbl">Web · iOS · Android 동시 지원</span>
+                </div>
+                <p class="s03-kpi-desc">React 19 · Vite 8 · Capacitor 8 단일 코드베이스와 IndexedDB 오프라인 동기화로 모든 기기에서 동일하게 작동합니다.</p>
               </div>
             </div>
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
             <span>핵심 요약 — 옷의 시작부터 끝까지 이어지는 디지털 옷장</span>
-            <span class="s-foot-num">03 / 18</span>
+            <span class="s-foot-num">03 / 24</span>
           </footer>
         </section>
       </div>
@@ -399,8 +573,8 @@
         <section id="slide-04" class="ir-slide" data-slide="4">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 01 · 문제 정의</span>
-              <h2 class="s-title" data-i18n-rich="s04-h2">지금 옷장이 겪는 <span class="serif-accent">6가지 불편</span></h2>
+              <span class="s-eyebrow">PART 01 · Painpoints</span>
+              <h2 class="s-title" data-i18n-rich="s04-h2">지금 옷장이 겪는 <span class="serif-accent">6 Painpoints</span></h2>
             </div>
           </header>
 
@@ -422,173 +596,1508 @@
 
             <div class="s04-grid">
               <!-- Painpoint 01 -->
-              <article class="panel s04-card">
+              <article class="panel s04-card" data-jump-slide="4" role="button" tabindex="0">
                 <div class="s04-card-head">
                   <span class="s04-card-title">01. 매장 중복 구매</span>
                   <span class="badge badge--danger">오프라인 쇼핑</span>
                 </div>
                 <div class="s04-card-mid">
-                  <svg class="s04-viz" viewBox="0 0 78 78" aria-hidden="true">
-                    <circle cx="39" cy="39" r="30" fill="none" stroke="var(--hairline-strong)" stroke-width="8" />
+                  <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="s04-g01-arc" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="var(--accent-gold)" />
+                        <stop offset="55%" stop-color="var(--accent-danger)" />
+                        <stop offset="100%" stop-color="var(--accent-danger)" />
+                      </linearGradient>
+                      <radialGradient id="s04-g01-glow" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="var(--accent-danger)" stop-opacity="0.22" />
+                        <stop offset="100%" stop-color="var(--accent-danger)" stop-opacity="0" />
+                      </radialGradient>
+                    </defs>
+                    <circle cx="50" cy="50" r="44" fill="url(#s04-g01-glow)" />
+                    <circle cx="50" cy="50" r="43" fill="none" stroke="var(--hairline-strong)" stroke-width="0.9" stroke-dasharray="1.4 6.1" />
+                    <circle cx="50" cy="50" r="35" fill="none" stroke="var(--svg-track)" stroke-width="4.5" />
                     <circle
-                      cx="39"
-                      cy="39"
-                      r="30"
+                      cx="50"
+                      cy="50"
+                      r="35"
                       fill="none"
-                      stroke="var(--accent-danger)"
-                      stroke-width="8"
+                      stroke="url(#s04-g01-arc)"
+                      stroke-width="4.5"
                       stroke-linecap="round"
-                      stroke-dasharray="132 188.5"
-                      transform="rotate(-90 39 39)"
+                      stroke-dasharray="180.3 219.9"
+                      transform="rotate(-90 50 50)"
                     />
-                    <text x="39" y="43" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="13" font-weight="700">70%</text>
+                    <circle cx="50" cy="50" r="24" fill="var(--svg-node-bg)" stroke="var(--hairline)" stroke-width="1" />
+                    <text x="50" y="50" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="12.5" font-weight="800">82%</text>
+                    <text x="50" y="60" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="5.5" font-weight="700" letter-spacing="0.6">IDLE</text>
+                    <circle cx="15.6" cy="56.5" r="3.4" fill="var(--accent-danger)" />
+                    <circle cx="15.6" cy="56.5" r="1.4" fill="var(--svg-node-bg)" />
                   </svg>
                   <div class="s04-stat-col">
-                    <span class="s04-stat danger-accent">70%+</span>
-                    <span class="s04-sub">옷장에 쌓인 안 입는 옷</span>
+                    <span class="s04-stat danger-accent">82%</span>
+                    <span class="s04-sub">12개월 미착용 방치율 (Movinga)</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>원인</span>
-                  <span>매장에서 내 옷장을 바로 확인할 수 없음</span>
+                  <span>매장에서 내 옷장 즉시 조회 불가</span>
+                  <span class="s04-cause-cta">심층 05 →</span>
                 </div>
               </article>
 
               <!-- Painpoint 02 -->
-              <article class="panel s04-card">
+              <article class="panel s04-card" data-jump-slide="5" role="button" tabindex="0">
                 <div class="s04-card-head">
                   <span class="s04-card-title">02. 온라인 쇼핑 반품</span>
                   <span class="badge badge--danger">반품 손실</span>
                 </div>
                 <div class="s04-card-mid">
-                  <svg class="s04-viz" viewBox="0 0 78 78" aria-hidden="true">
-                    <rect x="10" y="42" width="12" height="24" rx="3" fill="var(--hairline-strong)" />
-                    <rect x="27" y="32" width="12" height="34" rx="3" fill="var(--hairline-strong)" />
-                    <rect x="44" y="22" width="12" height="44" rx="3" fill="var(--accent-danger)" opacity="0.65" />
-                    <rect x="61" y="12" width="12" height="54" rx="3" fill="var(--accent-danger)" />
-                    <path d="M16 34 L33 24 L50 15 L67 8" fill="none" stroke="var(--accent-danger)" stroke-width="2" stroke-dasharray="3 2" />
+                  <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="s04-g02-bar4" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="var(--accent-danger)" stop-opacity="0.95" />
+                        <stop offset="100%" stop-color="var(--accent-danger)" stop-opacity="0.18" />
+                      </linearGradient>
+                      <linearGradient id="s04-g02-bar3" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="var(--accent-gold)" stop-opacity="0.72" />
+                        <stop offset="100%" stop-color="var(--accent-gold)" stop-opacity="0.14" />
+                      </linearGradient>
+                      <linearGradient id="s04-g02-area" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="var(--accent-danger)" stop-opacity="0.22" />
+                        <stop offset="100%" stop-color="var(--accent-danger)" stop-opacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <line x1="10" y1="84" x2="92" y2="84" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <line x1="10" y1="58" x2="92" y2="58" stroke="var(--hairline)" stroke-dasharray="2 2.5" stroke-width="0.8" />
+                    <line x1="10" y1="32" x2="92" y2="32" stroke="var(--hairline)" stroke-dasharray="2 2.5" stroke-width="0.8" />
+                    <path d="M 21 66 Q 40 54 59 38 T 78 18 L 78 84 L 21 84 Z" fill="url(#s04-g02-area)" />
+                    <rect x="15" y="66" width="12" height="18" rx="2" fill="var(--svg-track)" stroke="var(--hairline-strong)" stroke-width="0.7" />
+                    <rect x="34" y="54" width="12" height="30" rx="2" fill="var(--hairline-strong)" stroke="var(--hairline-strong)" stroke-width="0.7" />
+                    <rect x="53" y="38" width="12" height="46" rx="2" fill="url(#s04-g02-bar3)" stroke="var(--accent-gold)" stroke-width="0.8" />
+                    <rect x="72" y="18" width="12" height="66" rx="2" fill="url(#s04-g02-bar4)" stroke="var(--accent-danger)" stroke-width="0.9" />
+                    <path d="M 21 66 Q 40 54 59 38 T 78 18" fill="none" stroke="var(--accent-danger)" stroke-width="1.8" stroke-linecap="round" />
+                    <circle cx="21" cy="66" r="2" fill="var(--ink-secondary)" />
+                    <circle cx="40" cy="54" r="2" fill="var(--ink-secondary)" />
+                    <circle cx="59" cy="38" r="2.2" fill="var(--accent-gold)" />
+                    <circle cx="78" cy="18" r="3.4" fill="var(--accent-danger)" />
+                    <circle cx="78" cy="18" r="1.3" fill="var(--svg-node-bg)" />
                   </svg>
                   <div class="s04-stat-col">
-                    <span class="s04-stat danger-accent">$743B</span>
-                    <span class="s04-sub">전 세계 온라인 반품 규모</span>
+                    <span class="s04-stat danger-accent">$849.9B</span>
+                    <span class="s04-sub">미국 리테일 반품 · 의류 24.4% (NRF)</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>원인</span>
-                  <span>내가 가진 옷과 미리 맞춰볼 수 없음</span>
+                  <span>핏 불일치 53~56% · 내 옷 사전 매칭 불가</span>
+                  <span class="s04-cause-cta">심층 06 →</span>
                 </div>
               </article>
 
               <!-- Painpoint 03 -->
-              <article class="panel s04-card">
+              <article class="panel s04-card" data-jump-slide="6" role="button" tabindex="0">
                 <div class="s04-card-head">
-                  <span class="s04-card-title">03. 1벌 앞모습의 한계</span>
-                  <span class="badge badge--neutral">기존 AI 한계</span>
+                  <span class="s04-card-title">03. 기존 AI 피팅 앱들의 한계</span>
+                  <span class="badge badge--neutral">KR·글로벌 Peer</span>
                 </div>
                 <div class="s04-card-mid">
-                  <svg class="s04-viz" viewBox="0 0 78 78" aria-hidden="true">
-                    <circle cx="39" cy="39" r="30" fill="none" stroke="var(--hairline-strong)" stroke-width="2" stroke-dasharray="5 5" />
-                    <circle cx="39" cy="9" r="5" fill="var(--accent-gold)" />
-                    <circle cx="69" cy="39" r="3.5" fill="var(--hairline-strong)" />
-                    <circle cx="39" cy="69" r="3.5" fill="var(--hairline-strong)" />
-                    <circle cx="9" cy="39" r="3.5" fill="var(--hairline-strong)" />
-                    <rect x="28" y="25" width="22" height="28" rx="5" fill="var(--accent-gold-soft)" stroke="var(--accent-gold)" stroke-width="1.8" />
-                    <text x="39" y="43" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="11" font-weight="700">1/8</text>
+                  <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
+                    <defs>
+                      <radialGradient id="s04-g03-glow" cx="50" cy="18" r="14" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stop-color="var(--accent-gold)" stop-opacity="0.45" />
+                        <stop offset="100%" stop-color="var(--accent-gold)" stop-opacity="0" />
+                      </radialGradient>
+                    </defs>
+                    <circle cx="50" cy="52" r="34" fill="none" stroke="var(--hairline-strong)" stroke-width="1" stroke-dasharray="2.5 3.5" />
+                    <line x1="84" y1="52" x2="60" y2="52" stroke="var(--accent-danger)" stroke-opacity="0.38" stroke-width="0.9" stroke-dasharray="1.5 2" />
+                    <line x1="50" y1="86" x2="50" y2="66" stroke="var(--accent-danger)" stroke-opacity="0.38" stroke-width="0.9" stroke-dasharray="1.5 2" />
+                    <line x1="16" y1="52" x2="40" y2="52" stroke="var(--accent-danger)" stroke-opacity="0.38" stroke-width="0.9" stroke-dasharray="1.5 2" />
+                    <rect x="40" y="38" width="20" height="28" rx="3.5" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1.1" />
+                    <text x="50" y="55" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9" font-weight="800">1/8</text>
+                    <circle cx="74" cy="28" r="2.6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <circle cx="84" cy="52" r="2.6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <circle cx="74" cy="76" r="2.6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <circle cx="50" cy="86" r="2.6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <circle cx="26" cy="76" r="2.6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <circle cx="16" cy="52" r="2.6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <circle cx="26" cy="28" r="2.6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <circle cx="50" cy="18" r="11" fill="url(#s04-g03-glow)" />
+                    <line x1="50" y1="18" x2="50" y2="38" stroke="var(--accent-gold)" stroke-width="1.5" />
+                    <circle cx="50" cy="18" r="4" fill="var(--accent-gold)" />
+                    <circle cx="50" cy="18" r="1.5" fill="var(--svg-node-bg)" />
+                    <text x="50" y="10" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="6.2" font-weight="700">0° ONLY</text>
                   </svg>
                   <div class="s04-stat-col">
-                    <span class="s04-stat">1벌 앞면</span>
-                    <span class="s04-sub">겹쳐 입기와 뒷모습 확인 불가</span>
+                    <span class="s04-stat">2D 정면</span>
+                    <span class="s04-sub">에이블리 · 뷔통 · 에이클로젯 · Google</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>원인</span>
-                  <span>360° 옆·뒷모습과 겹쳐 입기 미지원</span>
+                  <span>30초 대기 · 2D 단품 · Doppl ’26.04 종료</span>
+                  <span class="s04-cause-cta">심층 07 →</span>
                 </div>
               </article>
 
               <!-- Painpoint 04 -->
-              <article class="panel s04-card">
+              <article class="panel s04-card" data-jump-slide="7" role="button" tabindex="0">
                 <div class="s04-card-head">
                   <span class="s04-card-title">04. 날씨·옷장 따로 확인</span>
                   <span class="badge badge--neutral">앱 분산</span>
                 </div>
                 <div class="s04-card-mid">
-                  <svg class="s04-viz" viewBox="0 0 78 78" aria-hidden="true">
-                    <rect x="9" y="10" width="24" height="24" rx="6" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" stroke-width="1.5" />
-                    <rect x="45" y="10" width="24" height="24" rx="6" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" stroke-width="1.5" />
-                    <rect x="9" y="44" width="24" height="24" rx="6" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" stroke-width="1.5" />
-                    <rect x="45" y="44" width="24" height="24" rx="6" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" stroke-width="1.5" />
-                    <line x1="33" y1="22" x2="45" y2="22" stroke="var(--accent-danger)" stroke-width="1.6" stroke-dasharray="2 2" />
-                    <line x1="21" y1="34" x2="21" y2="44" stroke="var(--accent-danger)" stroke-width="1.6" stroke-dasharray="2 2" />
-                    <line x1="57" y1="34" x2="57" y2="44" stroke="var(--accent-danger)" stroke-width="1.6" stroke-dasharray="2 2" />
-                    <line x1="33" y1="56" x2="45" y2="56" stroke="var(--accent-danger)" stroke-width="1.6" stroke-dasharray="2 2" />
-                    <text x="39" y="42" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="11" font-weight="700">✕</text>
+                  <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
+                    <circle cx="26" cy="26" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="26" y="29" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-sans)" font-size="7.2" font-weight="700">날씨</text>
+                    <circle cx="74" cy="26" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="74" y="29" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-sans)" font-size="7.2" font-weight="700">옷장</text>
+                    <circle cx="26" cy="74" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="26" y="77" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-sans)" font-size="7.2" font-weight="700">피팅</text>
+                    <circle cx="74" cy="74" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <text x="74" y="77" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-sans)" font-size="7.2" font-weight="700">리셀</text>
+                    <path d="M 42 26 L 47 29 L 50 23 L 54 29 L 58 26" fill="none" stroke="var(--accent-danger)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M 26 42 L 29 47 L 23 50 L 29 54 L 26 58" fill="none" stroke="var(--accent-danger)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M 74 42 L 71 47 L 77 50 L 71 54 L 74 58" fill="none" stroke="var(--accent-danger)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M 42 74 L 47 71 L 50 77 L 54 71 L 58 74" fill="none" stroke="var(--accent-danger)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                    <circle cx="50" cy="50" r="6.5" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-width="1.3" />
+                    <line x1="47.2" y1="47.2" x2="52.8" y2="52.8" stroke="var(--accent-danger)" stroke-width="1.5" stroke-linecap="round" />
+                    <line x1="52.8" y1="47.2" x2="47.2" y2="52.8" stroke="var(--accent-danger)" stroke-width="1.5" stroke-linecap="round" />
                   </svg>
                   <div class="s04-stat-col">
-                    <span class="s04-stat">앱 4개</span>
-                    <span class="s04-sub">매번 앱 여러 개를 번갈아 확인</span>
+                    <span class="s04-stat">17분/일</span>
+                    <span class="s04-sub">아침 코디 피로 · 4개 앱 분절 (M&amp;S)</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>원인</span>
-                  <span>실시간 날씨와 내 옷장이 연결되지 않음</span>
+                  <span>실시간 기온·강수·목적지와 옷장 단절</span>
+                  <span class="s04-cause-cta">심층 08 →</span>
                 </div>
               </article>
 
               <!-- Painpoint 05 -->
-              <article class="panel s04-card">
+              <article class="panel s04-card" data-jump-slide="8" role="button" tabindex="0">
                 <div class="s04-card-head">
                   <span class="s04-card-title">05. 얼굴·집 사진 유출</span>
                   <span class="badge badge--danger">보안 불안</span>
                 </div>
                 <div class="s04-card-mid">
-                  <svg class="s04-viz" viewBox="0 0 78 78" aria-hidden="true">
-                    <path d="M22 36 C16 36 12 31 12 26 C12 21 16 17 21 17 C23 11 30 8 37 10 C42 7 50 9 53 15 C59 15 64 20 64 26 C64 32 59 36 53 36 Z" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-width="1.8" />
-                    <line x1="39" y1="64" x2="39" y2="40" stroke="var(--accent-danger)" stroke-width="2.4" stroke-linecap="round" />
-                    <polyline points="31,47 39,39 47,47" fill="none" stroke="var(--accent-danger)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
-                    <rect x="24" y="59" width="30" height="10" rx="3" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" stroke-width="1.4" />
+                  <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="s04-g05-leak" x1="0" y1="1" x2="0" y2="0">
+                        <stop offset="0%" stop-color="var(--accent-danger)" stop-opacity="0.08" />
+                        <stop offset="100%" stop-color="var(--accent-danger)" stop-opacity="0.72" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M 50 14 Q 80 18 80 49 Q 80 74 50 88 Q 20 74 20 49 Q 20 18 50 14 Z" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-dasharray="3 2.5" stroke-width="1" />
+                    <path d="M 42 82 L 50 22 L 58 82 Z" fill="url(#s04-g05-leak)" />
+                    <line x1="50" y1="80" x2="50" y2="18" stroke="var(--accent-danger)" stroke-dasharray="2.5 1.5" stroke-width="1.7" />
+                    <path d="M 35 24 C 31 24 29 19 33 16 C 35 11 42 11 45 14 C 48 10 57 10 60 14 C 66 12 70 17 66 22 C 69 26 63 29 59 27 Z" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-width="1.3" />
+                    <circle cx="50" cy="56" r="15" fill="none" stroke="var(--accent-danger)" stroke-opacity="0.45" stroke-width="0.9" />
+                    <circle cx="50" cy="56" r="24" fill="none" stroke="var(--accent-danger)" stroke-opacity="0.22" stroke-dasharray="2.5 2.5" stroke-width="0.8" />
+                    <circle cx="50" cy="56" r="8" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-width="1.3" />
+                    <text x="50" y="59.5" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.5" font-weight="800">!</text>
                   </svg>
                   <div class="s04-stat-col">
                     <span class="s04-stat danger-accent">원본 업로드</span>
-                    <span class="s04-sub">셀카와 집 사진이 외부 서버로 전송</span>
+                    <span class="s04-sub">얼굴·EXIF·GPS 외부 서버 전송</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>원인</span>
-                  <span>기기 안에서만 안전하게 처리하는 구조 부재</span>
+                  <span>기기 내 WASM 0B 보안 구조 부재</span>
+                  <span class="s04-cause-cta">심층 09 →</span>
                 </div>
               </article>
 
               <!-- Painpoint 06 -->
-              <article class="panel s04-card">
+              <article class="panel s04-card" data-jump-slide="9" role="button" tabindex="0">
                 <div class="s04-card-head">
                   <span class="s04-card-title">06. 세탁·중고 판매 번거로움</span>
-                  <span class="badge badge--gold">장롱 방치</span>
+                  <span class="badge badge--gold">순환 단절</span>
                 </div>
                 <div class="s04-card-mid">
-                  <svg class="s04-viz" viewBox="0 0 78 78" aria-hidden="true">
-                    <rect x="12" y="14" width="54" height="12" rx="4" fill="var(--accent-gold-soft)" stroke="var(--accent-gold)" stroke-width="1.4" />
-                    <rect x="12" y="33" width="44" height="12" rx="4" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" stroke-width="1.4" />
-                    <rect x="12" y="52" width="32" height="12" rx="4" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" stroke-width="1.4" />
-                    <circle cx="58" cy="58" r="9" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-width="1.6" />
-                    <text x="58" y="62" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="11" font-weight="700">!</text>
+                  <svg class="s04-viz" viewBox="0 0 100 100" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="s04-g06-t1" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="var(--accent-gold)" stop-opacity="0.85" />
+                        <stop offset="100%" stop-color="var(--accent-gold)" stop-opacity="0.18" />
+                      </linearGradient>
+                      <linearGradient id="s04-g06-t2" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="var(--ink-secondary)" stop-opacity="0.48" />
+                        <stop offset="100%" stop-color="var(--ink-secondary)" stop-opacity="0.08" />
+                      </linearGradient>
+                      <linearGradient id="s04-g06-t3" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="var(--ink-muted)" stop-opacity="0.34" />
+                        <stop offset="100%" stop-color="var(--ink-muted)" stop-opacity="0.06" />
+                      </linearGradient>
+                    </defs>
+                    <rect x="14" y="20" width="64" height="11" rx="3" fill="url(#s04-g06-t1)" stroke="var(--accent-gold)" stroke-opacity="0.55" stroke-width="0.9" />
+                    <rect x="14" y="42" width="48" height="11" rx="3" fill="url(#s04-g06-t2)" stroke="var(--hairline-strong)" stroke-width="0.8" />
+                    <rect x="14" y="64" width="32" height="11" rx="3" fill="url(#s04-g06-t3)" stroke="var(--hairline)" stroke-width="0.8" />
+                    <path d="M 70 26 Q 82 50 52 79" fill="none" stroke="var(--accent-danger)" stroke-dasharray="2.5 2" stroke-width="1.4" />
+                    <polygon points="48,77 52,84 56,78" fill="var(--accent-danger)" />
+                    <g transform="translate(62, 46)">
+                      <circle cx="13" cy="13" r="12.5" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="1.3" />
+                      <rect x="9" y="12" width="8" height="6.8" rx="1.2" fill="var(--accent-gold)" />
+                      <path d="M 10.6 12 L 10.6 9.5 C 10.6 7.8 15.4 7.8 15.4 9.5 L 15.4 12" fill="none" stroke="var(--accent-gold)" stroke-width="1.3" stroke-linecap="round" />
+                      <circle cx="13" cy="15.3" r="1" fill="var(--svg-node-bg)" />
+                    </g>
                   </svg>
                   <div class="s04-stat-col">
-                    <span class="s04-stat gold-accent">다시 촬영</span>
-                    <span class="s04-sub">매번 사진 찍고 치수 재는 번거로움</span>
+                    <span class="s04-stat gold-accent">35~37%</span>
+                    <span class="s04-sub">국내 중고 의류 비중 · 재촬영 이탈</span>
                   </div>
                 </div>
                 <div class="s04-cause">
-                  <span>원인</span>
-                  <span>보유 기록으로 바로 판매·기부할 방법 없음</span>
+                  <span>실측·채팅 피로 · EU ESPR ’26.07 시행</span>
+                  <span class="s04-cause-cta">심층 10 →</span>
                 </div>
               </article>
             </div>
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>문제 정의 — 옷을 사고 입고 되팔 때까지 겪는 6가지 불편</span>
-            <span class="s-foot-num">04 / 18</span>
+            <span>Painpoints — 각 카드를 누르면 실증 딥리서치 슬라이드(05–10)로 이동합니다</span>
+            <span class="s-foot-num">04 / 24</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SLIDE 05 (04a) — PAINPOINT 01 DEEP RESEARCH: DUPLICATE & IDLE      -->
+      <!-- ================================================================== -->
+      <div class="ir-slide-slot">
+        <section id="slide-04a" class="ir-slide" data-slide="5">
+          <header class="s-head">
+            <div class="s-head-left">
+              <span class="s-eyebrow">PART 01 · Painpoint 01 심층 리서치</span>
+              <h2 class="s-title" data-i18n-rich="s04a-h2">매장 중복 구매와 <span class="serif-accent">장롱 속 방치 자산</span></h2>
+            </div>
+          </header>
+
+          <div class="s-body">
+            <div class="pp-grid">
+              <div class="pp-left">
+                <div class="pp-kpi-row">
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">12개월 미착용률</span>
+                    <span class="pp-kpi-val danger-accent">82%</span>
+                    <span class="pp-kpi-sub">글로벌 평균 방치 비율 (Movinga)</span>
+                  </div>
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">영국 방치 의류 가치</span>
+                    <span class="pp-kpi-val gold-accent">£30B</span>
+                    <span class="pp-kpi-sub">16억 벌 · 약 53조 원 (WRAP)</span>
+                  </div>
+                </div>
+
+                <div class="panel pp-viz-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">주요국 12개월 미착용률 · Wardrobe Delusion</span>
+                    <span class="pp-panel-meta">Movinga · WRAP 실측</span>
+                  </div>
+                  <div class="pp-viz-wrap">
+                    <svg class="pp-viz-svg" viewBox="0 0 460 184" role="img" aria-label="주요국 12개월 미착용률 및 보유 의류 대비 방치 비중">
+                      <!-- Left Donut: WRAP 118 items avg -->
+                      <g transform="translate(88, 92)">
+                        <circle cx="0" cy="0" r="62" fill="none" stroke="var(--hairline)" stroke-width="1" stroke-dasharray="2 5" />
+                        <circle cx="0" cy="0" r="50" fill="none" stroke="var(--svg-track)" stroke-width="10" />
+                        <circle cx="0" cy="0" r="50" fill="none" stroke="var(--accent-danger)" stroke-width="10" stroke-dasharray="257.6 314.2" stroke-linecap="round" transform="rotate(-90)" />
+                        <circle cx="0" cy="0" r="34" fill="var(--svg-node-bg)" stroke="var(--hairline)" stroke-width="1" />
+                        <text x="0" y="-4" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="20" font-weight="800">82%</text>
+                        <text x="0" y="11" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="7.5" font-weight="700">UNWORN AVG</text>
+                        <text x="0" y="79" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-mono)" font-size="8.5" font-weight="600">성인 평균 118벌 보유 (WRAP)</text>
+                      </g>
+                      <!-- Right Country Bars -->
+                      <g transform="translate(186, 22)">
+                        <text x="0" y="10" fill="var(--ink-secondary)" font-size="10" font-weight="600">벨기에</text>
+                        <rect x="64" y="1" width="166" height="11" rx="2" fill="var(--svg-track)" />
+                        <rect x="64" y="1" width="146" height="11" rx="2" fill="var(--accent-danger)" opacity="0.9" />
+                        <text x="238" y="10" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="10" font-weight="700">88%</text>
+
+                        <text x="0" y="40" fill="var(--ink-secondary)" font-size="10" font-weight="600">미국</text>
+                        <rect x="64" y="31" width="166" height="11" rx="2" fill="var(--svg-track)" />
+                        <rect x="64" y="31" width="136" height="11" rx="2" fill="var(--accent-danger)" opacity="0.8" />
+                        <text x="238" y="40" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="10" font-weight="700">82%</text>
+
+                        <text x="0" y="70" fill="var(--ink-secondary)" font-size="10" font-weight="600">캐나다·스위스</text>
+                        <rect x="64" y="61" width="166" height="11" rx="2" fill="var(--svg-track)" />
+                        <rect x="64" y="61" width="131" height="11" rx="2" fill="var(--accent-gold)" opacity="0.85" />
+                        <text x="238" y="70" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="10" font-weight="700">79%</text>
+
+                        <text x="0" y="100" fill="var(--ink-secondary)" font-size="10" font-weight="600">영국</text>
+                        <rect x="64" y="91" width="166" height="11" rx="2" fill="var(--svg-track)" />
+                        <rect x="64" y="91" width="121" height="11" rx="2" fill="var(--accent-gold)" opacity="0.72" />
+                        <text x="238" y="100" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="10" font-weight="700">73%</text>
+
+                        <line x1="0" y1="124" x2="262" y2="124" stroke="var(--hairline)" stroke-width="1" />
+                        <text x="0" y="142" fill="var(--ink-muted)" font-size="9.5">인지 왜곡: 소비자 다수가 실제 방치량을 과소평가</text>
+                        <text x="0" y="157" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9.2" font-weight="700">물가 압박 체감 72% · 중고 상쇄 59% (ThredUp)</text>
+                      </g>
+                    </svg>
+                  </div>
+                </div>
+
+                <div class="panel pp-bars-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">중복 구매 · 지출 압박 실증 지표</span>
+                    <span class="pp-panel-meta">ThredUp · WRAP</span>
+                  </div>
+                  <div class="pp-bar-list">
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">물가 상승으로 의류 지출 압박 체감</span>
+                        <span class="pp-bar-val danger-accent">72%</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--danger" style="width:72%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">중고 의류 구매로 예산·중복 상쇄</span>
+                        <span class="pp-bar-val gold-accent">59%</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--gold" style="width:59%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">WRAP 실측 성인 1인당 완전 미착용 (31/118벌)</span>
+                        <span class="pp-bar-val">26%</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill" style="width:26%"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pp-right">
+                <div class="panel pp-table-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">KR · 글로벌 커머스·옷장 Peer 중복 체크 감사</span>
+                    <span class="pp-panel-meta">2026 App Store 실측</span>
+                  </div>
+                  <div class="pp-table-scroll">
+                    <table class="pp-table">
+                      <thead>
+                        <tr>
+                          <th>서비스 (지역)</th>
+                          <th>수익 구조</th>
+                          <th>매장 3초 중복 체크</th>
+                          <th>무료 옷장 상한</th>
+                          <th>구조적 공백</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="pp-peer-name">무신사 · 29CM</span><span class="pp-peer-meta">KR 커머스</span></td>
+                          <td>신상품 판매 수수료</td>
+                          <td class="pp-cell-danger">미지원</td>
+                          <td>구매 이력 한정</td>
+                          <td>타사·오프라인 옷 연동 불가</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">에이블리 · 지그재그</span><span class="pp-peer-meta">KR 커머스</span></td>
+                          <td>신상품 중개·광고</td>
+                          <td class="pp-cell-danger">미지원</td>
+                          <td>자사 찜 목록만</td>
+                          <td>중복 경고 시 매출 이해상충</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">네이버 플러스 스토어</span><span class="pp-peer-meta">KR 포털</span></td>
+                          <td>검색·쇼핑 수수료</td>
+                          <td class="pp-cell-danger">미지원</td>
+                          <td>주문 내역만</td>
+                          <td>실보유·착용 횟수 데이터 없음</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">에이클로젯 (Acloset)</span><span class="pp-peer-meta">KR 옷장 앱</span></td>
+                          <td>구독·광고</td>
+                          <td class="pp-cell-danger">미지원</td>
+                          <td class="pp-cell-gold">무료 100벌 제한</td>
+                          <td>100벌 초과 페이월·결제 마찰</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">Whering · Indyx</span><span class="pp-peer-meta">UK/US 옷장</span></td>
+                          <td>제휴·스타일리스트</td>
+                          <td class="pp-cell-danger">미지원</td>
+                          <td>무제한(수동)</td>
+                          <td>오프라인 매장 유사도 검색 없음</td>
+                        </tr>
+                        <tr class="pp-row--invtry">
+                          <td><span class="pp-peer-name">iNVTRY</span><span class="pp-peer-meta">All-in-One</span></td>
+                          <td>구독·제휴·순환</td>
+                          <td class="pp-cell-live">3초 유사도 비교</td>
+                          <td class="pp-cell-live">로컬 IndexedDB</td>
+                          <td class="pp-cell-live">결제 전 중복 차단 → 신뢰 확보</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="panel pp-takeaway">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">전략적 시사점 — 왜 기존 앱은 중복 구매를 막지 못하는가?</span>
+                    <span class="pp-panel-meta">Painpoint 01 → Moat</span>
+                  </div>
+                  <div class="pp-takeaway-grid">
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">01 · 이해상충</span>
+                      <span class="pp-tk-title">커머스는 덜 사게 만들 수 없음</span>
+                      <p class="pp-tk-desc">무신사·에이블리 등 신상품 판매 수수료 모델은 “이미 비슷한 옷이 있다”는 경고를 구조적으로 넣기 어렵습니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">02 · 데이터 단절</span>
+                      <span class="pp-tk-title">오프라인·타몰 보유 옷 누락</span>
+                      <p class="pp-tk-desc">특정 앱 주문 내역만으로는 백화점·편집숍·타 플랫폼에서 산 전체 옷장을 파악할 수 없습니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">03 · 초기 훅</span>
+                      <span class="pp-tk-title">저비용 오프라인 유입 레버</span>
+                      <p class="pp-tk-desc">매장 3초 중복 체크는 기기 내 처리로 서버비 부담을 낮추며, 등록 옷이 쌓일수록 이탈 장벽이 커집니다.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer class="s-foot">
+            <span class="s-foot-brand">iNVTRY 사업계획서</span>
+            <span>출처: Movinga Global Wardrobe Study · WRAP UK Textiles Report · ThredUp Resale Report · 2026 App Store 실측</span>
+            <span class="s-foot-num">05 / 24</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SLIDE 06 (04b) — PAINPOINT 02 DEEP RESEARCH: E-COMMERCE RETURNS    -->
+      <!-- ================================================================== -->
+      <div class="ir-slide-slot">
+        <section id="slide-04b" class="ir-slide" data-slide="6">
+          <header class="s-head">
+            <div class="s-head-left">
+              <span class="s-eyebrow">PART 01 · Painpoint 02 심층 리서치</span>
+              <h2 class="s-title" data-i18n-rich="s04b-h2">온라인 의류 반품 손실과 <span class="serif-accent">브래케팅(Bracketing)</span></h2>
+            </div>
+          </header>
+
+          <div class="s-body">
+            <div class="pp-grid">
+              <div class="pp-left">
+                <div class="pp-kpi-row">
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">미국 리테일 반품 규모</span>
+                    <span class="pp-kpi-val danger-accent">$849.9B</span>
+                    <span class="pp-kpi-sub">전체 15.8% · 이커머스 19.3% (NRF)</span>
+                  </div>
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">의류 온라인 반품률</span>
+                    <span class="pp-kpi-val gold-accent">24.4%</span>
+                    <span class="pp-kpi-sub">Gen Z 연평균 7.8회 반품 (NRF)</span>
+                  </div>
+                </div>
+
+                <div class="panel pp-viz-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">채널별 반품률 격차 · 의류 집중도</span>
+                    <span class="pp-panel-meta">NRF · Coresight</span>
+                  </div>
+                  <div class="pp-viz-wrap">
+                    <svg class="pp-viz-svg" viewBox="0 0 460 184" role="img" aria-label="채널별 반품률 비교 및 의류 반품 원인 비중">
+                      <!-- Vertical Grid Lines -->
+                      <line x1="120" y1="18" x2="120" y2="146" stroke="var(--hairline-strong)" stroke-width="1" />
+                      <line x1="205" y1="18" x2="205" y2="146" stroke="var(--hairline)" stroke-dasharray="2 3" stroke-width="0.9" />
+                      <line x1="290" y1="18" x2="290" y2="146" stroke="var(--hairline)" stroke-dasharray="2 3" stroke-width="0.9" />
+                      <line x1="375" y1="18" x2="375" y2="146" stroke="var(--hairline)" stroke-dasharray="2 3" stroke-width="0.9" />
+
+                      <!-- Bar 1: Retail Avg -->
+                      <text x="110" y="39" text-anchor="end" fill="var(--ink-secondary)" font-size="10.2" font-weight="600">전체 리테일</text>
+                      <rect x="120" y="27" width="134" height="17" rx="2.5" fill="var(--ink-muted)" opacity="0.45" />
+                      <text x="262" y="39" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="10.5" font-weight="750">15.8%</text>
+
+                      <!-- Bar 2: E-Commerce Avg -->
+                      <text x="110" y="74" text-anchor="end" fill="var(--ink-secondary)" font-size="10.2" font-weight="600">이커머스 평균</text>
+                      <rect x="120" y="62" width="164" height="17" rx="2.5" fill="var(--accent-gold)" opacity="0.82" />
+                      <text x="292" y="74" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="10.5" font-weight="750">19.3%</text>
+
+                      <!-- Bar 3: Online Apparel -->
+                      <text x="110" y="109" text-anchor="end" fill="var(--ink-primary)" font-size="10.2" font-weight="750">의류 온라인</text>
+                      <rect x="120" y="97" width="208" height="17" rx="2.5" fill="var(--accent-danger)" opacity="0.92" />
+                      <text x="336" y="109" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="11" font-weight="800">24.4%</text>
+
+                      <!-- Bar 4: High-end / Bracketing Peak -->
+                      <text x="110" y="140" text-anchor="end" fill="var(--ink-muted)" font-size="9.5">의류 피크 구간</text>
+                      <rect x="120" y="130" width="255" height="12" rx="2" fill="var(--accent-danger)" opacity="0.32" stroke="var(--accent-danger)" stroke-dasharray="3 2" stroke-width="0.9" />
+                      <text x="383" y="140" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="9.8" font-weight="700">~30%</text>
+
+                      <!-- Axis ticks -->
+                      <text x="120" y="162" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="8.5">0%</text>
+                      <text x="205" y="162" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="8.5">10%</text>
+                      <text x="290" y="162" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="8.5">20%</text>
+                      <text x="375" y="162" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="8.5">30%</text>
+                      <text x="230" y="178" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-mono)" font-size="8.8">의류는 전체 이커머스 중 반품률·역물류 손실 최상위 카테고리</text>
+                    </svg>
+                  </div>
+                </div>
+
+                <div class="panel pp-bars-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">의류 반품 핵심 원인 (Coresight · Loop)</span>
+                    <span class="pp-panel-meta">복수 응답 실측</span>
+                  </div>
+                  <div class="pp-bar-list">
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">핏·브래케팅·기대 불일치 합산 비중</span>
+                        <span class="pp-bar-val danger-accent">최대 70%</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--danger" style="width:70%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">순수 사이즈·핏 불일치 직접 원인</span>
+                        <span class="pp-bar-val gold-accent">53~56%</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--gold" style="width:55%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">리테일러의 사후 유료 반품 전환 비중</span>
+                        <span class="pp-bar-val">33%</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill" style="width:33%"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pp-right">
+                <div class="panel pp-table-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">KR · 글로벌 커머스 반품 대응 현황 비교</span>
+                    <span class="pp-panel-meta">2025–2026 시장 감사</span>
+                  </div>
+                  <div class="pp-table-scroll">
+                    <table class="pp-table">
+                      <thead>
+                        <tr>
+                          <th>대응 방식 / 플랫폼</th>
+                          <th>도입률·현황</th>
+                          <th>구매 전 내 옷 매칭</th>
+                          <th>역물류 손실 방지</th>
+                          <th>한계점</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="pp-peer-name">리뷰·실착 사진 확대</span><span class="pp-peer-meta">무신사·지그재그·에이블리</span></td>
+                          <td>42% 도입</td>
+                          <td class="pp-cell-danger">불가</td>
+                          <td class="pp-cell-gold">부분 완화</td>
+                          <td>타인 체형·코디 기준(내 옷 무관)</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">사이즈표·스펙 보강</span><span class="pp-peer-meta">글로벌 브랜드 공통</span></td>
+                          <td>41% 도입</td>
+                          <td class="pp-cell-danger">불가</td>
+                          <td class="pp-cell-gold">부분 완화</td>
+                          <td>실루엣·기장·레이어드 조화 미확인</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">무료·빠른 반품 정책</span><span class="pp-peer-meta">쿠팡·국내 패션몰</span></td>
+                          <td>연 수억 건 반품</td>
+                          <td class="pp-cell-danger">불가</td>
+                          <td class="pp-cell-danger">오히려 악화</td>
+                          <td>멤버십 인상·셀러 수수료 전가</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">유료 반품·교환 전환</span><span class="pp-peer-meta">ZARA·글로벌 SPA</span></td>
+                          <td>33% 도입</td>
+                          <td class="pp-cell-danger">불가</td>
+                          <td class="pp-cell-gold">사후 억제</td>
+                          <td>전환율 하락·소비자 불만 가중</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">단품 2D 가상 피팅</span><span class="pp-peer-meta">뷔통·Google Try-On</span></td>
+                          <td>단품 정면</td>
+                          <td class="pp-cell-danger">미연동</td>
+                          <td class="pp-cell-gold">단품 한정</td>
+                          <td>내 보유 상·하의와 코디 조합 불가</td>
+                        </tr>
+                        <tr class="pp-row--invtry">
+                          <td><span class="pp-peer-name">iNVTRY</span><span class="pp-peer-meta">Pre-Buy AI Fit</span></td>
+                          <td class="pp-cell-live">실구동 MVP</td>
+                          <td class="pp-cell-live">내 옷+신상품 레이어드</td>
+                          <td class="pp-cell-live">사전 예방</td>
+                          <td class="pp-cell-live">360° 8방향 실루엣·조합 사전 검증</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="panel pp-takeaway">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">전략적 시사점 — 반품 문제의 본질은 ‘사전 코디 부재’</span>
+                    <span class="pp-panel-meta">Painpoint 02 → B2B SDK</span>
+                  </div>
+                  <div class="pp-takeaway-grid">
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">01 · 사후 처방 한계</span>
+                      <span class="pp-tk-title">유료 반품은 근본 해법 아님</span>
+                      <p class="pp-tk-desc">반품 수수료 부과는 구매 전환율을 떨어뜨리며, 무료 반품은 셀러와 플랫폼의 역물류 적자를 키웁니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">02 · 조합 실패</span>
+                      <span class="pp-tk-title">“옷은 예쁜데 내 옷과 안 맞음”</span>
+                      <p class="pp-tk-desc">단품 사진만 보고 구매했다가 집에 있는 바지·아우터와 기장·색감이 어긋나 반품하는 비중이 큽니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">03 · 수익 연결</span>
+                      <span class="pp-tk-title">브랜드 제휴·B2B SDK 직결</span>
+                      <p class="pp-tk-desc">내 옷장 기반 사전 피팅은 소비자의 확신을 높이고 브랜드 반품 비용을 줄여 제휴·SDK 수요를 만듭니다.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer class="s-foot">
+            <span class="s-foot-brand">iNVTRY 사업계획서</span>
+            <span>출처: NRF &amp; Happy Returns Retail Returns Landscape · Coresight Research · Loop Returns · 조선일보 국내 반품 보도</span>
+            <span class="s-foot-num">06 / 24</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SLIDE 07 (04c) — PAINPOINT 03 DEEP RESEARCH: AI TRY-ON PEER AUDIT  -->
+      <!-- ================================================================== -->
+      <div class="ir-slide-slot">
+        <section id="slide-04c" class="ir-slide" data-slide="7">
+          <header class="s-head">
+            <div class="s-head-left">
+              <span class="s-eyebrow">PART 01 · Painpoint 03 심층 리서치</span>
+              <h2 class="s-title" data-i18n-rich="s04c-h2">한국·글로벌 <span class="serif-accent">기존 AI 피팅 앱</span> 전수 실측</h2>
+            </div>
+          </header>
+
+          <div class="s-body">
+            <div class="pp-grid">
+              <div class="pp-left">
+                <div class="pp-kpi-row">
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">단독 AI 피팅 이탈 사례</span>
+                    <span class="pp-kpi-val danger-accent">’26.04 종료</span>
+                    <span class="pp-kpi-sub">Google Labs Doppl 서비스 공식 종료</span>
+                  </div>
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">국내 피팅 앱 실측 한계</span>
+                    <span class="pp-kpi-val gold-accent">30초 · 2벌</span>
+                    <span class="pp-kpi-sub">뷔통 생성 ~30초 · 동시 비교 최대 2벌</span>
+                  </div>
+                </div>
+
+                <div class="panel pp-viz-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">360° 8방향 커버리지 진단 (Peer vs iNVTRY)</span>
+                    <span class="pp-panel-meta">0° 단면 vs 45°×8각도</span>
+                  </div>
+                  <div class="pp-viz-wrap">
+                    <svg class="pp-viz-svg" viewBox="0 0 460 184" role="img" aria-label="기존 AI 피팅 앱의 0도 정면 한계와 iNVTRY 360도 8방향 비교">
+                      <!-- Left Radar: Existing Peers (0° Only) -->
+                      <g transform="translate(115, 92)">
+                        <circle cx="0" cy="0" r="58" fill="none" stroke="var(--hairline)" stroke-dasharray="3 3" stroke-width="1" />
+                        <circle cx="0" cy="0" r="36" fill="none" stroke="var(--hairline)" stroke-width="0.8" />
+                        <!-- Blind spot sector -->
+                        <path d="M 16 -55 A 58 58 0 1 1 -16 -55 L 0 0 Z" fill="var(--accent-danger)" fill-opacity="0.11" />
+                        <!-- Active 0° wedge -->
+                        <path d="M -14 -56 A 58 58 0 0 1 14 -56 L 0 0 Z" fill="var(--accent-gold)" fill-opacity="0.32" stroke="var(--accent-gold)" stroke-width="1.2" />
+                        <!-- 7 missing nodes -->
+                        <circle cx="41" cy="-41" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-width="1" />
+                        <circle cx="58" cy="0" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-width="1" />
+                        <circle cx="41" cy="41" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-width="1" />
+                        <circle cx="0" cy="58" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-width="1" />
+                        <circle cx="-41" cy="41" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-width="1" />
+                        <circle cx="-58" cy="0" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-width="1" />
+                        <circle cx="-41" cy="-41" r="3" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-width="1" />
+                        <!-- 0° active node -->
+                        <circle cx="0" cy="-58" r="4.5" fill="var(--accent-gold)" />
+                        <text x="0" y="-68" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.5" font-weight="800">0° FRONT ONLY</text>
+                        <text x="0" y="3" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="13" font-weight="800">1 / 8</text>
+                        <text x="0" y="16" text-anchor="middle" fill="var(--ink-muted)" font-size="7.5">옆·뒷모습 사각지대</text>
+                        <text x="0" y="79" text-anchor="middle" fill="var(--ink-secondary)" font-family="var(--font-mono)" font-size="8.5" font-weight="700">기존 AI 피팅 앱 (8개 Peer)</text>
+                      </g>
+
+                      <!-- Center Divider Arrow -->
+                      <text x="230" y="96" text-anchor="middle" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="15" font-weight="800">→</text>
+
+                      <!-- Right Radar: iNVTRY 360° 8-Angle -->
+                      <g transform="translate(345, 92)">
+                        <circle cx="0" cy="0" r="58" fill="var(--accent-live)" fill-opacity="0.10" stroke="var(--accent-live)" stroke-width="1.5" />
+                        <circle cx="0" cy="0" r="36" fill="none" stroke="var(--accent-live)" stroke-opacity="0.35" stroke-width="0.9" />
+                        <!-- 8 active spokes -->
+                        <line x1="0" y1="-58" x2="0" y2="58" stroke="var(--accent-live)" stroke-opacity="0.3" stroke-width="0.9" />
+                        <line x1="-58" y1="0" x2="58" y2="0" stroke="var(--accent-live)" stroke-opacity="0.3" stroke-width="0.9" />
+                        <line x1="-41" y1="-41" x2="41" y2="41" stroke="var(--accent-live)" stroke-opacity="0.3" stroke-width="0.9" />
+                        <line x1="41" y1="-41" x2="-41" y2="41" stroke="var(--accent-live)" stroke-opacity="0.3" stroke-width="0.9" />
+                        <!-- 8 active nodes -->
+                        <circle cx="0" cy="-58" r="4" fill="var(--accent-live)" />
+                        <circle cx="41" cy="-41" r="3.6" fill="var(--accent-live)" />
+                        <circle cx="58" cy="0" r="3.6" fill="var(--accent-live)" />
+                        <circle cx="41" cy="41" r="3.6" fill="var(--accent-live)" />
+                        <circle cx="0" cy="58" r="3.6" fill="var(--accent-live)" />
+                        <circle cx="-41" cy="41" r="3.6" fill="var(--accent-live)" />
+                        <circle cx="-58" cy="0" r="3.6" fill="var(--accent-live)" />
+                        <circle cx="-41" cy="-41" r="3.6" fill="var(--accent-live)" />
+                        <circle cx="0" cy="0" r="24" fill="var(--svg-node-bg)" stroke="var(--accent-live)" stroke-width="1.2" />
+                        <text x="0" y="-68" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="8.5" font-weight="800">360° 8-ANGLE</text>
+                        <text x="0" y="3" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="13" font-weight="800">8 / 8</text>
+                        <text x="0" y="15" text-anchor="middle" fill="var(--ink-secondary)" font-size="7.2">멀티 레이어</text>
+                        <text x="0" y="79" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="8.5" font-weight="700">iNVTRY (Three.js 3D 무대)</text>
+                      </g>
+                    </svg>
+                  </div>
+                </div>
+
+                <div class="panel pp-bars-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">실측 8개 Peer 핵심 요건 충족률</span>
+                    <span class="pp-panel-meta">KR 4종 + 글로벌 4종 감사</span>
+                  </div>
+                  <div class="pp-bar-list">
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">360° 8방향 실사 회전 지원</span>
+                        <span class="pp-bar-val danger-accent">0 / 8 (0%)</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--danger" style="width:4%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">내 옷장 + 멀티 레이어드 동시 피팅</span>
+                        <span class="pp-bar-val gold-accent">부분 2D (2 / 8)</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--gold" style="width:25%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">얼굴·체형 0B 기기 내 처리</span>
+                        <span class="pp-bar-val danger-accent">0 / 8 (0%)</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--danger" style="width:4%"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pp-right">
+                <div class="panel pp-table-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">KR 런칭 · 글로벌 App Store AI 피팅 실측 매트릭스</span>
+                    <span class="pp-panel-meta">8개 실존 Peer 대조</span>
+                  </div>
+                  <div class="pp-table-scroll">
+                    <table class="pp-table">
+                      <thead>
+                        <tr>
+                          <th>앱 / 서비스</th>
+                          <th>피팅 방식</th>
+                          <th>각도·레이어드</th>
+                          <th>실측 병목·한계</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="pp-peer-name">에이블리 AI 옷입기</span><span class="pp-peer-meta">KR · ’25 여름 출시</span></td>
+                          <td>2D 정면 템플릿</td>
+                          <td class="pp-cell-danger">0° 콘셉트 한정</td>
+                          <td>내 옷장 미연동 · 피크 대기열 지연</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">드랩 뷔통 (Viton)</span><span class="pp-peer-meta">KR App Store</span></td>
+                          <td>2D 정면 단품</td>
+                          <td class="pp-cell-danger">0° · 최대 2벌 비교</td>
+                          <td>생성 약 30초 · 옷장·날씨·리셀 부재</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">에이클로젯 (Acloset)</span><span class="pp-peer-meta">KR 루코</span></td>
+                          <td>2D 정면 아바타</td>
+                          <td class="pp-cell-gold">2D 코디 · 360°✕</td>
+                          <td>무료 100벌 상한 · 서버 타임아웃</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">스타일봇 (StyleBot)</span><span class="pp-peer-meta">KR 스타일링</span></td>
+                          <td>착장 점수·룩북</td>
+                          <td class="pp-cell-danger">직접 피팅 없음</td>
+                          <td>B2B 룩북 위주 · 순환 옷장 부재</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">Google Try-On</span><span class="pp-peer-meta">Global Shopping</span></td>
+                          <td>2D 정면 단품</td>
+                          <td class="pp-cell-danger">0° 1벌 스펙 제한</td>
+                          <td>Merchant 공식 스펙상 레이어드 불가</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">Google Labs Doppl</span><span class="pp-peer-meta">Global 실험 앱</span></td>
+                          <td>단독 AI 피팅</td>
+                          <td class="pp-cell-danger">’26.04.30 종료</td>
+                          <td>옷장 없는 단독 피팅의 리텐션 한계</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">Alta · Whering · Indyx</span><span class="pp-peer-meta">US/UK 옷장</span></td>
+                          <td>2D 아바타·콜라주</td>
+                          <td class="pp-cell-gold">평면 2D 중심</td>
+                          <td>신상품 편향 · Indyx 스타일리스트 $60+</td>
+                        </tr>
+                        <tr class="pp-row--invtry">
+                          <td><span class="pp-peer-name">iNVTRY</span><span class="pp-peer-meta">Live MVP</span></td>
+                          <td class="pp-cell-live">Three.js 3D+AI</td>
+                          <td class="pp-cell-live">360° 8방향 · 레이어드</td>
+                          <td class="pp-cell-live">내 옷장·날씨·0B 보안·리셀 일체형</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="panel pp-takeaway">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">전략적 시사점 — Doppl 종료가 증명한 시장의 답</span>
+                    <span class="pp-panel-meta">Painpoint 03 → Retention</span>
+                  </div>
+                  <div class="pp-takeaway-grid">
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">01 · 리텐션 함정</span>
+                      <span class="pp-tk-title">단독 피팅 앱은 1회성 호기심</span>
+                      <p class="pp-tk-desc">Google Labs Doppl의 2026년 4월 종료는 내 옷장과 일상 루틴 없는 단독 AI 피팅 앱의 구조적 한계를 보여줍니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">02 · 2D 정면 한계</span>
+                      <span class="pp-tk-title">옆·뒷모습·레이어드 실루엣 누락</span>
+                      <p class="pp-tk-desc">실제 외출 코디는 이너·상의·아우터·하의 조합과 측면 핏이 핵심이지만, 기존 8개 Peer 모두 2D 정면에 머뭅니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">03 · 기술 우위</span>
+                      <span class="pp-tk-title">Three.js 3D + 8각도 캐시</span>
+                      <p class="pp-tk-desc">iNVTRY는 8방향 레이어드 피팅과 Three.js 3D 실시간 회전을 결합하고, 해시 캐시로 재조회 대기시간을 없앱니다.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer class="s-foot">
+            <span class="s-foot-brand">iNVTRY 사업계획서</span>
+            <span>출처: KR/US App Store 실측(2026) · Google Merchant Center VTON 공식 스펙 · Google Labs Doppl 종료 공지(2026.04.30)</span>
+            <span class="s-foot-num">07 / 24</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SLIDE 08 (04d) — PAINPOINT 04 DEEP RESEARCH: DECISION FATIGUE      -->
+      <!-- ================================================================== -->
+      <div class="ir-slide-slot">
+        <section id="slide-04d" class="ir-slide" data-slide="8">
+          <header class="s-head">
+            <div class="s-head-left">
+              <span class="s-eyebrow">PART 01 · Painpoint 04 심층 리서치</span>
+              <h2 class="s-title" data-i18n-rich="s04d-h2">매일 아침 코디 결정 피로와 <span class="serif-accent">4개 앱 분절</span></h2>
+            </div>
+          </header>
+
+          <div class="s-body">
+            <div class="pp-grid">
+              <div class="pp-left">
+                <div class="pp-kpi-row">
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">아침 코디 소요 시간</span>
+                    <span class="pp-kpi-val danger-accent">17분 / 일</span>
+                    <span class="pp-kpi-sub">여성 17분 · 남성 13분 (M&amp;S Survey)</span>
+                  </div>
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">평생 코디 고민 누적</span>
+                    <span class="pp-kpi-val gold-accent">약 6개월</span>
+                    <span class="pp-kpi-sub">60%+ ‘옷장 스트레스’ 경험 (M&amp;S)</span>
+                  </div>
+                </div>
+
+                <div class="panel pp-viz-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">매일 아침 4개 앱 단절 워크플로우 진단</span>
+                    <span class="pp-panel-meta">컨텍스트 스위칭 손실</span>
+                  </div>
+                  <div class="pp-viz-wrap">
+                    <svg class="pp-viz-svg" viewBox="0 0 460 184" role="img" aria-label="날씨, 옷장, 피팅, 지도 4개 앱 분절과 iNVTRY 단일 화면 통합 비교">
+                      <!-- Top Row: 4 Siloed Apps -->
+                      <text x="14" y="16" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8.5" font-weight="700">BEFORE · 매일 아침 4개 앱 분절 (평균 13~17분 소모)</text>
+                      <rect x="14" y="25" width="92" height="52" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                      <text x="60" y="45" text-anchor="middle" fill="var(--ink-primary)" font-size="10.5" font-weight="750">01 날씨 앱</text>
+                      <text x="60" y="61" text-anchor="middle" fill="var(--ink-muted)" font-size="8.5">기온·강수 텍스트</text>
+
+                      <text x="119" y="55" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="12" font-weight="800">✕</text>
+
+                      <rect x="132" y="25" width="92" height="52" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                      <text x="178" y="45" text-anchor="middle" fill="var(--ink-primary)" font-size="10.5" font-weight="750">02 옷장 앱</text>
+                      <text x="178" y="61" text-anchor="middle" fill="var(--ink-muted)" font-size="8.5">2D 정적 목록</text>
+
+                      <text x="237" y="55" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="12" font-weight="800">✕</text>
+
+                      <rect x="250" y="25" width="92" height="52" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                      <text x="296" y="45" text-anchor="middle" fill="var(--ink-primary)" font-size="10.5" font-weight="750">03 피팅 앱</text>
+                      <text x="296" y="61" text-anchor="middle" fill="var(--ink-muted)" font-size="8.5">단품 30초 대기</text>
+
+                      <text x="355" y="55" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="12" font-weight="800">✕</text>
+
+                      <rect x="368" y="25" width="78" height="52" rx="6" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                      <text x="407" y="45" text-anchor="middle" fill="var(--ink-primary)" font-size="10.5" font-weight="750">04 지도</text>
+                      <text x="407" y="61" text-anchor="middle" fill="var(--ink-muted)" font-size="8.5">TPO·거리 확인</text>
+
+                      <!-- Convergence Lines -->
+                      <path d="M 60 77 L 60 96 L 230 96 M 178 77 L 178 96 M 296 77 L 296 96 M 407 77 L 407 96 L 230 96" fill="none" stroke="var(--accent-live)" stroke-dasharray="2.5 2.5" stroke-width="1" />
+                      <line x1="230" y1="96" x2="230" y2="112" stroke="var(--accent-live)" stroke-width="1.5" />
+                      <polygon points="225,110 230,117 235,110" fill="var(--accent-live)" />
+
+                      <!-- Bottom Bar: Unified iNVTRY Stage -->
+                      <rect x="14" y="119" width="432" height="54" rx="8" fill="var(--accent-live-soft)" stroke="var(--accent-live)" stroke-width="1.3" />
+                      <text x="28" y="140" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="9" font-weight="800">AFTER · iNVTRY 단일 무대 (Weather v1 × Street View × 내 옷장)</text>
+                      <text x="28" y="158" fill="var(--ink-primary)" font-size="10.5" font-weight="650">오늘 기온·강수 자동 감지 → 내 보유 옷 레이어드 추천 → 목적지 거리 배경 360° 확인</text>
+                    </svg>
+                  </div>
+                </div>
+
+                <div class="panel pp-bars-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">아침 결정 피로 실증 지표 (M&amp;S Survey)</span>
+                    <span class="pp-panel-meta">UK 2,000+ 성인 조사</span>
+                  </div>
+                  <div class="pp-bar-list">
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">옷장 스트레스(‘Wardrobe Rage’) 경험 비율</span>
+                        <span class="pp-bar-val danger-accent">60%+</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--danger" style="width:62%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">보유 150벌+ 중 정기 착용 비중</span>
+                        <span class="pp-bar-val gold-accent">50% 미만</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--gold" style="width:46%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">여성 일평균 17분 (연간 약 103시간 소모)</span>
+                        <span class="pp-bar-val">103h / 년</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill" style="width:74%"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pp-right">
+                <div class="panel pp-table-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">KR · 글로벌 날씨·코디 앱 통합 수준 비교</span>
+                    <span class="pp-panel-meta">실시간 컨텍스트 감사</span>
+                  </div>
+                  <div class="pp-table-scroll">
+                    <table class="pp-table">
+                      <thead>
+                        <tr>
+                          <th>서비스</th>
+                          <th>실시간 기온·강수</th>
+                          <th>내 보유 옷 연동</th>
+                          <th>목적지 거리 배경</th>
+                          <th>핵심 한계</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="pp-peer-name">기상청 · 애플 날씨</span><span class="pp-peer-meta">기본 날씨 앱</span></td>
+                          <td class="pp-cell-live">실시간 정밀</td>
+                          <td class="pp-cell-danger">없음</td>
+                          <td class="pp-cell-danger">없음</td>
+                          <td>숫자·아이콘만 제공 (체감 코디 부재)</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">무신사 · 지그재그(Zefi)</span><span class="pp-peer-meta">KR 커머스 AI</span></td>
+                          <td class="pp-cell-gold">텍스트 추천</td>
+                          <td class="pp-cell-danger">신상품 위주</td>
+                          <td class="pp-cell-danger">없음</td>
+                          <td>내 옷장 대신 새 상품 구매 유도</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">에이클로젯 (Acloset)</span><span class="pp-peer-meta">KR 옷장 앱</span></td>
+                          <td class="pp-cell-gold">기온 기반 2D</td>
+                          <td class="pp-cell-gold">100벌 무료 상한</td>
+                          <td class="pp-cell-danger">없음</td>
+                          <td>평면 콜라주 · 날씨 연출·거리 배경 없음</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">Alta Daily</span><span class="pp-peer-meta">US 스타일링</span></td>
+                          <td class="pp-cell-gold">날씨 코디</td>
+                          <td class="pp-cell-gold">부분 연동</td>
+                          <td class="pp-cell-danger">없음</td>
+                          <td>제휴 신상품 편향 · 2D 정면 아바타</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">Whering · Indyx</span><span class="pp-peer-meta">UK/US 옷장</span></td>
+                          <td class="pp-cell-danger">수동·텍스트</td>
+                          <td class="pp-cell-live">보유 옷 등록</td>
+                          <td class="pp-cell-danger">없음</td>
+                          <td>정적 2D 무드보드 · 실착·날씨 시뮬 부재</td>
+                        </tr>
+                        <tr class="pp-row--invtry">
+                          <td><span class="pp-peer-name">iNVTRY</span><span class="pp-peer-meta">Live Spatial Stage</span></td>
+                          <td class="pp-cell-live">Weather v1 실시간</td>
+                          <td class="pp-cell-live">100% 내 옷장</td>
+                          <td class="pp-cell-live">Street View 배경</td>
+                          <td class="pp-cell-live">비·눈·햇살 Three.js 3D 무대 + 캘린더</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="panel pp-takeaway">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">전략적 시사점 — 일일 리텐션(DAU)을 만드는 유일한 트리거</span>
+                    <span class="pp-panel-meta">Painpoint 04 → Daily Habit</span>
+                  </div>
+                  <div class="pp-takeaway-grid">
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">01 · 매일 열리는 이유</span>
+                      <span class="pp-tk-title">쇼핑은 월 2회, 날씨 코디는 매일</span>
+                      <p class="pp-tk-desc">커머스·피팅 앱은 구매 직전에만 열지만, 날씨+옷장+캘린더 결합은 출근·외출 전 매일 여는 습관을 만듭니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">02 · 체감 시각화</span>
+                      <span class="pp-tk-title">“12°C 비”를 실착 화면으로 직관화</span>
+                      <p class="pp-tk-desc">단순 기온 텍스트 대신 목적지 거리뷰와 비·눈 물리 무대에 내 옷을 입혀 10초 만에 의사결정을 끝냅니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">03 · 자산 순환</span>
+                      <span class="pp-tk-title">캘린더 기록 → CPW 자동 계산</span>
+                      <p class="pp-tk-desc">오늘 입은 코디를 1탭으로 기록하면 착용 횟수와 1회 착용비(CPW), 90일 미착용 옷이 자동 식별됩니다.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer class="s-foot">
+            <span class="s-foot-brand">iNVTRY 사업계획서</span>
+            <span>출처: Marks &amp; Spencer UK Wardrobe Survey · Google Weather v1 / Street View API 스펙 · 2026 App Store 실측</span>
+            <span class="s-foot-num">08 / 24</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SLIDE 09 (04e) — PAINPOINT 05 DEEP RESEARCH: BIOMETRIC & EXIF RISK -->
+      <!-- ================================================================== -->
+      <div class="ir-slide-slot">
+        <section id="slide-04e" class="ir-slide" data-slide="9">
+          <header class="s-head">
+            <div class="s-head-left">
+              <span class="s-eyebrow">PART 01 · Painpoint 05 심층 리서치</span>
+              <h2 class="s-title" data-i18n-rich="s04e-h2">얼굴·집 사진 <span class="serif-accent">생체정보·EXIF 유출</span> 리스크</h2>
+            </div>
+          </header>
+
+          <div class="s-body">
+            <div class="pp-grid">
+              <div class="pp-left">
+                <div class="pp-kpi-row">
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">기존 AI 피팅 원본 전송</span>
+                    <span class="pp-kpi-val danger-accent">100% 서버</span>
+                    <span class="pp-kpi-sub">얼굴·전신 셀카 외부 클라우드 업로드</span>
+                  </div>
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">iNVTRY 얼굴 원본 전송</span>
+                    <span class="pp-kpi-val live-accent">0 Bytes</span>
+                    <span class="pp-kpi-sub">MediaPipe WASM 기기 내 수치 추출</span>
+                  </div>
+                </div>
+
+                <div class="panel pp-viz-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">데이터 이동 경로 감사 (Legacy Cloud vs On-Device)</span>
+                    <span class="pp-panel-meta">GDPR · 개인정보보호법</span>
+                  </div>
+                  <div class="pp-viz-wrap">
+                    <svg class="pp-viz-svg" viewBox="0 0 460 184" role="img" aria-label="기존 클라우드 원본 업로드 방식과 iNVTRY 온디바이스 0B 처리 경로 비교">
+                      <!-- Top Row: Legacy Risk Path -->
+                      <text x="14" y="16" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8.5" font-weight="700">LEGACY AI PEERS · 원본 생체·위치 데이터 외부 서버 유출 경로</text>
+                      <rect x="14" y="25" width="112" height="52" rx="6" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-opacity="0.55" stroke-width="1" />
+                      <text x="70" y="45" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">셀카 · 거울 사진</text>
+                      <text x="70" y="61" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8">얼굴 + 집 배경 + GPS</text>
+
+                      <line x1="126" y1="51" x2="176" y2="51" stroke="var(--accent-danger)" stroke-width="1.6" stroke-dasharray="3 2" />
+                      <polygon points="174,47 182,51 174,55" fill="var(--accent-danger)" />
+                      <text x="152" y="43" text-anchor="middle" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="7.5" font-weight="700">RAW</text>
+
+                      <rect x="184" y="25" width="122" height="52" rx="6" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-width="1.1" />
+                      <text x="245" y="45" text-anchor="middle" fill="var(--accent-danger)" font-size="10" font-weight="750">외부 클라우드 서버</text>
+                      <text x="245" y="61" text-anchor="middle" fill="var(--ink-secondary)" font-size="8.2">24~48h 보관 · 전송 발생</text>
+
+                      <line x1="306" y1="51" x2="342" y2="51" stroke="var(--accent-danger)" stroke-width="1.4" stroke-dasharray="3 2" />
+                      <polygon points="340,47 348,51 340,55" fill="var(--accent-danger)" />
+
+                      <rect x="350" y="25" width="96" height="52" rx="6" fill="var(--svg-node-bg)" stroke="var(--accent-danger)" stroke-opacity="0.6" stroke-width="1" />
+                      <text x="398" y="45" text-anchor="middle" fill="var(--accent-danger)" font-size="9.8" font-weight="750">이탈 · 규제 위험</text>
+                      <text x="398" y="61" text-anchor="middle" fill="var(--ink-muted)" font-size="8">재학습·유출 불안</text>
+
+                      <!-- Divider -->
+                      <line x1="14" y1="94" x2="446" y2="94" stroke="var(--hairline)" stroke-width="1" />
+
+                      <!-- Bottom Row: iNVTRY Zero-Upload Local Vault -->
+                      <text x="14" y="111" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="8.5" font-weight="700">iNVTRY ON-DEVICE · 기기 내 WASM 처리 후 비식별 수치·의류만 분리</text>
+                      <rect x="14" y="120" width="166" height="52" rx="6" fill="var(--accent-live-soft)" stroke="var(--accent-live)" stroke-width="1.2" />
+                      <text x="97" y="140" text-anchor="middle" fill="var(--accent-live)" font-size="10" font-weight="800">기기 내 WASM 격리 구역</text>
+                      <text x="97" y="156" text-anchor="middle" fill="var(--ink-primary)" font-size="8.4">피부톤 수치 추출 · 배경·EXIF 삭제</text>
+
+                      <!-- Firewall barrier -->
+                      <line x1="196" y1="118" x2="196" y2="174" stroke="var(--accent-gold)" stroke-width="2" />
+                      <text x="234" y="141" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="8.5" font-weight="800">얼굴 0B</text>
+                      <text x="234" y="155" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="7.5">GPS 0B</text>
+
+                      <rect x="272" y="120" width="174" height="52" rx="6" fill="var(--svg-node-bg)" stroke="var(--accent-live-border)" stroke-width="1.1" />
+                      <text x="359" y="140" text-anchor="middle" fill="var(--ink-primary)" font-size="10" font-weight="750">비식별 옷 WebP · 무학습 AI</text>
+                      <text x="359" y="156" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="8.2">Vertex No-Train · 원클릭 영구 파기</text>
+                    </svg>
+                  </div>
+                </div>
+
+                <div class="panel pp-bars-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">사진 1장에 포함된 민감 노출 요소</span>
+                    <span class="pp-panel-meta">iNVTRY 사전 차단 항목</span>
+                  </div>
+                  <div class="pp-bar-list">
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">얼굴 생체 특징점 (GDPR 민감 생체정보)</span>
+                        <span class="pp-bar-val live-accent">기기 내 0B 차단</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--live" style="width:100%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">스마트폰 EXIF · 집 주소 GPS 좌표</span>
+                        <span class="pp-bar-val live-accent">로컬 100% 소거</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--live" style="width:100%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">거울 뒤 실내·주거 환경 배경 노출</span>
+                        <span class="pp-bar-val live-accent">로컬 배경 제거</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--live" style="width:100%"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pp-right">
+                <div class="panel pp-table-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">KR · 글로벌 AI 피팅 개인정보 처리 구조 감사</span>
+                    <span class="pp-panel-meta">약관·아키텍처 대조</span>
+                  </div>
+                  <div class="pp-table-scroll">
+                    <table class="pp-table">
+                      <thead>
+                        <tr>
+                          <th>서비스</th>
+                          <th>얼굴·전신 전송</th>
+                          <th>EXIF·GPS 사전 삭제</th>
+                          <th>배경 제거 위치</th>
+                          <th>개인정보 리스크</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="pp-peer-name">에이블리 AI 옷입기</span><span class="pp-peer-meta">KR 커머스</span></td>
+                          <td class="pp-cell-danger">외부 서버 업로드</td>
+                          <td class="pp-cell-danger">미보장</td>
+                          <td>클라우드 서버</td>
+                          <td>얼굴 원본 전송·보관 심리 장벽</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">드랩 뷔통 (Viton)</span><span class="pp-peer-meta">KR AI 피팅</span></td>
+                          <td class="pp-cell-danger">전신 서버 업로드</td>
+                          <td class="pp-cell-danger">미보장</td>
+                          <td>클라우드 서버</td>
+                          <td>합성 처리 위해 전신 사진 전송 필수</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">에이클로젯 (Acloset)</span><span class="pp-peer-meta">KR 옷장 앱</span></td>
+                          <td class="pp-cell-danger">서버 업로드</td>
+                          <td class="pp-cell-gold">서버 후처리</td>
+                          <td>클라우드 서버</td>
+                          <td>방 배경·위치 포함 원본이 서버 경유</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">Google Try-On</span><span class="pp-peer-meta">Global</span></td>
+                          <td class="pp-cell-danger">전신 서버 업로드</td>
+                          <td class="pp-cell-gold">정책상 삭제</td>
+                          <td>클라우드 서버</td>
+                          <td>전송 자체 발생 · GDPR 규제 민감</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">Alta Daily</span><span class="pp-peer-meta">US 스타일링</span></td>
+                          <td class="pp-cell-danger">아바타 서버 전송</td>
+                          <td class="pp-cell-danger">미보장</td>
+                          <td>클라우드 서버</td>
+                          <td>개인 얼굴 이미지 외부 클라우드 저장</td>
+                        </tr>
+                        <tr class="pp-row--invtry">
+                          <td><span class="pp-peer-name">iNVTRY</span><span class="pp-peer-meta">Privacy-by-Design</span></td>
+                          <td class="pp-cell-live">0 Bytes (미전송)</td>
+                          <td class="pp-cell-live">업로드 전 100% 삭제</td>
+                          <td class="pp-cell-live">기기 내 WASM</td>
+                          <td class="pp-cell-live">개인정보보호법 · App Store 5.1.1v</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="panel pp-takeaway">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">전략적 시사점 — 보안은 비용이 아니라 전환율·규제 해자</span>
+                    <span class="pp-panel-meta">Painpoint 05 → Security Moat</span>
+                  </div>
+                  <div class="pp-takeaway-grid">
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">01 · 온보딩 장벽</span>
+                      <span class="pp-tk-title">“셀카 올리기 찝찝함”이 최대 이탈</span>
+                      <p class="pp-tk-desc">AI 피팅을 써보고 싶어도 얼굴·전신·집 거울 사진이 외부 서버로 올라간다는 사실 자체가 가입을 막습니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">02 · 글로벌 규제</span>
+                      <span class="pp-tk-title">GDPR·국내 개인정보보호법 강화</span>
+                      <p class="pp-tk-desc">안면 이미지가 생체정보로 엄격히 분류되는 추세에서, 원본을 애초에 수집하지 않는 설계가 가장 강력한 방어입니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">03 · 원가 절감</span>
+                      <span class="pp-tk-title">보안 설계 = 서버 GPU 비용 ₩0</span>
+                      <p class="pp-tk-desc">기기 내 MediaPipe WASM 분석과 로컬 배경 제거는 보안과 동시에 클라우드 전처리·스토리지 비용을 극소화합니다.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer class="s-foot">
+            <span class="s-foot-brand">iNVTRY 사업계획서</span>
+            <span>출처: EU GDPR Art. 9 Biometric Data 가이드라인 · 한국 개인정보보호법 · Apple App Store 5.1.1v · 2026 Peer 약관 감사</span>
+            <span class="s-foot-num">09 / 24</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SLIDE 10 (04f) — PAINPOINT 06 DEEP RESEARCH: RESALE & EU ESPR 2026 -->
+      <!-- ================================================================== -->
+      <div class="ir-slide-slot">
+        <section id="slide-04f" class="ir-slide" data-slide="10">
+          <header class="s-head">
+            <div class="s-head-left">
+              <span class="s-eyebrow">PART 01 · Painpoint 06 심층 리서치</span>
+              <h2 class="s-title" data-i18n-rich="s04f-h2">중고 판매 등록 피로와 <span class="serif-accent">EU ESPR 순환 단절</span></h2>
+            </div>
+          </header>
+
+          <div class="s-body">
+            <div class="pp-grid">
+              <div class="pp-left">
+                <div class="pp-kpi-row">
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">국내 중고 의류·패션 비중</span>
+                    <span class="pp-kpi-val gold-accent">35~37%</span>
+                    <span class="pp-kpi-sub">대한상공회의소·키위서베이 최상위</span>
+                  </div>
+                  <div class="panel pp-kpi-card">
+                    <span class="pp-kpi-label">EU 미판매 의류 폐기 금지</span>
+                    <span class="pp-kpi-val live-accent">2026.07 시행</span>
+                    <span class="pp-kpi-sub">EU ESPR 대기업 소각·매립 금지 발효</span>
+                  </div>
+                </div>
+
+                <div class="panel pp-viz-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">국내 C2C 의류 판매 4단계 이탈 퍼널</span>
+                    <span class="pp-panel-meta">등록 마찰 vs 30초 원클릭</span>
+                  </div>
+                  <div class="pp-viz-wrap">
+                    <svg class="pp-viz-svg" viewBox="0 0 460 184" role="img" aria-label="기존 C2C 중고 판매 4단계 마찰과 iNVTRY 30초 원클릭 자동화 비교">
+                      <!-- Legacy 4-step friction funnel -->
+                      <text x="14" y="16" fill="var(--accent-danger)" font-family="var(--font-mono)" font-size="8.5" font-weight="700">LEGACY C2C (당근·번개장터) · 4단계 수동 마찰로 장롱 방치</text>
+
+                      <rect x="14" y="25" width="96" height="46" rx="5" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                      <text x="62" y="44" text-anchor="middle" fill="var(--ink-primary)" font-size="9.8" font-weight="750">① 재촬영·보정</text>
+                      <text x="62" y="59" text-anchor="middle" fill="var(--ink-muted)" font-size="8">바닥·옷걸이 다시 찍기</text>
+
+                      <text x="119" y="52" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="11">→</text>
+
+                      <rect x="128" y="25" width="96" height="46" rx="5" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                      <text x="176" y="44" text-anchor="middle" fill="var(--ink-primary)" font-size="9.8" font-weight="750">② 실측·소재 입력</text>
+                      <text x="176" y="59" text-anchor="middle" fill="var(--ink-muted)" font-size="8">총장·가슴·하자 수기</text>
+
+                      <text x="233" y="52" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="11">→</text>
+
+                      <rect x="242" y="25" width="96" height="46" rx="5" fill="var(--accent-danger-soft)" stroke="var(--accent-danger)" stroke-opacity="0.7" stroke-width="1" />
+                      <text x="290" y="44" text-anchor="middle" fill="var(--accent-danger)" font-size="9.8" font-weight="750">③ 채팅·네고</text>
+                      <text x="290" y="59" text-anchor="middle" fill="var(--ink-secondary)" font-size="8">노쇼·반복 질문 피로</text>
+
+                      <text x="347" y="52" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="11">→</text>
+
+                      <rect x="356" y="25" width="90" height="46" rx="5" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1" />
+                      <text x="401" y="44" text-anchor="middle" fill="var(--ink-primary)" font-size="9.8" font-weight="750">④ 포장·택배</text>
+                      <text x="401" y="59" text-anchor="middle" fill="var(--ink-muted)" font-size="8">수수료 위탁 이탈</text>
+
+                      <!-- Timeline divider -->
+                      <line x1="14" y1="90" x2="446" y2="90" stroke="var(--hairline)" stroke-width="1" />
+
+                      <!-- iNVTRY 30-sec Automated Circular Flow -->
+                      <text x="14" y="108" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="8.5" font-weight="700">iNVTRY CIRCULAR · 보유 기록 기반 30초 원클릭 판매 · 세탁 · 기부</text>
+                      <rect x="14" y="117" width="432" height="54" rx="8" fill="var(--accent-live-soft)" stroke="var(--accent-live)" stroke-width="1.3" />
+                      <text x="30" y="139" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="9.5" font-weight="800">90일 미착용 자동 감지 → 배경 제거 사진 · 세탁 라벨 OCR · 실착용 이력 자동 첨부</text>
+                      <text x="30" y="158" fill="var(--ink-primary)" font-size="10.2" font-weight="650">신뢰 인증 리셀(AI 과장 이미지 불신 해소) · 문 앞 세탁 수거 · 기부 영수증 원클릭</text>
+                    </svg>
+                  </div>
+                </div>
+
+                <div class="panel pp-bars-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">글로벌·국내 순환 패션 전환 동력</span>
+                    <span class="pp-panel-meta">ThredUp · 어패럴뉴스</span>
+                  </div>
+                  <div class="pp-bar-list">
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">글로벌 소비자 중고 의류 구매 경험률</span>
+                        <span class="pp-bar-val live-accent">59%</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--live" style="width:59%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">국내 중고거래 내 의류·패션 잡화 비중</span>
+                        <span class="pp-bar-val gold-accent">35~37%</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--gold" style="width:37%"></div></div>
+                    </div>
+                    <div class="pp-bar-item">
+                      <div class="pp-bar-top">
+                        <span class="pp-bar-name">국내 중고 패션 시장 연성장률 (₩5조+ 돌파)</span>
+                        <span class="pp-bar-val gold-accent">~30% YoY</span>
+                      </div>
+                      <div class="pp-bar-track"><div class="pp-bar-fill pp-bar-fill--gold" style="width:65%"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pp-right">
+                <div class="panel pp-table-panel">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">KR · 글로벌 중고·세탁·옷장 Peer 순환 기능 비교</span>
+                    <span class="pp-panel-meta">보유→세탁→판매 연결성</span>
+                  </div>
+                  <div class="pp-table-scroll">
+                    <table class="pp-table">
+                      <thead>
+                        <tr>
+                          <th>서비스</th>
+                          <th>등록 소요</th>
+                          <th>착용·세탁 이력 인증</th>
+                          <th>수수료·마찰</th>
+                          <th>구조적 한계</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="pp-peer-name">당근 · 번개장터</span><span class="pp-peer-meta">KR C2C 직거래</span></td>
+                          <td class="pp-cell-danger">10~15분 수동</td>
+                          <td class="pp-cell-danger">없음</td>
+                          <td>채팅·네고·노쇼</td>
+                          <td>실측·재촬영 피로로 등록 포기</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">차란 · 리클</span><span class="pp-peer-meta">KR 위탁 리셀</span></td>
+                          <td class="pp-cell-gold">수거 대기</td>
+                          <td class="pp-cell-danger">없음</td>
+                          <td class="pp-cell-danger">높은 위탁 수수료</td>
+                          <td>정산 지연·저가 의류 매입 거절</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">ThredUp · Depop</span><span class="pp-peer-meta">US/UK 리셀</span></td>
+                          <td class="pp-cell-gold">수동·위탁</td>
+                          <td class="pp-cell-danger">없음</td>
+                          <td>AI 합성 실물 불신</td>
+                          <td>구매자 실물 상태 검증 어려움</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">Whering · Indyx</span><span class="pp-peer-meta">UK/US 옷장</span></td>
+                          <td>옷장 기록만</td>
+                          <td class="pp-cell-gold">CPW 통계만</td>
+                          <td class="pp-cell-danger">리셀 연동 부재</td>
+                          <td>안 입는 옷 발견 후 현금화 단절</td>
+                        </tr>
+                        <tr>
+                          <td><span class="pp-peer-name">세탁특공대 · 런드리고</span><span class="pp-peer-meta">KR O2O 세탁</span></td>
+                          <td>세탁 전용</td>
+                          <td class="pp-cell-danger">옷장 미연동</td>
+                          <td>개별 품목 추적✕</td>
+                          <td>보유 옷별 세탁 라벨·이력 단절</td>
+                        </tr>
+                        <tr class="pp-row--invtry">
+                          <td><span class="pp-peer-name">iNVTRY</span><span class="pp-peer-meta">Circular Closet</span></td>
+                          <td class="pp-cell-live">30초 원클릭</td>
+                          <td class="pp-cell-live">착용·세탁 자동 인증</td>
+                          <td class="pp-cell-live">판매·기부 선택</td>
+                          <td class="pp-cell-live">세탁소 지도 · EU ESPR 순환 대응</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="panel pp-takeaway">
+                  <div class="pp-panel-head">
+                    <span class="pp-panel-kicker">전략적 시사점 — 디지털 옷장이 중고 거래의 신뢰 인프라가 된다</span>
+                    <span class="pp-panel-meta">Painpoint 06 → Circular Loop</span>
+                  </div>
+                  <div class="pp-takeaway-grid">
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">01 · 등록 장벽 제거</span>
+                      <span class="pp-tk-title">이미 찍은 사진·라벨로 30초 등록</span>
+                      <p class="pp-tk-desc">옷장에 등록된 배경 제거 사진, 브랜드·사이즈·세탁 라벨 정보를 그대로 넘겨 재촬영 피로를 없앱니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">02 · 실물 신뢰 인증</span>
+                      <span class="pp-tk-title">AI 합성 불신 vs 실착용 이력</span>
+                      <p class="pp-tk-desc">과장된 AI 모델 컷 대신 실제 보유 기간·착용 횟수·세탁 이력이 붙어 구매자 신뢰와 체결률을 높입니다.</p>
+                    </div>
+                    <div class="pp-tk-col">
+                      <span class="pp-tk-num">03 · 규제 순풍</span>
+                      <span class="pp-tk-title">2026.07 EU ESPR · EPR 본격화</span>
+                      <p class="pp-tk-desc">미판매 의류 폐기 금지와 순환 규제 강화로 브랜드·소비자 모두 추적 가능한 디지털 옷장 인프라가 필수화됩니다.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer class="s-foot">
+            <span class="s-foot-brand">iNVTRY 사업계획서</span>
+            <span>출처: 대한상공회의소 · 코리아리서치 키위서베이 · EU Commission ESPR(2026.07 시행) · ThredUp 2026 · 어패럴뉴스</span>
+            <span class="s-foot-num">10 / 24</span>
           </footer>
         </section>
       </div>
@@ -597,11 +2106,11 @@
       <!-- SLIDE 05 — SOLUTION (LARGE LIVE APP + SITE CENTERPIECE)            -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-05" class="ir-slide" data-slide="5">
+        <section id="slide-05" class="ir-slide" data-slide="11">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 01 · 해결 방안</span>
-              <h2 class="s-title" data-i18n-rich="s05-h2">6가지 불편, <span class="serif-accent">iNVTRY 하나로 끝</span></h2>
+              <span class="s-eyebrow">PART 01 · Solution</span>
+              <h2 class="s-title" data-i18n-rich="s05-h2">6 Painpoints, <span class="serif-accent">1 Solution</span></h2>
             </div>
           </header>
 
@@ -647,9 +2156,9 @@
                   <strong class="s05-pair-after">구매 전 내 옷과 AI 코디</strong>
                 </div>
                 <div class="panel s05-pair">
-                  <span class="s05-pair-before">1벌 앞면 피팅 한계</span>
+                  <span class="s05-pair-before">기존 AI 피팅 앱 한계</span>
                   <span class="s05-pair-arrow">→</span>
-                  <strong class="s05-pair-after gold-accent">360° 4겹 · Three.js 3D</strong>
+                  <strong class="s05-pair-after gold-accent">360° 레이어드 · Three.js 3D</strong>
                 </div>
                 <div class="panel s05-pair">
                   <span class="s05-pair-before">날씨·옷장 따로 확인</span>
@@ -671,8 +2180,8 @@
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>해결 방안 — 비교하고, 미리 입혀보고, 세탁·판매·기부까지 하나로</span>
-            <span class="s-foot-num">05 / 18</span>
+            <span>Solution — 비교하고, 미리 입혀보고, 세탁·판매·기부까지 iNVTRY 하나로</span>
+            <span class="s-foot-num">11 / 24</span>
           </footer>
         </section>
       </div>
@@ -681,10 +2190,10 @@
       <!-- SLIDE 06 — USER JOURNEY (FULL-SIZE 6-CUT STORYBOARD)               -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-06" class="ir-slide" data-slide="6">
+        <section id="slide-06" class="ir-slide" data-slide="12">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 02 · 서비스 흐름</span>
+              <span class="s-eyebrow">PART 02 · 서비스 흐름</span>
               <h2 class="s-title" data-i18n-rich="s06-h2">옷을 사고, 입고, 되파는 <span class="serif-accent">6단계</span></h2>
             </div>
           </header>
@@ -726,7 +2235,7 @@
                   </div>
                 </div>
                 <div class="s06-cap">
-                  <span class="s06-cap-title">오늘 날씨에 맞춰 4겹 피팅</span>
+                  <span class="s06-cap-title">오늘 날씨에 맞춰 레이어드 피팅</span>
                   <span class="s06-cap-meta" data-ir-bind="performance.fpsThreeChip">Three.js 3D · 120FPS</span>
                 </div>
               </article>
@@ -740,7 +2249,7 @@
                   </div>
                 </div>
                 <div class="s06-cap">
-                  <span class="s06-cap-title">코디 달력 기록 · 360° 공유</span>
+                  <span class="s06-cap-title">OOTD 캘린더 기록 · 360° 공유</span>
                 </div>
               </article>
 
@@ -774,7 +2283,7 @@
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
             <span>서비스 흐름 — 쇼핑 전 비교부터 세탁·판매·기부까지 6단계</span>
-            <span class="s-foot-num">06 / 18</span>
+            <span class="s-foot-num">12 / 24</span>
           </footer>
         </section>
       </div>
@@ -783,10 +2292,10 @@
       <!-- SLIDE 07 — LIVE DEMO SHOWCASE (LARGE 5-PHONE PRODUCTION RUNWAY)    -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-07" class="ir-slide" data-slide="7">
+        <section id="slide-07" class="ir-slide" data-slide="13">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 02 · 실제 앱 화면</span>
+              <span class="s-eyebrow">PART 02 · 실제 앱 화면</span>
               <h2 class="s-title" data-i18n-rich="s07-h2">지금 바로 써볼 수 있는 <span class="serif-accent">핵심 화면 5가지</span></h2>
             </div>
           </header>
@@ -848,7 +2357,7 @@
                   </div>
                 </div>
                 <div class="s07-cap">
-                  <span class="s07-cap-title"><span class="mono gold-accent">03</span> 코디 캘린더</span>
+                  <span class="s07-cap-title"><span class="mono gold-accent">03</span> OOTD 캘린더</span>
                   <span class="s07-cap-sub">월간 · 주간 착용 기록</span>
                 </div>
               </div>
@@ -868,7 +2377,7 @@
                   </div>
                 </div>
                 <div class="s07-cap">
-                  <span class="s07-cap-title"><span class="mono gold-accent">04</span> 옷장 활용 분석</span>
+                  <span class="s07-cap-title"><span class="mono gold-accent">04</span> CPW · 자산 리포트</span>
                   <span class="s07-cap-sub">2,878회 착용 · 회당 착용비</span>
                 </div>
               </div>
@@ -889,15 +2398,15 @@
                 </div>
                 <div class="s07-cap">
                   <span class="s07-cap-title"><span class="mono gold-accent">05</span> 얼굴 안심 보관</span>
-                  <span class="s07-cap-sub">28가지 체형 · 외부 전송 0건</span>
+                  <span class="s07-cap-sub">키·체형·피부톤 · 외부 전송 0건</span>
                 </div>
               </div>
             </div>
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>실제 앱 화면 — 웹 · iOS · Android 동시 지원 (www.ainvtry.com/app)</span>
-            <span class="s-foot-num">07 / 18</span>
+            <span>실제 앱 화면 — Web · iOS · Android 동시 지원 (www.ainvtry.com/app)</span>
+            <span class="s-foot-num">13 / 24</span>
           </footer>
         </section>
       </div>
@@ -906,11 +2415,11 @@
       <!-- SLIDE 08 — CORE TECH (LARGE SITE Three.js 3D WEATHER + ON-DEVICE CUTOUT) -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-08" class="ir-slide" data-slide="8">
+        <section id="slide-08" class="ir-slide" data-slide="14">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 02 · 핵심 기술</span>
-              <h2 class="s-title" data-i18n-rich="s08-h2">Three.js 3D · 8방향 AI 피팅 · <span class="serif-accent">기기 내 처리</span></h2>
+              <span class="s-eyebrow">PART 02 · 핵심 기술</span>
+              <h2 class="s-title" data-i18n-rich="s08-h2">Three.js 3D · 8방향 AI 피팅 · <span class="serif-accent">On-Device 처리</span></h2>
             </div>
           </header>
 
@@ -963,7 +2472,7 @@
                         <img src="/assets/garments/charcoal-slacks.webp" alt="차콜 슬랙스 배경 제거 의류" />
                         <img src="/assets/garments/black-loafers.webp" alt="블랙 로퍼 배경 제거 의류" />
                       </div>
-                      <span class="mono live-accent s08-thumb-cap">WebP 4겹</span>
+                      <span class="mono live-accent s08-thumb-cap">WebP 풀 코디</span>
                     </div>
                   </div>
 
@@ -994,8 +2503,8 @@
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>핵심 기술 — Three.js 3D · 8방향 AI 피팅 · 기기 내 전처리</span>
-            <span class="s-foot-num">08 / 18</span>
+            <span>핵심 기술 — Three.js 3D · 8방향 AI 피팅 · On-Device 전처리</span>
+            <span class="s-foot-num">14 / 24</span>
           </footer>
         </section>
       </div>
@@ -1004,10 +2513,10 @@
       <!-- SLIDE 09 — PRIVACY MOAT (FULL-SCALE OFFICIAL SITE SECURITY UI)     -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-09" class="ir-slide" data-slide="9">
+        <section id="slide-09" class="ir-slide" data-slide="15">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 02 · 개인정보 보호</span>
+              <span class="s-eyebrow">PART 02 · 개인정보 보호</span>
               <h2 class="s-title" data-i18n-rich="s09-h2">얼굴과 집 사진을 지키는 <span class="serif-accent">4단계 보안 설계</span></h2>
             </div>
           </header>
@@ -1031,10 +2540,10 @@
                 <div class="s09-kpi-strip">
                   <div class="panel panel--live s09-kpi-pill">
                     <span class="s09-kpi-val live-accent">0 Bytes</span>
-                    <span class="s09-kpi-sub">얼굴 원본 서버 전송 없음</span>
+                    <span class="s09-kpi-sub">개인정보 보안 · 원본 미전송</span>
                   </div>
                   <div class="panel panel--gold s09-kpi-pill">
-                    <span class="s09-kpi-val gold-accent">정보 삭제</span>
+                    <span class="s09-kpi-val gold-accent">EXIF 삭제</span>
                     <span class="s09-kpi-sub">위치·방 배경 제거 후 옷만 저장</span>
                   </div>
                   <div class="panel s09-kpi-pill">
@@ -1091,7 +2600,7 @@
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
             <span>개인정보 보호 — 개인정보보호법 · App Store 정책 준수</span>
-            <span class="s-foot-num">09 / 18</span>
+            <span class="s-foot-num">15 / 24</span>
           </footer>
         </section>
       </div>
@@ -1100,10 +2609,10 @@
       <!-- SLIDE 10 — MARKET OPPORTUNITY (LARGE PRIMARY-SOURCE CHARTS)        -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-10" class="ir-slide" data-slide="10">
+        <section id="slide-10" class="ir-slide" data-slide="16">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 03 · 시장 규모</span>
+              <span class="s-eyebrow">PART 03 · 시장 규모</span>
               <h2 class="s-title" data-i18n-rich="s10-h2">글로벌 중고 의류 <span class="serif-accent">$393B</span> × AI 가상 피팅 <span class="serif-accent">$23.9B</span></h2>
             </div>
           </header>
@@ -1185,7 +2694,7 @@
 
             <div class="s10-bottom-links">
               <div class="panel s10-anchor-pill">
-                <span class="mono" style="font-size:11px;color:var(--ink-secondary);">전체 시장</span>
+                <span class="mono" style="font-size:11px;color:var(--ink-secondary);">TAM · 전체 시장</span>
                 <strong class="mono" style="font-size:16px;">$417B</strong>
               </div>
               <a
@@ -1194,11 +2703,11 @@
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <span class="mono" style="font-size:11px;color:var(--ink-secondary);">국내 중고 의류 (연 30%↑)</span>
+                <span class="mono" style="font-size:11px;color:var(--ink-secondary);">SAM · 국내 리셀 (연 30%↑)</span>
                 <strong class="mono gold-accent" style="font-size:16px;">₩5조+ ↗</strong>
               </a>
               <div class="panel s10-anchor-pill">
-                <span class="mono" style="font-size:11px;color:var(--accent-live);">초기 목표 시장</span>
+                <span class="mono" style="font-size:11px;color:var(--accent-live);">SOM · 초기 목표</span>
                 <strong style="font-size:13px;">서울 2030 · [기입 예정]</strong>
               </div>
             </div>
@@ -1214,7 +2723,7 @@
               ·
               <a href="https://environment.ec.europa.eu/news/ban-destruction-unsold-clothes-and-shoes-enters-application-2026-07-17_en" target="_blank" rel="noopener noreferrer">EU ESPR ↗</a>
             </span>
-            <span class="s-foot-num">10 / 18</span>
+            <span class="s-foot-num">16 / 24</span>
           </footer>
         </section>
       </div>
@@ -1223,11 +2732,11 @@
       <!-- SLIDE 11 — COMPETITIVE LANDSCAPE (LARGE MANNEQUIN + CLEAN MATRIX)  -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-11" class="ir-slide" data-slide="11">
+        <section id="slide-11" class="ir-slide" data-slide="17">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 03 · 경쟁력 비교</span>
-              <h2 class="s-title" data-i18n-rich="s11-h2">유일한 <span class="serif-accent">올인원 디지털 옷장</span></h2>
+              <span class="s-eyebrow">PART 03 · 경쟁 서비스 비교</span>
+              <h2 class="s-title" data-i18n-rich="s11-h2">유일한 <span class="serif-accent">All-in-One 디지털 옷장</span></h2>
             </div>
           </header>
 
@@ -1248,28 +2757,68 @@
 
               <div class="s11-right-col">
                 <div class="panel s11-map-compact">
-                  <svg class="s11-map-svg" viewBox="0 0 540 230" aria-label="2x2 경쟁 포지셔닝 맵">
-                    <rect x="270" y="18" width="248" height="96" rx="10" fill="var(--accent-live-soft)" stroke="var(--accent-live-border)" stroke-dasharray="4 4" />
-                    <line x1="270" y1="16" x2="270" y2="214" stroke="var(--hairline-strong)" stroke-width="1.3" />
-                    <line x1="20" y1="116" x2="520" y2="116" stroke="var(--hairline-strong)" stroke-width="1.3" />
+                  <svg class="s11-map-svg" viewBox="0 0 540 248" aria-label="2x2 경쟁 포지셔닝 맵">
+                    <defs>
+                      <radialGradient id="s11-quad-glow" cx="50%" cy="50%" r="62%">
+                        <stop offset="0%" stop-color="var(--accent-gold)" stop-opacity="0.22" />
+                        <stop offset="52%" stop-color="var(--accent-live)" stop-opacity="0.11" />
+                        <stop offset="100%" stop-color="var(--accent-live)" stop-opacity="0" />
+                      </radialGradient>
+                    </defs>
 
-                    <text x="270" y="11" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="9.5" font-weight="700">▲ 얼굴 보안 · 구매부터 판매까지</text>
-                    <text x="270" y="226" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="9.5">▼ 단일 기능</text>
-                    <text x="24" y="109" text-anchor="start" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="9">◀ 1벌 앞면</text>
-                    <text x="516" y="109" text-anchor="end" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="9" font-weight="700">4겹 Three.js 3D · 8방향 ▶</text>
+                    <!-- 4-Quadrant Architectural Framing -->
+                    <rect x="20" y="24" width="250" height="100" rx="8" fill="none" stroke="var(--hairline)" stroke-dasharray="3 3" stroke-width="0.9" />
+                    <rect x="20" y="124" width="250" height="100" rx="8" fill="none" stroke="var(--hairline)" stroke-dasharray="3 3" stroke-width="0.9" />
+                    <rect x="270" y="124" width="250" height="100" rx="8" fill="none" stroke="var(--hairline)" stroke-dasharray="3 3" stroke-width="0.9" />
+                    <rect x="270" y="24" width="250" height="100" rx="8" fill="url(#s11-quad-glow)" stroke="var(--accent-gold)" stroke-opacity="0.4" stroke-dasharray="3 3" stroke-width="1" />
+                    <text x="512" y="37" text-anchor="end" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="7.2" font-weight="700" letter-spacing="0.08em">★ WHITE SPACE</text>
 
-                    <circle cx="136" cy="66" r="22" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" />
-                    <text x="136" y="70" text-anchor="middle" fill="var(--ink-secondary)" font-size="10.5" font-weight="700">중고 앱</text>
+                    <!-- Precision Axes & Calibration Ticks -->
+                    <line x1="270" y1="22" x2="270" y2="226" stroke="var(--hairline-strong)" stroke-width="1.2" />
+                    <line x1="18" y1="124" x2="522" y2="124" stroke="var(--hairline-strong)" stroke-width="1.2" />
+                    <line x1="266" y1="74" x2="274" y2="74" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <line x1="266" y1="174" x2="274" y2="174" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <line x1="145" y1="120" x2="145" y2="128" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <line x1="395" y1="120" x2="395" y2="128" stroke="var(--hairline-strong)" stroke-width="1" />
+                    <circle cx="270" cy="124" r="3" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-width="1.1" />
 
-                    <circle cx="136" cy="166" r="22" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" />
-                    <text x="136" y="170" text-anchor="middle" fill="var(--ink-secondary)" font-size="10.5" font-weight="700">옷장 앱</text>
+                    <!-- Axis Labels -->
+                    <text x="270" y="14" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="9.5" font-weight="700">▲ 개인정보 보안 · 구매부터 판매까지</text>
+                    <text x="270" y="240" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="9.2" font-weight="600">▼ 단일 기능</text>
+                    <text x="24" y="117" text-anchor="start" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="8.8" font-weight="600">◀ 2D 정면 · 콜라주</text>
+                    <text x="516" y="117" text-anchor="end" fill="var(--accent-gold)" font-family="var(--font-mono)" font-size="8.8" font-weight="700">360° 레이어드 · Three.js 3D ▶</text>
 
-                    <circle cx="404" cy="166" r="22" fill="var(--bg-elevated)" stroke="var(--hairline-strong)" />
-                    <text x="404" y="170" text-anchor="middle" fill="var(--ink-secondary)" font-size="10.5" font-weight="700">1벌 AI</text>
+                    <!-- Competitor Nodes (Restrained Dashed Halos) -->
+                    <g transform="translate(140, 70)">
+                      <circle cx="0" cy="0" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-dasharray="2.5 2.5" stroke-width="1.1" />
+                      <circle cx="0" cy="0" r="3.5" fill="var(--ink-muted)" />
+                      <text x="0" y="27" text-anchor="middle" fill="var(--ink-secondary)" font-size="9.8" font-weight="700">중고 앱</text>
+                      <text x="0" y="38" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="7.4">당근 · 번개장터 · Depop</text>
+                    </g>
 
-                    <circle cx="394" cy="66" r="34" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2.2" />
-                    <text x="394" y="64" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="12.5" font-weight="800">iNVTRY</text>
-                    <text x="394" y="79" text-anchor="middle" fill="var(--accent-live)" font-size="9" font-weight="700">올인원</text>
+                    <g transform="translate(140, 166)">
+                      <circle cx="0" cy="0" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-dasharray="2.5 2.5" stroke-width="1.1" />
+                      <circle cx="0" cy="0" r="3.5" fill="var(--ink-muted)" />
+                      <text x="0" y="27" text-anchor="middle" fill="var(--ink-secondary)" font-size="9.8" font-weight="700">옷장 앱</text>
+                      <text x="0" y="38" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="7.4">에이클로젯 · Whering · Indyx</text>
+                    </g>
+
+                    <g transform="translate(396, 166)">
+                      <circle cx="0" cy="0" r="16" fill="var(--svg-node-bg)" stroke="var(--hairline-strong)" stroke-dasharray="2.5 2.5" stroke-width="1.1" />
+                      <circle cx="0" cy="0" r="3.5" fill="var(--ink-muted)" />
+                      <text x="0" y="27" text-anchor="middle" fill="var(--ink-secondary)" font-size="9.8" font-weight="700">기존 AI 피팅</text>
+                      <text x="0" y="38" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="7.4">에이블리 · 뷔통 · Google · Alta</text>
+                    </g>
+
+                    <!-- Hero Monopoly Bullseye: iNVTRY -->
+                    <g transform="translate(392, 74)">
+                      <circle cx="0" cy="0" r="42" fill="none" stroke="var(--accent-gold)" stroke-opacity="0.22" stroke-dasharray="3 3" stroke-width="1" />
+                      <circle cx="0" cy="0" r="34" fill="none" stroke="var(--accent-live)" stroke-opacity="0.45" stroke-width="1.1" />
+                      <circle cx="0" cy="0" r="27" fill="var(--svg-node-bg)" stroke="var(--accent-gold)" stroke-width="2" />
+                      <circle cx="0" cy="-16" r="2.6" fill="var(--accent-live)" />
+                      <text x="0" y="1" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="11.5" font-weight="800" letter-spacing="0.03em">iNVTRY</text>
+                      <text x="0" y="14" text-anchor="middle" fill="var(--accent-live)" font-size="8.6" font-weight="700">올인원</text>
+                    </g>
                   </svg>
                 </div>
 
@@ -1278,37 +2827,37 @@
                     <thead>
                       <tr>
                         <th>핵심 기능</th>
-                        <th>옷장 앱</th>
-                        <th>1벌 AI</th>
-                        <th>중고 앱</th>
+                        <th>에이클로젯·Whering</th>
+                        <th>에이블리·뷔통·Google</th>
+                        <th>당근·번개장터</th>
                         <th class="live-accent">iNVTRY</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td>360° 4겹 피팅</td>
-                        <td>—</td>
-                        <td>1벌</td>
+                        <td>360° 레이어드 피팅</td>
+                        <td>2D 콜라주</td>
+                        <td>2D 정면</td>
                         <td>—</td>
                         <td class="live-accent mono"><strong>8방향</strong></td>
                       </tr>
                       <tr>
                         <td>실시간 날씨·거리</td>
                         <td>텍스트</td>
-                        <td>—</td>
+                        <td>일부</td>
                         <td>—</td>
                         <td class="live-accent mono"><strong>실시간</strong></td>
                       </tr>
                       <tr>
-                        <td>얼굴 원본 비전송</td>
-                        <td>—</td>
+                        <td>개인정보 보안</td>
+                        <td>서버 전송</td>
                         <td>서버 전송</td>
                         <td>—</td>
                         <td class="live-accent mono"><strong>4단계</strong></td>
                       </tr>
                       <tr>
                         <td>3초 비교·착용비</td>
-                        <td>수동</td>
+                        <td>100벌 제한</td>
                         <td>—</td>
                         <td>—</td>
                         <td class="live-accent mono"><strong>자동</strong></td>
@@ -1328,8 +2877,8 @@
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>경쟁력 비교 — 5가지 핵심 기능을 모두 갖춘 유일한 옷장</span>
-            <span class="s-foot-num">11 / 18</span>
+            <span>경쟁 비교 — KR·글로벌 10대 Peer 중 5가지 핵심 기능을 모두 갖춘 유일한 옷장</span>
+            <span class="s-foot-num">17 / 24</span>
           </footer>
         </section>
       </div>
@@ -1338,10 +2887,10 @@
       <!-- SLIDE 12 — BUSINESS MODEL 1 (LARGE 4-GALLERY PRODUCT MONETIZATION) -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-12" class="ir-slide" data-slide="12">
+        <section id="slide-12" class="ir-slide" data-slide="18">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 03 · 수익 모델 ①</span>
+              <span class="s-eyebrow">PART 03 · 비즈니스 모델 ①</span>
               <h2 class="s-title" data-i18n-rich="s12-h2">실제 기능에서 나오는 <span class="serif-accent">4가지 수익 모델</span></h2>
             </div>
           </header>
@@ -1363,7 +2912,7 @@
                   <span class="s12-kicker">01 · 월 구독</span>
                   <div class="s12-val">₩6,900~9,900</div>
                   <strong class="s12-name">iNVTRY Pro 멤버십</strong>
-                  <span class="s12-sub">무제한 4겹 AI 가상 피팅</span>
+                  <span class="s12-sub">무제한 레이어드 AI 가상 피팅</span>
                 </div>
               </article>
 
@@ -1427,8 +2976,8 @@
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>수익 모델 ① — 무료 사용으로 시작해 4가지 수익으로 연결</span>
-            <span class="s-foot-num">12 / 18</span>
+            <span>비즈니스 모델 — 무료 사용으로 시작해 4가지 수익으로 연결</span>
+            <span class="s-foot-num">18 / 24</span>
           </footer>
         </section>
       </div>
@@ -1437,10 +2986,10 @@
       <!-- SLIDE 13 — BM 2 (LARGE LIVE LOOP STAGE + ZERO-COST SHIELD)         -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-13" class="ir-slide" data-slide="13">
+        <section id="slide-13" class="ir-slide" data-slide="19">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 03 · 수익 모델 ②</span>
+              <span class="s-eyebrow">PART 03 · 비즈니스 모델 ②</span>
               <h2 class="s-title" data-i18n-rich="s13-h2">매일 쓰게 만드는 구조 × <span class="serif-accent">서버비 최소화</span></h2>
             </div>
           </header>
@@ -1507,8 +3056,8 @@
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>수익 모델 ② — 높은 재방문율과 서버비 절감</span>
-            <span class="s-foot-num">13 / 18</span>
+            <span>수익 구조 — 높은 재방문율과 기기 내 서버비 절감</span>
+            <span class="s-foot-num">19 / 24</span>
           </footer>
         </section>
       </div>
@@ -1517,10 +3066,10 @@
       <!-- SLIDE 14 — TRACTION (LARGE SITE STUDIO + SPECS + 6-TIER STACK)     -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-14" class="ir-slide" data-slide="14">
+        <section id="slide-14" class="ir-slide" data-slide="20">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 04 · 개발 현황</span>
+              <span class="s-eyebrow">PART 04 · 개발 현황</span>
               <h2 class="s-title" data-i18n-rich="s14-h2">이미 작동하는 <span class="serif-accent">6단계 시스템 구조</span></h2>
             </div>
           </header>
@@ -1547,7 +3096,7 @@
 
                 <div class="s14-proofs">
                   <div class="panel s14-proof">
-                    <span class="s14-proof-val live-accent">실제 작동 중</span>
+                    <span class="s14-proof-val live-accent">LIVE MVP</span>
                     <span class="s14-proof-sub">핵심 5개 메뉴 · 라이브 운영</span>
                   </div>
                   <div class="panel s14-proof">
@@ -1556,7 +3105,7 @@
                   </div>
                   <div class="panel s14-proof">
                     <span class="s14-proof-val gold-accent" data-ir-bind="performance.fpsLabel">120 FPS</span>
-                    <span class="s14-proof-sub">Three.js 3D 모션</span>
+                    <span class="s14-proof-sub">Three.js 3D 피팅 무대</span>
                   </div>
                 </div>
               </div>
@@ -1605,7 +3154,7 @@
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
             <span>개발 현황 — 실제 작동 중인 서비스와 6단계 시스템 구조</span>
-            <span class="s-foot-num">14 / 18</span>
+            <span class="s-foot-num">20 / 24</span>
           </footer>
         </section>
       </div>
@@ -1614,11 +3163,11 @@
       <!-- SLIDE 15 — GTM & 18M ROADMAP (3 LARGE VISUAL CHANNEL CARDS)        -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-15" class="ir-slide" data-slide="15">
+        <section id="slide-15" class="ir-slide" data-slide="21">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 04 · 성장 전략</span>
-              <h2 class="s-title" data-i18n-rich="s15-h2">초기 고객 확보와 <span class="serif-accent">18개월 성장 계획</span></h2>
+              <span class="s-eyebrow">PART 04 · 성장 전략</span>
+              <h2 class="s-title" data-i18n-rich="s15-h2">초기 고객 확보와 <span class="serif-accent">18개월 성장 로드맵</span></h2>
             </div>
           </header>
 
@@ -1629,7 +3178,7 @@
                   <span class="badge badge--live" data-ir-bind="roadmap.stage-1.badge">1단계 · 완료</span>
                   <span class="mono live-accent" style="font-size:11px;font-weight:700;">100%</span>
                 </div>
-                <strong class="s15-phase-title">4겹 피팅 · 기기 내 사진 정리</strong>
+                <strong class="s15-phase-title">360° 레이어드 피팅 · 옷장 자동 정리</strong>
                 <div class="s15-progress"><div class="s15-progress-fill" style="width:100%;background:var(--accent-live);"></div></div>
               </div>
 
@@ -1665,7 +3214,7 @@
                   />
                 </div>
                 <div class="s15-ch-body">
-                  <span class="mono gold-accent s15-ch-kicker">유입 경로 01</span>
+                  <span class="mono gold-accent s15-ch-kicker">유입 전략 01</span>
                   <strong class="s15-ch-title">매장 3초 중복 확인</strong>
                   <span class="s15-ch-sub">성수 · 명동 · 더현대 쇼핑객 유입</span>
                 </div>
@@ -1683,8 +3232,8 @@
                   />
                 </div>
                 <div class="s15-ch-body">
-                  <span class="mono gold-accent s15-ch-kicker">유입 경로 02</span>
-                  <strong class="s15-ch-title">코디 달력 · 360° 공유</strong>
+                  <span class="mono gold-accent s15-ch-kicker">유입 전략 02</span>
+                  <strong class="s15-ch-title">OOTD 캘린더 · 360° 공유</strong>
                   <span class="s15-ch-sub">매일 기록 보상 · SNS 자연 확산</span>
                 </div>
               </article>
@@ -1701,7 +3250,7 @@
                   />
                 </div>
                 <div class="s15-ch-body">
-                  <span class="mono gold-accent s15-ch-kicker">유입 경로 03</span>
+                  <span class="mono gold-accent s15-ch-kicker">유입 전략 03</span>
                   <strong class="s15-ch-title">세탁 수거 · 편집숍 제휴</strong>
                   <span class="s15-ch-sub">초기 옷장 등록 · 중고 매물 확보</span>
                 </div>
@@ -1711,7 +3260,7 @@
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
             <span>성장 전략 — 서울 2030 초기 확산 후 글로벌 진출</span>
-            <span class="s-foot-num">15 / 18</span>
+            <span class="s-foot-num">21 / 24</span>
           </footer>
         </section>
       </div>
@@ -1720,10 +3269,10 @@
       <!-- SLIDE 16 — TEAM & 2027 SECURITY (LARGE SHIPPED PROOF GALLERY)      -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-16" class="ir-slide" data-slide="16">
+        <section id="slide-16" class="ir-slide" data-slide="22">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 04 · 팀 및 보안 계획</span>
+              <span class="s-eyebrow">PART 04 · 팀 및 보안 계획</span>
               <h2 class="s-title" data-i18n-rich="s16-h2">1인 풀스택 실행력 × <span class="serif-accent">2027 보안 계획</span></h2>
             </div>
           </header>
@@ -1828,7 +3377,7 @@
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
             <span>팀 및 보안 계획 — 검증된 개발 실행력과 기업 수준 보안</span>
-            <span class="s-foot-num">16 / 18</span>
+            <span class="s-foot-num">22 / 24</span>
           </footer>
         </section>
       </div>
@@ -1837,10 +3386,10 @@
       <!-- SLIDE 17 — FUNDING ASK (DONUT + LARGE VISUAL MILESTONE CARDS)      -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-17" class="ir-slide" data-slide="17">
+        <section id="slide-17" class="ir-slide" data-slide="23">
           <header class="s-head">
             <div class="s-head-left">
-              <span class="s-eyebrow">파트 04 · 투자 제안</span>
+              <span class="s-eyebrow">PART 04 · 투자 제안</span>
               <h2 class="s-title" data-i18n-rich="s17-h2">18개월 성장을 위한 <span class="serif-accent">투자 제안</span></h2>
             </div>
           </header>
@@ -1850,33 +3399,53 @@
               <div class="panel s17-donut-card">
                 <span class="s-eyebrow">자금 운용 계획</span>
 
-                <svg class="s17-donut-svg" viewBox="0 0 220 220" aria-label="18개월 자금 배분 도넛 차트 45/25/20/10%">
-                  <circle cx="110" cy="110" r="78" fill="none" stroke="var(--svg-track)" stroke-width="22" />
-                  <circle cx="110" cy="110" r="78" fill="none" stroke="var(--accent-gold)" stroke-width="22" stroke-dasharray="216 275" stroke-dashoffset="0" transform="rotate(-90 110 110)" />
-                  <circle cx="110" cy="110" r="78" fill="none" stroke="var(--ink-primary)" stroke-width="22" stroke-dasharray="118 373" stroke-dashoffset="-220.5" transform="rotate(-90 110 110)" />
-                  <circle cx="110" cy="110" r="78" fill="none" stroke="var(--accent-live)" stroke-width="22" stroke-dasharray="94 397" stroke-dashoffset="-343" transform="rotate(-90 110 110)" />
-                  <circle cx="110" cy="110" r="78" fill="none" stroke="var(--ink-muted)" stroke-width="22" stroke-dasharray="45 446" stroke-dashoffset="-441" transform="rotate(-90 110 110)" />
+                <svg class="s17-donut-svg" viewBox="0 0 260 260" aria-label="18개월 자금 배분 도넛 차트 45/25/20/10%">
+                  <defs>
+                    <linearGradient id="s17-gold-arc" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="var(--accent-gold-strong)" />
+                      <stop offset="100%" stop-color="var(--accent-gold)" />
+                    </linearGradient>
+                  </defs>
+                  <!-- Swiss Chronograph Outer Calibration Bezel -->
+                  <circle cx="130" cy="130" r="122" fill="none" stroke="var(--hairline)" stroke-width="1" />
+                  <circle cx="130" cy="130" r="115" fill="none" stroke="var(--hairline-strong)" stroke-width="3.2" stroke-dasharray="1.4 18.67" />
+                  <circle cx="130" cy="130" r="108" fill="none" stroke="var(--hairline)" stroke-width="0.9" />
 
-                  <text x="110" y="96" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="10" font-weight="600">운영 기간</text>
-                  <text x="110" y="126" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="30" font-weight="800">18개월</text>
-                  <text x="110" y="144" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="9.5" font-weight="700">시리즈 A 목표</text>
+                  <!-- Donut Channel Track (r=86, C=540.35) -->
+                  <circle cx="130" cy="130" r="86" fill="none" stroke="var(--svg-track)" stroke-width="22" />
+                  <!-- 45% Champagne Gold (243.16 - 3 gap = 240) -->
+                  <circle cx="130" cy="130" r="86" fill="none" stroke="url(#s17-gold-arc)" stroke-width="22" stroke-dasharray="240 540.35" stroke-dashoffset="0" transform="rotate(-90 130 130)" />
+                  <!-- 25% Primary Ink (135.09 - 3 gap = 132) -->
+                  <circle cx="130" cy="130" r="86" fill="none" stroke="var(--ink-primary)" stroke-width="22" stroke-dasharray="132 540.35" stroke-dashoffset="-243.2" transform="rotate(-90 130 130)" />
+                  <!-- 20% Live Emerald (108.07 - 3 gap = 105) -->
+                  <circle cx="130" cy="130" r="86" fill="none" stroke="var(--accent-live)" stroke-width="22" stroke-dasharray="105 540.35" stroke-dashoffset="-378.3" transform="rotate(-90 130 130)" />
+                  <!-- 10% Muted Pewter (54.04 - 3 gap = 51) -->
+                  <circle cx="130" cy="130" r="86" fill="none" stroke="var(--ink-muted)" stroke-width="22" stroke-dasharray="51 540.35" stroke-dashoffset="-486.3" transform="rotate(-90 130 130)" />
+
+                  <!-- Inner Chrono Ring & Metric Hub -->
+                  <circle cx="130" cy="130" r="71" fill="none" stroke="var(--accent-gold)" stroke-opacity="0.32" stroke-width="1" />
+                  <circle cx="130" cy="130" r="65" fill="var(--svg-node-bg)" />
+
+                  <text x="130" y="109" text-anchor="middle" fill="var(--ink-muted)" font-family="var(--font-mono)" font-size="10.5" font-weight="600" letter-spacing="0.06em">운영 기간</text>
+                  <text x="130" y="141" text-anchor="middle" fill="var(--ink-primary)" font-family="var(--font-mono)" font-size="31" font-weight="800">18개월</text>
+                  <text x="130" y="162" text-anchor="middle" fill="var(--accent-live)" font-family="var(--font-mono)" font-size="9.5" font-weight="700">Pre-A → Series A</text>
                 </svg>
 
                 <div class="s17-legend">
                   <div class="s17-leg-row">
-                    <span><strong class="mono gold-accent">45%</strong> AI · 제품 개발</span>
+                    <span class="s17-leg-main"><i class="s17-leg-dot s17-leg-dot--gold" aria-hidden="true"></i><strong class="mono gold-accent">45%</strong> AI · 제품 개발</span>
                     <span class="s17-leg-sub">8방향 피팅 · 라벨 인식</span>
                   </div>
                   <div class="s17-leg-row">
-                    <span><strong class="mono">25%</strong> 마케팅 · 제휴</span>
+                    <span class="s17-leg-main"><i class="s17-leg-dot s17-leg-dot--ink" aria-hidden="true"></i><strong class="mono">25%</strong> 마케팅 · 제휴</span>
                     <span class="s17-leg-sub">서울 2030 · 세탁 제휴</span>
                   </div>
                   <div class="s17-leg-row">
-                    <span><strong class="mono live-accent">20%</strong> 클라우드 · 보안</span>
+                    <span class="s17-leg-main"><i class="s17-leg-dot s17-leg-dot--live" aria-hidden="true"></i><strong class="mono live-accent">20%</strong> 클라우드 · 보안</span>
                     <span class="s17-leg-sub">3중 암호화 · 모의해킹</span>
                   </div>
                   <div class="s17-leg-row">
-                    <span><strong class="mono" style="color:var(--ink-muted);">10%</strong> 운영 · 특허</span>
+                    <span class="s17-leg-main"><i class="s17-leg-dot s17-leg-dot--muted" aria-hidden="true"></i><strong class="mono" style="color:var(--ink-muted);">10%</strong> 운영 · 특허</span>
                     <span class="s17-leg-sub">특허 2건+ · 법률 자문</span>
                   </div>
                 </div>
@@ -1887,12 +3456,12 @@
                   <div class="panel panel--gold s17-anchor">
                     <span class="s17-anchor-kicker gold-accent">희망 투자금</span>
                     <span class="s17-anchor-val gold-accent">[기입 예정] 억원</span>
-                    <span class="s17-anchor-sub">Seed / TIPS · 18개월</span>
+                    <span class="s17-anchor-sub">Seed · TIPS → Pre-A</span>
                   </div>
                   <div class="panel s17-anchor">
                     <span class="s17-anchor-kicker">18개월 목표</span>
                     <span class="s17-anchor-val">[기입 예정] 명</span>
-                    <span class="s17-anchor-sub">월간 사용자 · 구독 · 판매</span>
+                    <span class="s17-anchor-sub">MAU · Pre-A → Series A</span>
                   </div>
                   <div class="panel panel--live s17-anchor">
                     <span class="s17-anchor-kicker live-accent">2027 핵심 목표</span>
@@ -1914,13 +3483,13 @@
                       />
                     </div>
                     <div class="s17-ms-body">
-                      <span class="mono s17-ms-time">1 ~ 6개월</span>
+                      <span class="mono s17-ms-time">1 ~ 6개월 · Seed</span>
                       <strong>01 · 정식 출시</strong>
                       <span>앱스토어 출시 · 모의해킹</span>
                     </div>
                   </article>
 
-                  <article class="panel s17-ms-card">
+                  <article class="panel panel--live s17-ms-card">
                     <div class="s17-ms-shot">
                       <img
                         src="/assets/previews/app-stats-ko-dark.webp"
@@ -1932,9 +3501,9 @@
                       />
                     </div>
                     <div class="s17-ms-body">
-                      <span class="mono s17-ms-time">7 ~ 12개월</span>
-                      <strong>02 · 수익화 시작</strong>
-                      <span>월 구독 · 맞춤 추천</span>
+                      <span class="mono live-accent s17-ms-time">7 ~ 12개월 · Pre-A</span>
+                      <strong class="live-accent">02 · 수익화 · Pre-A</strong>
+                      <span>월 구독 · Pre-A 투자 유치</span>
                     </div>
                   </article>
 
@@ -1950,9 +3519,9 @@
                       />
                     </div>
                     <div class="s17-ms-body">
-                      <span class="mono gold-accent s17-ms-time">13 ~ 18개월</span>
-                      <strong class="gold-accent">03 · 본격 성장</strong>
-                      <span>원클릭 판매 · 시리즈 A</span>
+                      <span class="mono gold-accent s17-ms-time">13 ~ 18개월 · Series A</span>
+                      <strong class="gold-accent">03 · 본격 성장 · Series A</strong>
+                      <span>원클릭 판매 · Series A</span>
                     </div>
                   </article>
                 </div>
@@ -1961,8 +3530,8 @@
           </div>
           <footer class="s-foot">
             <span class="s-foot-brand">iNVTRY 사업계획서</span>
-            <span>투자 제안 — 18개월 자금 운용 및 성장 단계</span>
-            <span class="s-foot-num">17 / 18</span>
+            <span>투자 제안 — Seed · Pre-A · Series A 18개월 성장 단계</span>
+            <span class="s-foot-num">23 / 24</span>
           </footer>
         </section>
       </div>
@@ -1971,7 +3540,7 @@
       <!-- SLIDE 18 — CLOSING (LARGE DUAL-DEVICE LIVE SITE + APP)             -->
       <!-- ================================================================== -->
       <div class="ir-slide-slot">
-        <section id="slide-18" class="ir-slide" data-slide="18">
+        <section id="slide-18" class="ir-slide" data-slide="24">
           <div class="s-body" style="padding: 8px 0;">
             <div class="s18-grid">
               <div class="s18-left">
@@ -2033,7 +3602,7 @@
           <footer class="s-foot">
             <span class="s-foot-brand">Ainvtry Inc. (iNVTRY) · 사업계획서 v5.4</span>
             <span data-ir-bind="meta.locationDate">대한민국 서울 · 2026.11</span>
-            <span class="s-foot-num">18 / 18</span>
+            <span class="s-foot-num">24 / 24</span>
           </footer>
         </section>
       </div>
@@ -2047,7 +3616,7 @@
       <span aria-hidden="true">←</span>
       <span>이전</span>
     </button>
-    <span id="ir-mobile-counter" class="ir-mb-counter">01 / 18</span>
+    <span id="ir-mobile-counter" class="ir-mb-counter">01 / 24</span>
     <button id="ir-mobile-next" type="button" class="ir-mb-nav-btn ir-mb-nav-btn--primary" aria-label="다음 슬라이드">
       <span>다음</span>
       <span aria-hidden="true">→</span>
