@@ -383,8 +383,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
   site_demo: SITE_DEMO_DEFAULT_PERMISSIONS,
 });
 
-export function ensureRbacSchemaAndSeeds(db) {
-  db.exec(`
+export async function ensureRbacSchemaAndSeeds(db) {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       code TEXT PRIMARY KEY,
       name_ko TEXT NOT NULL,
@@ -444,7 +444,7 @@ export function ensureRbacSchemaAndSeeds(db) {
       description_en = excluded.description_en
   `);
   for (const role of ROLE_DEFINITIONS) {
-    upsertRole.run(
+    await upsertRole.run(
       role.code,
       role.nameKo,
       role.nameEn,
@@ -464,7 +464,7 @@ export function ensureRbacSchemaAndSeeds(db) {
       description_ko = excluded.description_ko
   `);
   for (const perm of PERMISSION_DEFINITIONS) {
-    upsertPerm.run(
+    await upsertPerm.run(
       perm.code,
       perm.groupName,
       perm.nameKo,
@@ -485,17 +485,17 @@ export function ensureRbacSchemaAndSeeds(db) {
     'INSERT OR IGNORE INTO role_permissions (role_code, permission_code) VALUES (?, ?)'
   );
   for (const [roleCode, permCodes] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
-    const existingCount = Number(countRolePerms.get(roleCode)?.c || 0);
+    const existingCount = Number((await countRolePerms.get(roleCode))?.c || 0);
     if (existingCount === 0) {
       for (const permCode of permCodes) {
-        insertRolePerm.run(roleCode, permCode);
+        await insertRolePerm.run(roleCode, permCode);
       }
     } else {
-      const existingUiCount = Number(countRoleUiPerms.get(roleCode)?.c || 0);
+      const existingUiCount = Number((await countRoleUiPerms.get(roleCode))?.c || 0);
       if (existingUiCount === 0) {
         for (const permCode of permCodes) {
           if (permCode.startsWith('menu:') || permCode.startsWith('btn:')) {
-            insertRolePerm.run(roleCode, permCode);
+            await insertRolePerm.run(roleCode, permCode);
           }
         }
       }
@@ -503,11 +503,11 @@ export function ensureRbacSchemaAndSeeds(db) {
   }
 
   // Ensure admin always retains core admin permissions
-  insertRolePerm.run('admin', 'admin:manage_roles');
-  insertRolePerm.run('admin', 'admin:manage_users');
+  await insertRolePerm.run('admin', 'admin:manage_roles');
+  await insertRolePerm.run('admin', 'admin:manage_users');
 
   // Backfill user_roles for existing users missing an explicit mapping
-  const usersWithoutRole = db
+  const usersWithoutRole = await db
     .prepare(
       `SELECT u.id, u.role
        FROM users u
@@ -522,17 +522,17 @@ export function ensureRbacSchemaAndSeeds(db) {
     const normalized = VALID_ROLE_SET.has(String(row.role || ''))
       ? String(row.role)
       : 'member';
-    insertUserRole.run(row.id, normalized);
+    await insertUserRole.run(row.id, normalized);
   }
 }
 
-export function resolveUserRoleCode(db, userRow) {
+export async function resolveUserRoleCode(db, userRow) {
   if (!userRow) return 'guest';
   const rawRole = String(userRow.role || '').trim();
   const userId = Number(userRow.id);
   if (Number.isInteger(userId) && userId > 0) {
     try {
-      const mapped = db
+      const mapped = await db
         .prepare('SELECT role_code FROM user_roles WHERE user_id = ? LIMIT 1')
         .get(userId);
       if (mapped?.role_code) {
@@ -546,11 +546,11 @@ export function resolveUserRoleCode(db, userRow) {
   return rawRole || 'member';
 }
 
-export function getRoleMetadata(db, roleCode) {
+export async function getRoleMetadata(db, roleCode) {
   const code = String(roleCode || '').trim();
   if (!code) return null;
   try {
-    const row = db
+    const row = await db
       .prepare(
         'SELECT code, name_ko, name_en, description_ko, description_en, is_system FROM roles WHERE code = ?'
       )
@@ -592,14 +592,14 @@ export function getRoleMetadata(db, roleCode) {
   return null;
 }
 
-export function getPermissionsForRole(db, roleCode) {
+export async function getPermissionsForRole(db, roleCode) {
   const code = String(roleCode || '').trim();
   if (!code) return [];
   if (code === 'guest') {
     return [...SITE_DEMO_DEFAULT_PERMISSIONS];
   }
   try {
-    const rows = db
+    const rows = await db
       .prepare(
         'SELECT permission_code FROM role_permissions WHERE role_code = ? ORDER BY permission_code ASC'
       )
@@ -613,13 +613,13 @@ export function getPermissionsForRole(db, roleCode) {
   return [...(DEFAULT_ROLE_PERMISSIONS[code] || [])];
 }
 
-export function getUserPermissionOverrides(db, userId) {
+export async function getUserPermissionOverrides(db, userId) {
   const numericUserId = Number(userId);
   if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
     return {};
   }
   try {
-    const rows = db
+    const rows = await db
       .prepare(
         'SELECT permission_code, effect FROM user_permission_overrides WHERE user_id = ? ORDER BY permission_code ASC'
       )
@@ -658,11 +658,13 @@ export function computeEffectivePermissions(roleCode, rolePermissions, overrides
   return Array.from(effectiveSet).sort();
 }
 
-export function getUserRbacContext(db, userRow) {
-  const roleCode = resolveUserRoleCode(db, userRow);
-  const roleMeta = getRoleMetadata(db, roleCode);
-  const rolePermissions = getPermissionsForRole(db, roleCode);
-  const overrides = getUserPermissionOverrides(db, userRow?.id);
+export async function getUserRbacContext(db, userRow) {
+  const roleCode = await resolveUserRoleCode(db, userRow);
+  const [roleMeta, rolePermissions, overrides] = await Promise.all([
+    getRoleMetadata(db, roleCode),
+    getPermissionsForRole(db, roleCode),
+    getUserPermissionOverrides(db, userRow?.id),
+  ]);
   const permissions = computeEffectivePermissions(roleCode, rolePermissions, overrides);
   return {
     roleCode,
@@ -691,30 +693,30 @@ export function hasPermission(userOrPermissions, permissionCode) {
   return false;
 }
 
-export function assignUserRole(db, userId, roleCode) {
+export async function assignUserRole(db, userId, roleCode) {
   const numericUserId = Number(userId);
   const cleanRole = String(roleCode || '').trim();
   if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
     return { ok: false, status: 400, error: '유효하지 않은 사용자 ID입니다.' };
   }
-  const roleRow = db.prepare('SELECT code FROM roles WHERE code = ?').get(cleanRole);
+  const roleRow = await db.prepare('SELECT code FROM roles WHERE code = ?').get(cleanRole);
   if (!roleRow) {
     return { ok: false, status: 400, error: '존재하지 않는 권한 역할(role)입니다.' };
   }
-  const userRow = db
+  const userRow = await db
     .prepare('SELECT id, username, role FROM users WHERE id = ?')
     .get(numericUserId);
   if (!userRow) {
     return { ok: false, status: 404, error: '사용자를 찾을 수 없습니다.' };
   }
 
-  db.transaction(() => {
-    db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(numericUserId);
-    db.prepare('INSERT INTO user_roles (user_id, role_code) VALUES (?, ?)').run(
+  await db.transaction(async () => {
+    await db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(numericUserId);
+    await db.prepare('INSERT INTO user_roles (user_id, role_code) VALUES (?, ?)').run(
       numericUserId,
       cleanRole
     );
-    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(cleanRole, numericUserId);
+    await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(cleanRole, numericUserId);
   });
 
   return {
@@ -722,13 +724,13 @@ export function assignUserRole(db, userId, roleCode) {
     userId: numericUserId,
     username: userRow.username,
     roleCode: cleanRole,
-    permissions: getPermissionsForRole(db, cleanRole),
+    permissions: await getPermissionsForRole(db, cleanRole),
   };
 }
 
-export function updateRolePermissions(db, roleCode, rawPermissionCodes) {
+export async function updateRolePermissions(db, roleCode, rawPermissionCodes) {
   const cleanRole = String(roleCode || '').trim();
-  const roleRow = db.prepare('SELECT code FROM roles WHERE code = ?').get(cleanRole);
+  const roleRow = await db.prepare('SELECT code FROM roles WHERE code = ?').get(cleanRole);
   if (!roleRow) {
     return { ok: false, status: 404, error: '존재하지 않는 역할입니다.' };
   }
@@ -750,24 +752,24 @@ export function updateRolePermissions(db, roleCode, rawPermissionCodes) {
     if (!normalized.includes('admin:manage_users')) normalized.push('admin:manage_users');
   }
 
-  db.transaction(() => {
-    db.prepare('DELETE FROM role_permissions WHERE role_code = ?').run(cleanRole);
+  await db.transaction(async () => {
+    await db.prepare('DELETE FROM role_permissions WHERE role_code = ?').run(cleanRole);
     const ins = db.prepare(
       'INSERT OR IGNORE INTO role_permissions (role_code, permission_code) VALUES (?, ?)'
     );
     for (const permCode of normalized) {
-      ins.run(cleanRole, permCode);
+      await ins.run(cleanRole, permCode);
     }
   });
 
   return {
     ok: true,
     roleCode: cleanRole,
-    permissions: getPermissionsForRole(db, cleanRole),
+    permissions: await getPermissionsForRole(db, cleanRole),
   };
 }
 
-export function setUserPermissionOverrides(db, userId, rawOverrides) {
+export async function setUserPermissionOverrides(db, userId, rawOverrides) {
   const numericUserId = Number(userId);
   if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
     return { ok: false, status: 400, error: '유효하지 않은 사용자 ID입니다.' };
@@ -775,18 +777,18 @@ export function setUserPermissionOverrides(db, userId, rawOverrides) {
   if (!rawOverrides || typeof rawOverrides !== 'object' || Array.isArray(rawOverrides)) {
     return { ok: false, status: 400, error: 'overrides 객체가 필요합니다.' };
   }
-  const userRow = db
+  const userRow = await db
     .prepare('SELECT id, username, role FROM users WHERE id = ?')
     .get(numericUserId);
   if (!userRow) {
     return { ok: false, status: 404, error: '사용자를 찾을 수 없습니다.' };
   }
 
-  const roleCode = resolveUserRoleCode(db, userRow);
-  const rolePermissions = getPermissionsForRole(db, roleCode);
+  const roleCode = await resolveUserRoleCode(db, userRow);
+  const rolePermissions = await getPermissionsForRole(db, roleCode);
   const rolePermSet = new Set(rolePermissions);
 
-  db.transaction(() => {
+  await db.transaction(async () => {
     const upsertOverride = db.prepare(`
       INSERT INTO user_permission_overrides (user_id, permission_code, effect, updated_at)
       VALUES (?, ?, ?, datetime('now'))
@@ -805,12 +807,12 @@ export function setUserPermissionOverrides(db, userId, rawOverrides) {
         roleCode === 'admin' &&
         (code === 'admin:manage_roles' || code === 'admin:manage_users')
       ) {
-        deleteOverride.run(numericUserId, code);
+        await deleteOverride.run(numericUserId, code);
         continue;
       }
 
       if (rawEffect === 'inherit' || rawEffect === null || rawEffect === '') {
-        deleteOverride.run(numericUserId, code);
+        await deleteOverride.run(numericUserId, code);
         continue;
       }
 
@@ -825,14 +827,14 @@ export function setUserPermissionOverrides(db, userId, rawOverrides) {
       // If the requested state matches the role default, drop redundant override row
       const roleHasIt = rolePermSet.has(code);
       if ((normalizedEffect === 'grant' && roleHasIt) || (normalizedEffect === 'deny' && !roleHasIt)) {
-        deleteOverride.run(numericUserId, code);
+        await deleteOverride.run(numericUserId, code);
       } else {
-        upsertOverride.run(numericUserId, code, normalizedEffect);
+        await upsertOverride.run(numericUserId, code, normalizedEffect);
       }
     }
   });
 
-  const nextOverrides = getUserPermissionOverrides(db, numericUserId);
+  const nextOverrides = await getUserPermissionOverrides(db, numericUserId);
   const effectivePermissions = computeEffectivePermissions(roleCode, rolePermissions, nextOverrides);
   return {
     ok: true,
@@ -845,20 +847,20 @@ export function setUserPermissionOverrides(db, userId, rawOverrides) {
   };
 }
 
-export function resetUserPermissionOverrides(db, userId) {
+export async function resetUserPermissionOverrides(db, userId) {
   const numericUserId = Number(userId);
   if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
     return { ok: false, status: 400, error: '유효하지 않은 사용자 ID입니다.' };
   }
-  const userRow = db
+  const userRow = await db
     .prepare('SELECT id, username, role FROM users WHERE id = ?')
     .get(numericUserId);
   if (!userRow) {
     return { ok: false, status: 404, error: '사용자를 찾을 수 없습니다.' };
   }
-  db.prepare('DELETE FROM user_permission_overrides WHERE user_id = ?').run(numericUserId);
-  const roleCode = resolveUserRoleCode(db, userRow);
-  const rolePermissions = getPermissionsForRole(db, roleCode);
+  await db.prepare('DELETE FROM user_permission_overrides WHERE user_id = ?').run(numericUserId);
+  const roleCode = await resolveUserRoleCode(db, userRow);
+  const rolePermissions = await getPermissionsForRole(db, roleCode);
   return {
     ok: true,
     userId: numericUserId,
@@ -870,38 +872,42 @@ export function resetUserPermissionOverrides(db, userId) {
   };
 }
 
-export function listRbacOverview(db) {
-  const roles = db
+export async function listRbacOverview(db) {
+  const rawRoles = await db
     .prepare(
       'SELECT code, name_ko, name_en, description_ko, description_en, is_system FROM roles ORDER BY code ASC'
     )
-    .all()
-    .map((r) => ({
+    .all();
+
+  const roles = [];
+  for (const r of rawRoles) {
+    roles.push({
       code: r.code,
       nameKo: r.name_ko,
       nameEn: r.name_en,
       descriptionKo: r.description_ko || '',
       descriptionEn: r.description_en || '',
       isSystem: Boolean(r.is_system),
-      permissions: getPermissionsForRole(db, r.code),
-    }));
+      permissions: await getPermissionsForRole(db, r.code),
+    });
+  }
 
   const rolePermMap = new Map(roles.map((r) => [r.code, r.permissions]));
 
-  const permissions = db
+  const rawPermissions = await db
     .prepare(
       'SELECT code, group_name, name_ko, name_en, description_ko FROM permissions ORDER BY group_name ASC, code ASC'
     )
-    .all()
-    .map((p) => ({
-      code: p.code,
-      groupName: p.group_name,
-      nameKo: p.name_ko,
-      nameEn: p.name_en,
-      descriptionKo: p.description_ko || '',
-    }));
+    .all();
+  const permissions = rawPermissions.map((p) => ({
+    code: p.code,
+    groupName: p.group_name,
+    nameKo: p.name_ko,
+    nameEn: p.name_en,
+    descriptionKo: p.description_ko || '',
+  }));
 
-  const users = db
+  const rawUsers = await db
     .prepare(
       `SELECT
          u.id,
@@ -915,30 +921,33 @@ export function listRbacOverview(db) {
        LEFT JOIN user_roles ur ON ur.user_id = u.id
        ORDER BY u.id ASC`
     )
-    .all()
-    .map((u) => {
-      const roleCode = u.role_code || 'member';
-      const rolePermissions = rolePermMap.get(roleCode) || getPermissionsForRole(db, roleCode);
-      const overrides = getUserPermissionOverrides(db, u.id);
-      const effectivePermissions = computeEffectivePermissions(
-        roleCode,
-        rolePermissions,
-        overrides
-      );
-      return {
-        id: u.id,
-        username: u.username,
-        displayName: u.display_name,
-        email: u.email || null,
-        role: roleCode,
-        defaultCloset: u.default_closet,
-        createdAt: u.created_at || null,
-        rolePermissions,
-        overrides,
-        overrideCount: Object.keys(overrides).length,
-        effectivePermissions,
-      };
+    .all();
+
+  const users = [];
+  for (const u of rawUsers) {
+    const roleCode = u.role_code || 'member';
+    const rolePermissions =
+      rolePermMap.get(roleCode) || (await getPermissionsForRole(db, roleCode));
+    const overrides = await getUserPermissionOverrides(db, u.id);
+    const effectivePermissions = computeEffectivePermissions(
+      roleCode,
+      rolePermissions,
+      overrides
+    );
+    users.push({
+      id: u.id,
+      username: u.username,
+      displayName: u.display_name,
+      email: u.email || null,
+      role: roleCode,
+      defaultCloset: u.default_closet,
+      createdAt: u.created_at || null,
+      rolePermissions,
+      overrides,
+      overrideCount: Object.keys(overrides).length,
+      effectivePermissions,
     });
+  }
 
   return {
     roles,

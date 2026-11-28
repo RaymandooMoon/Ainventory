@@ -5,6 +5,7 @@ import {
   FileText,
   Globe,
   KeyRound,
+  Link2,
   LogOut,
   Moon,
   Palette,
@@ -14,6 +15,7 @@ import {
   Sparkles,
   Sun,
   Trash2,
+  Unlink,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { translateSubTypeLabel } from '../services/skinToneAnalyzer.ts';
@@ -21,10 +23,16 @@ import { canAccessAdminMegascansLab } from '../three/megascans/megascansCatalog.
 import {
   apiFetch,
   flushPendingOfflineSync,
+  getConfiguredApiBaseUrl,
   hasUserPermission,
   isSiteDemoUser,
   setStoredToken,
 } from '../utils/api.ts';
+import {
+  buildGoogleOAuthStartUrl,
+  detectAppBasePath,
+  toAppPath,
+} from '../utils/appRouter.ts';
 import { guardUserPermission } from '../utils/accessControl.ts';
 import { localizeApiMessage, localizeUserName, tx } from '../utils/i18n.ts';
 import {
@@ -97,6 +105,16 @@ function AccountSettingsContent({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const canManageLinkedAccounts = Boolean(user) && !user?.isSampleDemo && !isSiteDemo;
+  const [providersState, setProvidersState] = useState(() => ({
+    loaded: false,
+    hasPassword: (user?.authProvider || 'email') === 'email',
+    canUnlinkGoogle: false,
+    providers: Array.isArray(user?.linkedProviders) ? user.linkedProviders : [],
+  }));
+  const [googleOAuthCodeFlowEnabled, setGoogleOAuthCodeFlowEnabled] = useState(false);
+  const [confirmUnlinkGoogle, setConfirmUnlinkGoogle] = useState(false);
+  const [unlinkingGoogle, setUnlinkingGoogle] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -111,6 +129,84 @@ function AccountSettingsContent({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!canManageLinkedAccounts || isAdminUser) return undefined;
+    let active = true;
+    Promise.all([
+      apiFetch('/auth/providers').catch(() => null),
+      apiFetch('/auth/config', { timeoutMs: 3500 }).catch(() => null),
+    ]).then(([provRes, cfgRes]) => {
+      if (!active) return;
+      if (provRes && typeof provRes === 'object') {
+        setProvidersState({
+          loaded: true,
+          hasPassword: Boolean(provRes.hasPassword),
+          canUnlinkGoogle: Boolean(provRes.canUnlinkGoogle),
+          providers: Array.isArray(provRes.providers) ? provRes.providers : [],
+        });
+      } else {
+        setProvidersState((prev) => ({ ...prev, loaded: true }));
+      }
+      if (cfgRes && typeof cfgRes === 'object') {
+        setGoogleOAuthCodeFlowEnabled(Boolean(cfgRes.googleOAuthCodeFlowEnabled));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [canManageLinkedAccounts, isAdminUser]);
+
+  const googleIdentity = providersState.providers.find((p) => p?.provider === 'google') || null;
+
+  const handleLinkGoogleAccount = () => {
+    if (!googleOAuthCodeFlowEnabled || typeof window === 'undefined') return;
+    triggerHaptic('selection');
+    const appBase = detectAppBasePath();
+    const returnTo = toAppPath('/', appBase);
+    const startUrl = buildGoogleOAuthStartUrl({
+      returnTo,
+      mode: 'link',
+      apiBaseUrl: getConfiguredApiBaseUrl() || '/api',
+    });
+    window.location.assign(startUrl);
+  };
+
+  const handleUnlinkGoogleAccount = async () => {
+    if (unlinkingGoogle || !providersState.canUnlinkGoogle) return;
+    setUnlinkingGoogle(true);
+    try {
+      await apiFetch('/auth/providers/google', { method: 'DELETE' });
+      const refreshed = await apiFetch('/auth/providers').catch(() => null);
+      if (refreshed && typeof refreshed === 'object') {
+        setProvidersState({
+          loaded: true,
+          hasPassword: Boolean(refreshed.hasPassword),
+          canUnlinkGoogle: Boolean(refreshed.canUnlinkGoogle),
+          providers: Array.isArray(refreshed.providers) ? refreshed.providers : [],
+        });
+      } else {
+        setProvidersState((prev) => ({
+          ...prev,
+          canUnlinkGoogle: false,
+          providers: prev.providers.filter((p) => p?.provider !== 'google'),
+        }));
+      }
+      setConfirmUnlinkGoogle(false);
+      triggerHaptic('light');
+      emitStatusCapsule(
+        tx(lang, 'Google 계정 연결이 해제되었습니다', 'Google account unlinked')
+      );
+    } catch (err) {
+      triggerHaptic('warning');
+      emitStatusCapsule(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, 'Google 연결 해제에 실패했습니다', 'Failed to unlink Google account')
+      );
+    } finally {
+      setUnlinkingGoogle(false);
+    }
+  };
 
   useEffect(() => {
     if (!isAdminUser || typeof window === 'undefined') return undefined;
@@ -433,6 +529,174 @@ function AccountSettingsContent({
               <span>{tx(lang, '3D 랩 열기', 'Open 3D Lab')}</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Linked Sign-In Accounts (Google OAuth 2.0 PKCE Link / Unlink) */}
+      {canManageLinkedAccounts && (
+        <div className="hig-sheet-card" data-linked-accounts-card="true">
+          <div className="hig-sheet-row-between" style={{ gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Link2 size={15} aria-hidden="true" />
+              <div>
+                <div className="hig-body" style={{ fontWeight: 680 }}>
+                  {tx(lang, '연결된 로그인 계정', 'Linked Sign-In Accounts')}
+                </div>
+                <div className="hig-caption">
+                  {isAdminUser
+                    ? tx(
+                        lang,
+                        '관리자 계정은 보안 정책상 소셜 로그인 연동이 비활성화되어 있습니다.',
+                        'Social sign-in linking is disabled for administrator accounts by security policy.'
+                      )
+                    : tx(
+                        lang,
+                        'Google 계정을 연결하면 한 번의 터치로 안전하게 로그인할 수 있습니다.',
+                        'Connect Google to sign in securely with a single tap.'
+                      )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {!isAdminUser && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: '1px solid var(--border-subtle, rgba(128,128,128,0.16))',
+              }}
+            >
+              <div className="hig-sheet-row-between" style={{ gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-3.98v3.09C3.515 21.3 7.565 24 12.255 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.525 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62h-3.98a11.86 11.86 0 0 0 0 10.76l3.98-3.09z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0c-4.69 0-8.74 2.7-10.71 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
+                    />
+                  </svg>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="hig-body" style={{ fontWeight: 640 }}>
+                      Google
+                    </div>
+                    <div
+                      className="hig-caption tabular-nums"
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {!providersState.loaded
+                        ? tx(lang, '연동 상태 확인 중…', 'Checking status…')
+                        : googleIdentity
+                          ? googleIdentity.email
+                            ? tx(
+                                lang,
+                                `연결됨 · ${googleIdentity.email}`,
+                                `Connected · ${googleIdentity.email}`
+                              )
+                            : tx(lang, '연결됨', 'Connected')
+                          : tx(lang, '연결되지 않음', 'Not connected')}
+                    </div>
+                  </div>
+                </div>
+
+                {googleIdentity ? (
+                  confirmUnlinkGoogle ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={unlinkingGoogle}
+                        onClick={() => setConfirmUnlinkGoogle(false)}
+                      >
+                        <span>{tx(lang, '취소', 'Cancel')}</span>
+                      </button>
+                      <button
+                        id="settings-confirm-unlink-google-btn"
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={unlinkingGoogle}
+                        onClick={handleUnlinkGoogleAccount}
+                      >
+                        <span>
+                          {unlinkingGoogle
+                            ? tx(lang, '해제 중…', 'Unlinking…')
+                            : tx(lang, '해제 확인', 'Confirm')}
+                        </span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      id="settings-unlink-google-btn"
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={!providersState.canUnlinkGoogle || unlinkingGoogle}
+                      onClick={() => setConfirmUnlinkGoogle(true)}
+                      style={{ flexShrink: 0 }}
+                    >
+                      <Unlink size={14} aria-hidden="true" />
+                      <span>{tx(lang, '연결 해제', 'Unlink')}</span>
+                    </button>
+                  )
+                ) : (
+                  <button
+                    id="settings-link-google-btn"
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={!providersState.loaded || !googleOAuthCodeFlowEnabled}
+                    onClick={handleLinkGoogleAccount}
+                    style={{ flexShrink: 0 }}
+                  >
+                    <Link2 size={14} aria-hidden="true" />
+                    <span>{tx(lang, 'Google 계정 연결', 'Connect Google')}</span>
+                  </button>
+                )}
+              </div>
+
+              {providersState.loaded && googleIdentity && !providersState.canUnlinkGoogle && (
+                <div className="hig-caption" style={{ opacity: 0.78 }}>
+                  {tx(
+                    lang,
+                    '유일한 로그인 수단인 Google 계정은 계정 보호를 위해 연결을 해제할 수 없습니다.',
+                    'Google is your only sign-in method and cannot be unlinked.'
+                  )}
+                </div>
+              )}
+
+              {providersState.loaded && !googleIdentity && !googleOAuthCodeFlowEnabled && (
+                <div className="hig-caption" style={{ opacity: 0.78 }}>
+                  {tx(
+                    lang,
+                    '현재 서버 환경에 Google OAuth 설정이 아직 활성화되지 않았습니다.',
+                    'Google OAuth linking is not enabled on this server environment yet.'
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

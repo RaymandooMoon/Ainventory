@@ -32,19 +32,20 @@
 ## 3. 사업계획서 본문 삽입용 3대 핵심 보안 정책
 
 ### 3-1. OAuth 인증 및 세션 토큰 보안 관리
-- **신뢰된 OIDC 서명 검증**: Apple Sign-In 및 Google OAuth 2.0 로그인 시 클라이언트가 전달한 이메일을 신뢰하지 않고, 서버가 직접 IdP 공개키(JWKS) 및 토큰 검증 API로 `iss`·`aud`·`exp`를 검증합니다.
-- **계정 탈취(ATO) 원천 차단**: 미검증 이메일 일치만으로 기존 계정에 소셜 계정을 자동 연결하는 취약 패턴을 코드 레벨에서 금지하고, `(provider, sub)` 고유 식별자 매칭만 허용합니다.
-- **OAuth 토큰 비보관 정책**: 외부 IdP의 Access/Refresh 토큰을 클라이언트 LocalStorage나 서버 DB에 저장하지 않아, 설령 단말이나 일부 세션이 탈취되더라도 사용자의 Apple/Google 계정으로 피해가 확산되는 연쇄 침해를 차단합니다.
-- **세션 수명주기 및 무차별 대입 방어**: `HttpOnly` · `SameSite=Lax` · `Secure`(HTTPS) 쿠키로 XSS 기반 토큰 탈취를 방어하며, 12시간 주기 만료 세션 자동 소거, IP/계정별 Rate Limiting, OTP 60초 쿨다운 및 상수 시간 비교(`timingSafeStringEquals`)를 적용했습니다. 상용 스케일업 시 단기 Access + Refresh Token Rotation 및 모바일 하드웨어 Keychain/Keystore 바인딩을 추가합니다.
+- **신뢰된 OIDC 서명 검증 (PKCE S256 + 로컬 RS256 JWKS)**: Google OAuth 2.0 Authorization Code + PKCE(`GET /api/auth/google/start`, `/callback`) 및 Apple Sign-In 시 클라이언트가 전달한 이메일을 신뢰하지 않고, 서버가 직접 IdP 공개키(JWKS)로 `RS256` 서명과 `iss`·`aud`·`azp`·`exp`·`nonce`·`email_verified` 클레임을 암호학적으로 검증합니다.
+- **계정 탈취(ATO) 원천 차단**: 미검증 이메일 일치만으로 기존 계정에 소셜 계정을 자동 연결하는 취약 패턴을 코드 레벨에서 금지(`409 ACCOUNT_EMAIL_CONFLICT`)하고, 정규화된 `user_identities(provider, provider_sub)` 매핑과 인증된 명시적 계정 연결(`mode=link`)만 허용합니다.
+- **OAuth 토큰 비보관 정책**: 외부 IdP의 Access/Refresh 토큰을 클라이언트 LocalStorage나 서버 DB에 저장하지 않고 교환 직후 즉시 폐기하여, 단말이나 일부 세션이 탈취되더라도 사용자의 Apple/Google 계정으로 피해가 확산되는 연쇄 침해를 차단합니다.
+- **동일 출처(`ainvtry.com/app`) 세션 수명주기 및 무차별 대입 방어**: `HttpOnly` · `SameSite=Lax` · `Secure`(HTTPS) 쿠키로 XSS 기반 토큰 탈취와 Safari ITP 서드파티 쿠키 차단을 동시 해결하며, 12시간 주기 만료 세션 자동 소거, IP/계정별 Rate Limiting, OTP 60초 쿨다운 및 상수 시간 비교(`timingSafeStringEquals`)를 적용했습니다. 상용 스케일업 시 단기 Access + Refresh Token Rotation 및 모바일 하드웨어 Keychain/Keystore 바인딩을 추가합니다.
 
 ### 3-2. 스토리지 접근 권한 분리 및 멀티테넌트 격리
 - **애플리케이션 계층 IDOR 차단**: 모든 의류·코디·착용 기록·가상 피팅 API에 중앙 인가 가드(`resolveAuthorizedClosets`)를 의무 적용하여, 비로그인 체험자(`sample`)는 읽기 전용 샘플 옷장에만, 정식 회원은 본인 소유 옷장(`closet_*`)에만 접근할 수 있도록 수평적 권한을 엄격히 분리했습니다.
-- **파일 업로드 검증 및 저장형 XSS 차단**: 이미지 업로드 시 매직 바이트 시그니처 검증, 4MB 용량 상한, 경로 순회(Path Traversal) 차단, DB 소유권 교차 검증을 수행하며, 정적 미디어 응답에 `Content-Security-Policy: default-src 'none'; sandbox` 및 `X-Content-Type-Options: nosniff` 헤더를 강제합니다.
-- **프로덕션 3-Zone 클라우드 스토리지 분리(2027 상용화 목표)**:
+- **파일 업로드 검증 및 저장형 XSS 차단**: 이미지 업로드 시 매직 바이트 시그니처 검증, 4MB 용량 상한, 경로 순회(Path Traversal) 차단, DB 소유권 교차 검증을 수행하며, 정적 미디어 응답(Express 및 Cloudflare Worker `/uploads/*` 프록시)에 `Content-Security-Policy: default-src 'none'; sandbox` 및 `X-Content-Type-Options: nosniff` 헤더를 강제합니다.
+- **GCP 서울 리전(`asia-northeast3`) 3-Zone 클라우드 스토리지 및 Cloud SQL 아키텍처 (`dbAdapter.js` · `storageAdapter.js` · `scripts/setup-gcp-prod.sh` 구현 완료)**:
   - **Zone A (Public Seed)**: 샘플 캡슐 의류·공용 3D 베이스 에셋(읽기 전용 CDN).
-  - **Zone B (Private User Vault)**: 사용자 의류·코디 전용 비공개 버킷(`Public Access Prevention` 강제, Uniform Bucket-Level Access, Cloud KMS CMEK AES-256 암호화, 인증 통과 사용자에게만 **15분 이하 단기 Signed URL** 발급).
-  - **Zone C (Ephemeral AI Scratch)**: 가상 피팅 중간 산출물 전용 임시 버킷(**24시간 Object Lifecycle 자동 영구 삭제**).
-- **API 시크릿 및 위치 미디어 격리**: Gemini·Google Maps·Weather 키는 서버 환경변수(`process.env`)에만 격리하며, Google Maps Street View/Place Photos 미디어는 DB에 영구 저장하지 않아 제3자 약관(ToS)과 위치 프라이버시를 동시에 준수합니다.
+  - **Zone B (Private User Vault)**: 사용자 의류·코디 전용 비공개 GCS 버킷(`Public Access Prevention` 강제, Uniform Bucket-Level Access, 인증·소유권 검증 통과 사용자에게만 **15분 이하 단기 V4 Signed URL** 또는 인증 프록시 제공, 상용 확장 시 Cloud KMS CMEK 적용).
+  - **Zone C (Ephemeral AI Scratch)**: 가상 피팅 중간 산출물 전용 임시 버킷(**24시간 Object Lifecycle 자동 영구 삭제** + 회원 탈퇴 시 즉시 삭제).
+  - **관계형 DB**: 서울 리전 **Cloud SQL for PostgreSQL 16**(`db-f1-micro`, 7일 자동 백업) 단일 리전 완결 구조.
+- **API 시크릿 및 위치 미디어 격리**: Gemini·Google OAuth Secret·Google Maps·Weather 키는 GCP Secret Manager 및 서버 환경변수(`process.env`)에만 격리하며, Google Maps Street View/Place Photos 미디어는 DB에 영구 저장하지 않아 제3자 약관(ToS)과 위치 프라이버시를 동시에 준수합니다.
 
 ### 3-3. 제3자 AI API 이미지 전송 시 비식별화 · 보유기간 · 파기 정책
 - **전송 전 비식별화(De-identification)**:

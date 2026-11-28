@@ -1,0 +1,19 @@
+{
+  "name": "iNVTRY — AI Wardrobe Atelier",
+  "short_name": "iNVTRY",
+  "description": "AI 디지털 옷장 · 3D 피팅 스튜디오 · OOTD 캘린더 · 오프라인 쇼핑 중복 판독",
+  "start_url": "/app",
+  "scope": "/app",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

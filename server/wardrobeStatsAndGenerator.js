@@ -91,8 +91,8 @@ export function buildWardrobeBenchmarksMatrix() {
   return rows;
 }
 
-export function seedWardrobeBenchmarks(db) {
-  db.exec(`
+export async function seedWardrobeBenchmarks(db) {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS wardrobe_statistics_benchmarks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       age_group TEXT NOT NULL,
@@ -103,17 +103,18 @@ export function seedWardrobeBenchmarks(db) {
     );
   `);
 
-  const cnt = db.prepare('SELECT COUNT(*) as c FROM wardrobe_statistics_benchmarks').get().c;
+  const countRow = await db.prepare('SELECT COUNT(*) as c FROM wardrobe_statistics_benchmarks').get();
+  const cnt = Number(countRow?.c || 0);
   if (cnt >= 400) return;
 
-  db.exec('DELETE FROM wardrobe_statistics_benchmarks;');
+  await db.exec('DELETE FROM wardrobe_statistics_benchmarks;');
   const insert = db.prepare(`
     INSERT INTO wardrobe_statistics_benchmarks (age_group, body_part, season, avg_count, source_citation)
     VALUES (?, ?, ?, ?, ?)
   `);
   const matrix = buildWardrobeBenchmarksMatrix();
   for (const r of matrix) {
-    insert.run(r.age_group, r.body_part, r.season, r.avg_count, r.source_citation);
+    await insert.run(r.age_group, r.body_part, r.season, r.avg_count, r.source_citation);
   }
 }
 
@@ -262,8 +263,8 @@ const SLOT_ITEM_TEMPLATES = {
   ],
 };
 
-export function generateStatisticalWardrobeForUser(db, closetOwner, userProfile = {}) {
-  seedWardrobeBenchmarks(db);
+export async function generateStatisticalWardrobeForUser(db, closetOwner, userProfile = {}) {
+  await seedWardrobeBenchmarks(db);
 
   const ageGroup = normalizeAgeGroupKey(userProfile.age_group || userProfile.ageGroup, userProfile.age);
   const personalColor = userProfile.personal_color || userProfile.personalColor || 'autumn_warm';
@@ -272,7 +273,7 @@ export function generateStatisticalWardrobeForUser(db, closetOwner, userProfile 
   const gender = userProfile.gender || 'unspecified';
 
   const palette = PERSONAL_COLOR_SWATCHES[macroPersonalColor] || PERSONAL_COLOR_SWATCHES.autumn_warm;
-  const benchmarks = db
+  const benchmarks = await db
     .prepare('SELECT * FROM wardrobe_statistics_benchmarks WHERE age_group = ?')
     .all(ageGroup);
 
@@ -331,7 +332,7 @@ export function generateStatisticalWardrobeForUser(db, closetOwner, userProfile 
       const daysAgo = ((i * 4 + 2) % 28) + 1;
       const isFav = i === 0 ? 1 : 0;
 
-      insertGarment.run(
+      await insertGarment.run(
         closetOwner,
         `${swatch.name} ${tpl.nameKo}`,
         slotKey,

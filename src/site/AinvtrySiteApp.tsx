@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ArrowRight,
+  ArrowUpRight,
   BarChart3,
   ChevronsUpDown,
   Compass,
@@ -1049,6 +1050,19 @@ export default function AinvtrySiteApp() {
             </div>
 
             <div className="site-topbar-right site-utility-rail">
+              <a
+                id="site-topbar-launch-app-link"
+                href="/app"
+                className="site-utility-pill site-utility-pill--app"
+                data-testid="site-topbar-launch-app"
+                data-marble-target="true"
+                data-marble-action="click"
+                aria-label={lang === 'ko' ? 'iNVTRY 웹 앱 시작하기' : 'Launch iNVTRY Web App'}
+              >
+                <span>{lang === 'ko' ? '앱 시작' : 'App'}</span>
+                <ArrowUpRight size={13} aria-hidden="true" />
+              </a>
+              <span className="site-utility-sep" aria-hidden="true" />
               <button
                 type="button"
                 className="site-utility-pill"
@@ -1115,6 +1129,27 @@ export default function AinvtrySiteApp() {
                   </h1>
 
                   <p className="site-hero-subtitle">{copy.hero.subtitle}</p>
+
+                  {!isIrCoverEmbed && (
+                    <div className="site-hero-actions" data-no-marble="true">
+                      <a
+                        id="site-hero-launch-app-btn"
+                        href="/app"
+                        className="site-hero-cta site-hero-cta--primary"
+                        data-testid="site-hero-launch-app"
+                        data-marble-target="true"
+                        data-marble-action="click"
+                        aria-label={
+                          lang === 'ko'
+                            ? 'iNVTRY 웹 앱 시작하기 (/app)'
+                            : 'Launch iNVTRY Web App (/app)'
+                        }
+                      >
+                        <span>{lang === 'ko' ? '앱 시작하기' : 'Launch App'}</span>
+                        <ArrowRight size={14} aria-hidden="true" />
+                      </a>
+                    </div>
+                  )}
 
 
                   {!isIrCoverEmbed &&

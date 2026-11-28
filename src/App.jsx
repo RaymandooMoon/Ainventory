@@ -37,9 +37,19 @@ import {
   isSiteDemoUser,
   loadInstantSampleGarmentsFallback,
   prefetchSampleGarments,
+  setCookieSessionActive,
   setSampleDemoMode,
   setStoredToken,
 } from './utils/api.ts';
+import {
+  buildAppLoginPath,
+  detectAppBasePath,
+  formatOAuthErrorMessage,
+  isMountedUnderAppRoute,
+  parseOAuthCallbackParams,
+  stripAppBasePath,
+  toAppPath,
+} from './utils/appRouter.ts';
 import { scheduleIdleTask } from './utils/resourcePriority.ts';
 import {
   getStoredLang,
@@ -112,46 +122,84 @@ const FLOATING_TABS = [
 
 function parseAppLocation() {
   if (typeof window === 'undefined') {
-    return { tab: 'outfits', itemId: null, showAuth: false };
+    return {
+      basePath: '',
+      tab: 'outfits',
+      itemId: null,
+      showAuth: false,
+      authResult: null,
+      authError: null,
+    };
   }
   const { pathname, search } = window.location;
+  const basePath = detectAppBasePath(pathname);
+  const subPath = stripAppBasePath(pathname, basePath);
   const params = new URLSearchParams(search);
+  const { authResult, authError } = parseOAuthCallbackParams(search);
   if (
-    pathname === '/login' ||
-    pathname === '/login/' ||
+    subPath === '/login' ||
+    subPath === '/login/' ||
     params.get('auth') === '1' ||
-    params.get('verify_token')
+    params.get('verify_token') ||
+    Boolean(authError)
   ) {
-    return { tab: 'outfits', itemId: null, showAuth: true };
+    return { basePath, tab: 'outfits', itemId: null, showAuth: true, authResult, authError };
   }
 
-  const itemMatch = pathname.match(/^\/item\/(-?\d+)\/?$/);
+  const itemMatch = subPath.match(/^\/item\/(-?\d+)\/?$/);
   if (itemMatch) {
-    return { tab: 'closet', itemId: Number(itemMatch[1]), showAuth: false };
+    return {
+      basePath,
+      tab: 'closet',
+      itemId: Number(itemMatch[1]),
+      showAuth: false,
+      authResult,
+      authError,
+    };
   }
-  return { tab: resolveInitialTabFromPath(pathname), itemId: null, showAuth: false };
+  return {
+    basePath,
+    tab: resolveInitialTabFromPath(subPath),
+    itemId: null,
+    showAuth: false,
+    authResult,
+    authError,
+  };
 }
 
 export default function App() {
   const isEmbedMode = isLiveAppEmbedSession();
   const [initialLoc] = useState(() => parseAppLocation());
-  const [hasInitialToken] = useState(() => {
+  const appBasePath = initialLoc.basePath;
+  const isAppRouteMount = !isEmbedMode && isMountedUnderAppRoute(appBasePath || undefined);
+  const [oauthErrorCode, setOauthErrorCode] = useState(() => initialLoc.authError || '');
+  const onboardingAutoPromptedRef = useRef(false);
+
+  const [shouldProbeSession] = useState(() => {
     if (isEmbedMode && initialLoc.showAuth) {
       setSampleDemoMode(false);
       return false;
     }
     const token = Boolean(getStoredToken());
-    if (!token) {
-      setSampleDemoMode(true);
+    if (token) return true;
+    // Under /app (ainvtry.com/app), always probe HttpOnly cookie session via /auth/me first
+    if (isAppRouteMount || Boolean(initialLoc.authResult)) {
+      setSampleDemoMode(false);
+      return true;
     }
-    return token;
+    setSampleDemoMode(true);
+    return false;
   });
 
   const [user, setUser] = useState(() =>
-    hasInitialToken || (isEmbedMode && initialLoc.showAuth) ? null : DEFAULT_LOCAL_USER
+    shouldProbeSession || (isEmbedMode && initialLoc.showAuth) || isAppRouteMount
+      ? null
+      : DEFAULT_LOCAL_USER
   );
-  const [authReady, setAuthReady] = useState(() => !hasInitialToken);
-  const [showAuthScreen, setShowAuthScreen] = useState(initialLoc.showAuth);
+  const [authReady, setAuthReady] = useState(() => !shouldProbeSession);
+  const [showAuthScreen, setShowAuthScreen] = useState(
+    () => initialLoc.showAuth || (isAppRouteMount && !initialLoc.authResult)
+  );
   const [loginPortal, setLoginPortal] = useState(null);
 
   const [activeTab, setActiveTab] = useState(initialLoc.tab);
@@ -319,29 +367,88 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [isEmbedMode]);
 
-  // Boot session -> Only verify `/auth/me` asynchronously when a stored token exists
+  // Boot session -> Verify Bearer token OR HttpOnly cookie session via `/auth/me`
   useEffect(() => {
-    if (!hasInitialToken) return undefined;
+    if (!shouldProbeSession) return undefined;
 
     let cancelled = false;
     apiFetch('/auth/me')
       .then((data) => {
         if (cancelled) return;
         if (data?.user) {
+          setCookieSessionActive(true, data.user.id);
           setSampleDemoMode(false);
           setUser(data.user);
+          setShowAuthScreen(false);
           syncAccountToAvatar(data.user);
+
+          // Confirmed Option B onboarding: newly signed-up Google user lands on empty Closet + auto-opens onboarding modal once
+          const shouldAutoOnboard =
+            !onboardingAutoPromptedRef.current &&
+            !data.user.isSampleDemo &&
+            !isSiteDemoUser(data.user) &&
+            (initialLoc.authResult === 'google_new' || data.user.profileCompleted === false);
+          if (shouldAutoOnboard) {
+            onboardingAutoPromptedRef.current = true;
+            setActiveTab('closet');
+            setProfileModalTab('skin');
+            setProfileModalOpen(true);
+          }
+
+          if (initialLoc.authResult === 'google_linked') {
+            showToast(
+              langRef.current === 'en'
+                ? 'Google account linked successfully.'
+                : 'Google 계정이 성공적으로 연결되었습니다.'
+            );
+          } else if (initialLoc.authError) {
+            showToast(formatOAuthErrorMessage(initialLoc.authError, langRef.current));
+          }
+
+          if (!isEmbedMode && typeof window !== 'undefined') {
+            const subPath = stripAppBasePath(window.location.pathname, appBasePath);
+            if (
+              subPath === '/login' ||
+              subPath === '/login/' ||
+              initialLoc.authResult ||
+              initialLoc.authError
+            ) {
+              const targetSub = shouldAutoOnboard ? '/closet' : subPath === '/login' ? '/' : subPath;
+              window.history.replaceState({}, '', toAppPath(targetSub, appBasePath));
+            }
+          }
         } else {
           setStoredToken(null);
-          setSampleDemoMode(true);
-          setUser(DEFAULT_LOCAL_USER);
+          setCookieSessionActive(false);
+          if (isAppRouteMount) {
+            setSampleDemoMode(false);
+            setUser(null);
+            setShowAuthScreen(true);
+            if (typeof window !== 'undefined') {
+              window.history.replaceState({}, '', buildAppLoginPath(appBasePath));
+            }
+          } else {
+            setSampleDemoMode(true);
+            setUser(DEFAULT_LOCAL_USER);
+          }
         }
       })
       .catch(() => {
         if (cancelled) return;
         setStoredToken(null);
-        setSampleDemoMode(true);
-        setUser(DEFAULT_LOCAL_USER);
+        setCookieSessionActive(false);
+        if (isAppRouteMount) {
+          // Confirmed Option A: unauthenticated `/app` visit shows Login screen first (with Sample Closet button)
+          setSampleDemoMode(false);
+          setUser(null);
+          setShowAuthScreen(true);
+          if (typeof window !== 'undefined') {
+            window.history.replaceState({}, '', buildAppLoginPath(appBasePath));
+          }
+        } else {
+          setSampleDemoMode(true);
+          setUser(DEFAULT_LOCAL_USER);
+        }
       })
       .finally(() => {
         if (!cancelled) {
@@ -352,7 +459,16 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [hasInitialToken, syncAccountToAvatar]);
+  }, [
+    appBasePath,
+    initialLoc.authError,
+    initialLoc.authResult,
+    isAppRouteMount,
+    isEmbedMode,
+    shouldProbeSession,
+    showToast,
+    syncAccountToAvatar,
+  ]);
 
   // Hydrate server-side profile configuration (`handedness`, default: `'right'`)
   useEffect(() => {
@@ -664,12 +780,13 @@ export default function App() {
       triggerHaptic('selection');
       setSelectedItemId(null);
       setActiveTab(target.key);
+      const nextUrlPath = toAppPath(target.path, appBasePath);
       if (
         !isEmbedMode &&
         typeof window !== 'undefined' &&
-        window.location.pathname !== target.path
+        window.location.pathname !== nextUrlPath
       ) {
-        window.history.pushState({}, '', target.path);
+        window.history.pushState({}, '', nextUrlPath);
       }
       if (
         isEmbedMode &&
@@ -686,7 +803,7 @@ export default function App() {
         );
       }
     },
-    [isEmbedMode, user, visibleTabs]
+    [appBasePath, isEmbedMode, user, visibleTabs]
   );
 
   // Enforce menu permission if user lands directly on /admin or a revoked tab URL
@@ -707,11 +824,11 @@ export default function App() {
       if (fallback.key !== activeTab) {
         setActiveTab(fallback.key);
         if (!isEmbedMode && typeof window !== 'undefined') {
-          window.history.replaceState({}, '', fallback.path);
+          window.history.replaceState({}, '', toAppPath(fallback.path, appBasePath));
         }
       }
     }
-  }, [activeTab, authReady, isEmbedMode, showAuthScreen, user]);
+  }, [activeTab, appBasePath, authReady, isEmbedMode, showAuthScreen, user]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -761,13 +878,13 @@ export default function App() {
       if (!garment) return;
       setSelectedItemId(Number(garment.id));
       if (!isEmbedMode && typeof window !== 'undefined') {
-        const nextPath = `/item/${garment.id}`;
+        const nextPath = toAppPath(`/item/${garment.id}`, appBasePath);
         if (window.location.pathname !== nextPath) {
           window.history.pushState({}, '', nextPath);
         }
       }
     },
-    [isEmbedMode]
+    [appBasePath, isEmbedMode]
   );
 
   const handleCloseGarmentDetail = useCallback(() => {
@@ -775,12 +892,12 @@ export default function App() {
     if (
       !isEmbedMode &&
       typeof window !== 'undefined' &&
-      window.location.pathname.startsWith('/item/')
+      stripAppBasePath(window.location.pathname, appBasePath).startsWith('/item/')
     ) {
       const fallbackTab = FLOATING_TABS.find((t) => t.key === activeTab) || FLOATING_TABS[0];
-      window.history.pushState({}, '', fallbackTab.path);
+      window.history.pushState({}, '', toAppPath(fallbackTab.path, appBasePath));
     }
-  }, [activeTab, isEmbedMode]);
+  }, [activeTab, appBasePath, isEmbedMode]);
 
   const handleTryInOutfits = useCallback(
     (garment) => {
@@ -790,10 +907,10 @@ export default function App() {
       setSelectedItemId(null);
       setActiveTab('outfits');
       if (!isEmbedMode && typeof window !== 'undefined') {
-        window.history.pushState({}, '', '/outfits');
+        window.history.pushState({}, '', toAppPath('/outfits', appBasePath));
       }
     },
-    [isEmbedMode]
+    [appBasePath, isEmbedMode]
   );
 
   const handleToggleTheme = useCallback(
@@ -1043,6 +1160,8 @@ export default function App() {
       .catch(() => {});
     startLoginPortalTransition(() => {
       setStoredToken(null);
+      setCookieSessionActive(false);
+      setOauthErrorCode('');
       setSampleDemoMode(true);
       setUser(DEFAULT_LOCAL_USER);
       const prefetched = getPrefetchedSampleGarments();
@@ -1053,14 +1172,19 @@ export default function App() {
       setSelectedItemId(null);
       setActiveTab('outfits');
       if (!isEmbedMode && typeof window !== 'undefined') {
-        window.history.replaceState({}, '', '/');
+        window.history.replaceState({}, '', toAppPath('/', appBasePath));
       }
     });
-  }, [isEmbedMode, startLoginPortalTransition]);
+  }, [appBasePath, isEmbedMode, startLoginPortalTransition]);
 
   const handleLoginSuccess = useCallback(
     (loggedInUser) => {
       const demoAccount = isDemoVtonAccount(loggedInUser);
+      const shouldAutoOnboard =
+        !demoAccount &&
+        !loggedInUser?.isSampleDemo &&
+        loggedInUser?.profileCompleted === false &&
+        !onboardingAutoPromptedRef.current;
       if (demoAccount) {
         void prefetchSampleGarments();
         void import('./services/vton2DService.ts')
@@ -1068,7 +1192,11 @@ export default function App() {
           .catch(() => {});
       }
       startLoginPortalTransition(() => {
+        setOauthErrorCode('');
         setSampleDemoMode(Boolean(loggedInUser?.isOfflineFallback));
+        if (!loggedInUser?.isOfflineFallback && !loggedInUser?.isSampleDemo) {
+          setCookieSessionActive(true, loggedInUser?.id);
+        }
         setUser(loggedInUser);
         if (demoAccount) {
           const prefetched = getPrefetchedSampleGarments();
@@ -1083,14 +1211,24 @@ export default function App() {
           // Ignore storage restrictions inside sandboxed embed iframes
         }
         setSelectedItemId(null);
-        setActiveTab('outfits');
+        const landingTab = shouldAutoOnboard ? 'closet' : 'outfits';
+        setActiveTab(landingTab);
+        if (shouldAutoOnboard) {
+          onboardingAutoPromptedRef.current = true;
+          setProfileModalTab('skin');
+          setProfileModalOpen(true);
+        }
         setRefreshKey((k) => k + 1);
         if (!isEmbedMode && typeof window !== 'undefined') {
-          window.history.replaceState({}, '', '/');
+          window.history.replaceState(
+            {},
+            '',
+            toAppPath(landingTab === 'closet' ? '/closet' : '/', appBasePath)
+          );
         }
       });
     },
-    [isEmbedMode, startLoginPortalTransition, syncAccountToAvatar]
+    [appBasePath, isEmbedMode, startLoginPortalTransition, syncAccountToAvatar]
   );
 
   const handleLogout = useCallback(async () => {
@@ -1105,27 +1243,29 @@ export default function App() {
       // ignore logout error
     }
     setStoredToken(null);
+    setCookieSessionActive(false);
     setSampleDemoMode(false);
     setUser(null);
     setShowAuthScreen(true);
     if (!isEmbedMode && typeof window !== 'undefined') {
-      window.history.replaceState({}, '', '/?auth=1');
+      window.history.replaceState({}, '', buildAppLoginPath(appBasePath));
     }
-  }, [clearPortalTimers, isEmbedMode, user]);
+  }, [appBasePath, clearPortalTimers, isEmbedMode, user]);
 
   const handleAccountDeleted = useCallback(() => {
     garmentsMutationSeqRef.current += 1;
     setAccountSheetOpen(false);
     setMegascansLabOpen(false);
     setStoredToken(null);
+    setCookieSessionActive(false);
     setSampleDemoMode(false);
     setUser(null);
     setGarments([]);
     setShowAuthScreen(true);
     if (!isEmbedMode && typeof window !== 'undefined') {
-      window.history.replaceState({}, '', '/?auth=1');
+      window.history.replaceState({}, '', buildAppLoginPath(appBasePath));
     }
-  }, [isEmbedMode]);
+  }, [appBasePath, isEmbedMode]);
 
   const handleGarmentRegistered = useCallback((created) => {
     if (created) {
@@ -1155,12 +1295,12 @@ export default function App() {
       if (
         !isEmbedMode &&
         typeof window !== 'undefined' &&
-        window.location.pathname.startsWith('/item/')
+        stripAppBasePath(window.location.pathname, appBasePath).startsWith('/item/')
       ) {
-        window.history.pushState({}, '', '/closet');
+        window.history.pushState({}, '', toAppPath('/closet', appBasePath));
       }
     },
-    [isEmbedMode]
+    [appBasePath, isEmbedMode]
   );
 
   const handleClosetUpdated = useCallback(() => {
@@ -1255,6 +1395,7 @@ export default function App() {
               onToggleTheme={handleToggleTheme}
               portalPhase={loginPortal?.phase || 'idle'}
               onPortalTargetResolved={handlePortalTargetResolved}
+              initialAuthError={oauthErrorCode}
             />
           </Suspense>
         </div>

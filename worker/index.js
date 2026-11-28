@@ -1623,20 +1623,70 @@ async function handleNewsletterUnsubscribe(request, env, ctx, fetchImpl) {
   return buildJsonResponse({ ok: true, status: 'unsubscribed' }, 200, request, env);
 }
 
+const APP_FULL_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval' blob: https://accounts.google.com/gsi/client",
+  "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "media-src 'self' blob: data:",
+  "worker-src 'self' blob:",
+  "frame-src 'self' https://accounts.google.com/gsi/",
+  "connect-src 'self' blob: data: https://accounts.google.com/gsi/ https://api.open-meteo.com https://appleid.apple.com https://staticimgly.com https://cdn.jsdelivr.net",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+function copyMultiSetCookieHeaders(sourceHeaders, targetHeaders) {
+  if (typeof sourceHeaders?.getSetCookie !== 'function') return;
+  const cookies = sourceHeaders.getSetCookie();
+  if (!Array.isArray(cookies) || cookies.length <= 1) return;
+  targetHeaders.delete('set-cookie');
+  for (const cookie of cookies) {
+    targetHeaders.append('set-cookie', cookie);
+  }
+}
+
+function buildForwardedProxyHeaders(request, incomingUrl, allowedNames) {
+  const forwardHeaders = new Headers();
+  for (const name of allowedNames) {
+    const val = request.headers.get(name);
+    if (val) forwardHeaders.set(name, val);
+  }
+  const clientIp =
+    request.headers.get('cf-connecting-ip') ||
+    request.headers.get('x-forwarded-for') ||
+    '';
+  if (clientIp) {
+    forwardHeaders.set('x-forwarded-for', clientIp);
+  }
+  forwardHeaders.set('x-forwarded-proto', incomingUrl.protocol.replace(':', '') || 'https');
+  forwardHeaders.set('x-forwarded-host', incomingUrl.host);
+  return forwardHeaders;
+}
+
 async function proxyApiRequest(request, env, fetchImpl) {
   const incomingUrl = new URL(request.url);
   const upstreamOrigin = resolveUpstreamOrigin(env);
   const targetUrl = `${upstreamOrigin}${incomingUrl.pathname}${incomingUrl.search}`;
 
-  const forwardHeaders = new Headers();
-  for (const name of ['accept', 'authorization', 'content-type', 'cookie', 'x-demo-mode', 'x-profile-key']) {
-    const val = request.headers.get(name);
-    if (val) forwardHeaders.set(name, val);
-  }
+  const forwardHeaders = buildForwardedProxyHeaders(request, incomingUrl, [
+    'accept',
+    'accept-language',
+    'authorization',
+    'content-type',
+    'cookie',
+    'origin',
+    'user-agent',
+    'x-demo-mode',
+    'x-profile-key',
+  ]);
 
   const init = {
     method: request.method,
     headers: forwardHeaders,
+    redirect: 'manual',
   };
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     init.body = await request.arrayBuffer();
@@ -1645,6 +1695,7 @@ async function proxyApiRequest(request, env, fetchImpl) {
   try {
     const upstreamRes = await fetchWithTimeout(fetchImpl, targetUrl, init, UPSTREAM_TIMEOUT_MS);
     const respHeaders = new Headers(upstreamRes.headers);
+    copyMultiSetCookieHeaders(upstreamRes.headers, respHeaders);
     respHeaders.set('Cache-Control', 'no-store');
     const corsOrigin = resolveCorsOrigin(request, env);
     if (corsOrigin) {
@@ -1665,6 +1716,59 @@ async function proxyApiRequest(request, env, fetchImpl) {
   }
 }
 
+async function proxyUploadsRequest(request, env, fetchImpl) {
+  if (request.method === 'OPTIONS') {
+    return buildJsonResponse({}, 204, request, env);
+  }
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Method Not Allowed', { status: 405 });
+  }
+  const incomingUrl = new URL(request.url);
+  const upstreamOrigin = resolveUpstreamOrigin(env);
+  const targetUrl = `${upstreamOrigin}${incomingUrl.pathname}${incomingUrl.search}`;
+
+  const forwardHeaders = buildForwardedProxyHeaders(request, incomingUrl, [
+    'accept',
+    'authorization',
+    'cookie',
+    'if-none-match',
+    'if-modified-since',
+    'user-agent',
+  ]);
+
+  try {
+    const upstreamRes = await fetchWithTimeout(
+      fetchImpl,
+      targetUrl,
+      {
+        method: request.method,
+        headers: forwardHeaders,
+        redirect: 'manual',
+      },
+      UPSTREAM_TIMEOUT_MS
+    );
+    const respHeaders = new Headers(upstreamRes.headers);
+    respHeaders.set('Content-Security-Policy', "default-src 'none'; sandbox");
+    respHeaders.set('X-Content-Type-Options', 'nosniff');
+    respHeaders.set('X-Robots-Tag', 'noindex, nofollow, noai, noimageai');
+    if (!respHeaders.get('cache-control')) {
+      respHeaders.set('Cache-Control', 'private, max-age=300');
+    }
+    return new Response(upstreamRes.body, {
+      status: upstreamRes.status,
+      headers: respHeaders,
+    });
+  } catch {
+    return new Response('Upstream image storage unavailable', { status: 503 });
+  }
+}
+
+function isFullAppSpaPath(pathname) {
+  if (pathname === '/app' || pathname === '/app/') return true;
+  if (!pathname.startsWith('/app/')) return false;
+  return !/\.[a-zA-Z0-9]{2,8}$/.test(pathname);
+}
+
 export function createWorkerHandler(fetchImpl = fetch) {
   return {
     /**
@@ -1674,6 +1778,20 @@ export function createWorkerHandler(fetchImpl = fetch) {
      */
     async fetch(request, env = {}, ctx = null) {
       const url = new URL(request.url);
+
+      // Canonicalize www.ainvtry.com/app* -> https://ainvtry.com/app* so OAuth cookies & redirect_uri stay single-origin
+      if (
+        url.hostname.toLowerCase() === 'www.ainvtry.com' &&
+        (url.pathname === '/app' || url.pathname.startsWith('/app/'))
+      ) {
+        return new Response(null, {
+          status: 301,
+          headers: {
+            Location: `https://ainvtry.com${url.pathname}${url.search}`,
+            'Cache-Control': 'public, max-age=3600',
+          },
+        });
+      }
 
       if (url.pathname === '/sitemap.xml' || url.pathname === '/sitemap_index.xml') {
         return buildRemovedSitemapResponse();
@@ -1740,6 +1858,10 @@ export function createWorkerHandler(fetchImpl = fetch) {
         return proxyApiRequest(request, env, fetchImpl);
       }
 
+      if (url.pathname.startsWith('/uploads/')) {
+        return proxyUploadsRequest(request, env, fetchImpl);
+      }
+
       if (isInvestorDeckPath(url.pathname)) {
         return handleProtectedIrRoute(request, url, env, { sha256Hex, verifyEdgeToken }, ctx);
       }
@@ -1754,6 +1876,29 @@ export function createWorkerHandler(fetchImpl = fetch) {
       }
 
       if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') {
+        if (isFullAppSpaPath(url.pathname)) {
+          // Request `/app/` directly from Static Assets to avoid Cloudflare auto-trailing-slash 307 redirect loops
+          const appShellRequest = new Request(
+            new URL(`/app/${url.search}`, url.origin),
+            request
+          );
+          const appAssetRes = await env.ASSETS.fetch(appShellRequest);
+          const headers = new Headers(appAssetRes.headers);
+          headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+          headers.set('X-Frame-Options', 'DENY');
+          headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+          headers.set('Content-Security-Policy', APP_FULL_CSP);
+          headers.set('X-Content-Type-Options', 'nosniff');
+          headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+          headers.set('X-Robots-Tag', 'noindex, nofollow, noai, noimageai');
+          headers.set('Vary', 'User-Agent');
+          return new Response(appAssetRes.body, {
+            status: appAssetRes.status,
+            statusText: appAssetRes.statusText,
+            headers,
+          });
+        }
+
         const isMinigameEntry =
           url.pathname === '/minigame' ||
           url.pathname === '/minigame/' ||

@@ -1561,6 +1561,144 @@
   margin-top: 4px;
 }
 
+.atelier-conflict-steps {
+  list-style: none;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--atelier-surface-subtle);
+  border: 1px solid var(--atelier-panel-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.atelier-conflict-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--atelier-ink-primary);
+  word-break: keep-all;
+}
+
+.atelier-conflict-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--atelier-accent-bg);
+  color: var(--atelier-accent-fg);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* In-App Browser (KakaoTalk / Instagram / Naver) External Browser Guard Banner */
+.atelier-inapp-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--atelier-surface-subtle);
+  border: 1px solid var(--atelier-panel-border);
+  color: var(--atelier-ink-primary);
+  box-sizing: border-box;
+}
+
+.atelier-inapp-banner-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.atelier-inapp-banner-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--atelier-ink-secondary);
+}
+
+.atelier-inapp-banner-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.atelier-inapp-banner-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--atelier-ink-primary);
+  word-break: keep-all;
+}
+
+.atelier-inapp-banner-desc {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 1.45;
+  color: var(--atelier-ink-secondary);
+  word-break: keep-all;
+}
+
+.atelier-inapp-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.atelier-inapp-action-btn {
+  flex: 1 1 120px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--atelier-secondary-border);
+  background: var(--atelier-surface-elevated);
+  color: var(--atelier-ink-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.3;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.15s ease;
+}
+
+.atelier-inapp-action-btn.is-primary {
+  background: var(--atelier-accent-bg);
+  color: var(--atelier-accent-fg);
+  border-color: transparent;
+}
+
+.atelier-inapp-action-btn:hover {
+  border-color: var(--atelier-input-border-hover);
+}
+
+.atelier-inapp-action-btn:active {
+  transform: scale(0.985);
+}
+
+.atelier-inapp-action-btn:focus-visible {
+  outline: 2px solid var(--atelier-accent-indicator);
+  outline-offset: 2px;
+}
+
 /* Spinner Animation */
 @keyframes atelierSpin {
   to {

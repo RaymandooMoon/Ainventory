@@ -126,11 +126,11 @@ function resolveAuthorizedClosetsForUser(userRow, resolvedRoleCode = null) {
  * Read-only session resolution middleware for `/api/vton/*`.
  * Allows authenticated users OR unauthenticated Sample Demo guests (`X-Demo-Mode: sample`).
  */
-function requireVtonSessionOrSample(req, res, next) {
+async function requireVtonSessionOrSample(req, res, next) {
   const token = extractAuthToken(req);
   if (token) {
     try {
-      const session = db
+      const session = await db
         .prepare(
           `SELECT
              s.token,
@@ -152,7 +152,7 @@ function requireVtonSessionOrSample(req, res, next) {
         .get(token);
 
       if (session && session.expires_at && new Date(session.expires_at) >= new Date()) {
-        const rbac = getUserRbacContext(db, session);
+        const rbac = await getUserRbacContext(db, session);
         req.vtonAuth = {
           isAuthenticated: true,
           isSampleGuest: false,

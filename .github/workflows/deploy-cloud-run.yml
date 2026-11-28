@@ -1,0 +1,118 @@
+name: Deploy Ainventory API to GCP Cloud Run (Seoul)
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_instances:
+        description: 'Cloud Run min-instances (0 = cost-saving default, 1 = zero cold start for demos)'
+        required: false
+        default: '0'
+        type: choice
+        options:
+          - '0'
+          - '1'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'server/**'
+      - 'src/contracts/**'
+      - 'src/services/**'
+      - 'src/shared/**'
+      - 'src/utils/**'
+      - '.github/workflows/deploy-cloud-run.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: gcp-cloud-run-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy API to Cloud Run (asia-northeast3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ vars.GCP_PROJECT_ID != '' && vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_CLOUD_RUN_DEPLOY_SA != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Keyless WIF OIDC)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_CLOUD_RUN_DEPLOY_SA }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          REGION="${{ vars.GCP_REGION || 'asia-northeast3' }}"
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push container image
+        id: image
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION || 'asia-northeast3' }}
+          AR_REPO: ${{ vars.GCP_ARTIFACT_REGISTRY_REPO || 'ainventory' }}
+          RUN_SERVICE: ${{ vars.GCP_CLOUD_RUN_SERVICE || 'ainventory-api' }}
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${AR_REPO}/${RUN_SERVICE}:${GITHUB_SHA}"
+          docker build --platform linux/amd64 -t "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
+          echo "uri=${IMAGE_URI}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy to Cloud Run (Seoul asia-northeast3)
+        id: deploy
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION || 'asia-northeast3' }}
+          RUN_SERVICE: ${{ vars.GCP_CLOUD_RUN_SERVICE || 'ainventory-api' }}
+          RUNTIME_SA: ${{ vars.GCP_CLOUD_RUN_RUNTIME_SA }}
+          SQL_CONN: ${{ vars.GCP_CLOUD_SQL_CONNECTION }}
+          GCS_PRIVATE: ${{ vars.GCP_GCS_PRIVATE_BUCKET }}
+          GCS_SCRATCH: ${{ vars.GCP_GCS_SCRATCH_BUCKET }}
+          MIN_INSTANCES: ${{ inputs.min_instances || '0' }}
+        run: |
+          set -euo pipefail
+          DEPLOY_ARGS=(
+            run deploy "${RUN_SERVICE}"
+            --project="${GCP_PROJECT_ID}"
+            --region="${GCP_REGION}"
+            --image="${{ steps.image.outputs.uri }}"
+            --platform=managed
+            --allow-unauthenticated
+            --port=8080
+            --cpu=1
+            --memory=512Mi
+            --concurrency=80
+            --timeout=120
+            --min-instances="${MIN_INSTANCES}"
+            --max-instances=5
+            --service-account="${RUNTIME_SA}"
+            --set-env-vars="NODE_ENV=production,TRUST_PROXY=1,SEED_DEMO_DATA=true,APP_PUBLIC_ORIGIN=https://ainvtry.com,CORS_ALLOWED_ORIGINS=https://ainvtry.com\,https://www.ainvtry.com\,https://raymandoomoon.github.io,GCS_PRIVATE_BUCKET=${GCS_PRIVATE},GCS_SCRATCH_BUCKET=${GCS_SCRATCH},RESEND_FROM_EMAIL=iNVTRY <newsletter@ainvtry.com>,NEWSLETTER_NOTIFY_EMAIL=raymond@ainvtry.com"
+            --set-secrets="DATABASE_URL=AINVENTORY_DATABASE_URL:latest,GOOGLE_CLIENT_ID=AINVENTORY_GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=AINVENTORY_GOOGLE_CLIENT_SECRET:latest,OAUTH_STATE_SECRET=AINVENTORY_OAUTH_STATE_SECRET:latest,GEMINI_API_KEY=AINVENTORY_GEMINI_API_KEY:latest,GOOGLE_MAPS_API_KEY=AINVENTORY_GOOGLE_MAPS_API_KEY:latest,RESEND_API_KEY=AINVENTORY_RESEND_API_KEY:latest,SITE_DEMO_PASSWORD=AINVENTORY_SITE_DEMO_PASSWORD:latest,ADMIN_INITIAL_PASSWORD=AINVENTORY_ADMIN_INITIAL_PASSWORD:latest"
+          )
+          if [[ -n "${SQL_CONN}" ]]; then
+            DEPLOY_ARGS+=(--add-cloudsql-instances="${SQL_CONN}")
+          fi
+          gcloud "${DEPLOY_ARGS[@]}"
+          SERVICE_URL="$(gcloud run services describe "${RUN_SERVICE}" --project="${GCP_PROJECT_ID}" --region="${GCP_REGION}" --format='value(status.url)')"
+          echo "url=${SERVICE_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify live /api/build-info health check
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 15 "${{ steps.deploy.outputs.url }}/api/build-info"
+          echo ""
+          curl -fsS --max-time 15 "${{ steps.deploy.outputs.url }}/api/auth/config"
+          echo ""

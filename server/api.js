@@ -15,10 +15,10 @@ import {
 } from '../src/shared/seasonal120Catalog.js';
 import db, {
   DATA_DIR,
+  DB_DIALECT,
   DB_PATH,
   OUTBOX_DIR,
   SQLITE_DRIVER,
-  UPLOADS_DIR,
   computeVerificationHash,
   ensureCyberDemoLookSeeds,
   ensureLuxuryStreetSeeds,
@@ -32,8 +32,21 @@ import db, {
   normalizeHandednessConfig,
   saveServerProfileConfig,
   seedIfEmpty,
+  storage,
   verifyPassword,
 } from './db.js';
+import {
+  buildGoogleAuthorizationUrl,
+  createPkceChallenge,
+  exchangeGoogleAuthCode,
+  resolveOAuthStateSecret,
+  resolveOrCreateGoogleUser,
+  resolvePublicOrigin,
+  sanitizeAppReturnTo,
+  signOAuthStateCookie,
+  verifyGoogleIdTokenJwks,
+  verifyOAuthStateCookie,
+} from './googleOAuthService.js';
 import {
   SITE_DEMO_ROLE_CODE,
   assignUserRole,
@@ -83,7 +96,7 @@ import {
   normalizeBodyShapeKey,
 } from './wardrobeStatsAndGenerator.js';
 
-initDb();
+await initDb();
 
 // Curated 4-Season + Multi-Part Accessories & Jewelry Capsule Catalog
 export const SAMPLE_CAPSULE_CATALOG = [
@@ -319,7 +332,12 @@ function validateAndDecodeDataUrl(dataUrl) {
   return { ok: true, buffer, ext: magicExt };
 }
 
-function saveDataUrlImage(dataUrl, ownerPrefix, fallbackUrl = '/seed/cream-knit.jpg', options = {}) {
+async function saveDataUrlImage(
+  dataUrl,
+  ownerPrefix,
+  fallbackUrl = '/seed/cream-knit.jpg',
+  options = {}
+) {
   const { persistToDisk = true } = options;
   if (!dataUrl || typeof dataUrl !== 'string') {
     return { ok: true, url: fallbackUrl };
@@ -350,12 +368,12 @@ function saveDataUrlImage(dataUrl, ownerPrefix, fallbackUrl = '/seed/cream-knit.
     const referencedByOwner =
       hasOwnerPrefix ||
       Boolean(
-        db
+        await db
           .prepare('SELECT 1 FROM garments WHERE closet_owner = ? AND image_url = ? LIMIT 1')
           .get(String(ownerPrefix || ''), normalizedPath)
       ) ||
       Boolean(
-        db
+        await db
           .prepare('SELECT 1 FROM shopping_checks WHERE closet_owner = ? AND image_url = ? LIMIT 1')
           .get(String(ownerPrefix || ''), normalizedPath)
       );
@@ -377,43 +395,39 @@ function saveDataUrlImage(dataUrl, ownerPrefix, fallbackUrl = '/seed/cream-knit.
       return { ok: true, url: fallbackUrl };
     }
     const filename = `${safeOwner}-${crypto.randomUUID()}.${decoded.ext}`;
-    const targetPath = path.resolve(UPLOADS_DIR, filename);
-    if (!targetPath.startsWith(`${path.resolve(UPLOADS_DIR)}${path.sep}`)) {
+    const contentType =
+      decoded.ext === 'webp' ? 'image/webp' : decoded.ext === 'png' ? 'image/png' : 'image/jpeg';
+    try {
+      const stored = await storage.putUpload(filename, decoded.buffer, contentType);
+      return { ok: true, url: stored.url };
+    } catch {
       return { ok: false, status: 400, error: '유효하지 않은 업로드 파일명입니다.' };
     }
-    fs.writeFileSync(targetPath, decoded.buffer);
-    return { ok: true, url: `/uploads/${filename}` };
   }
 
   return { ok: true, url: fallbackUrl };
 }
 
-function unlinkUploadIfUnreferenced(imageUrl) {
+async function unlinkUploadIfUnreferenced(imageUrl) {
   if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('/uploads/')) return;
   const safeBase = path.basename(imageUrl);
   if (imageUrl !== `/uploads/${safeBase}`) return;
 
   // Never delete if another garment or shopping_check row still references this upload
-  const stillReferencedByGarment = db
+  const stillReferencedByGarment = await db
     .prepare(
       'SELECT 1 FROM garments WHERE image_url = ? OR back_image_url = ? OR original_front_url = ? LIMIT 1'
     )
     .get(imageUrl, imageUrl, imageUrl);
   if (stillReferencedByGarment) return;
 
-  const stillReferencedByCheck = db
+  const stillReferencedByCheck = await db
     .prepare('SELECT 1 FROM shopping_checks WHERE image_url = ? LIMIT 1')
     .get(imageUrl);
   if (stillReferencedByCheck) return;
 
-  const uploadsRoot = path.resolve(UPLOADS_DIR);
-  const fullPath = path.resolve(uploadsRoot, safeBase);
-  if (!fullPath.startsWith(`${uploadsRoot}${path.sep}`)) return;
-
   try {
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
-    }
+    await storage.deleteUpload(safeBase);
   } catch (err) {
     if (err && typeof err === 'object' && 'code' in err && err.code !== 'ENOENT') {
       console.warn('[Uploads] Failed to unlink orphaned upload:', safeBase, err.code);
@@ -535,7 +549,7 @@ function parseGarmentRow(row) {
   };
 }
 
-export function formatUserPayload(u) {
+export async function formatUserPayload(u) {
   if (!u) return null;
   const pcProfile = u.personal_color ? getPersonalColorLabels(u.personal_color) : null;
   let skinUndertoneLab = null;
@@ -550,7 +564,22 @@ export function formatUserPayload(u) {
     }
   }
   const resolvedBody = computeBodyMetrics(u);
-  const rbac = getUserRbacContext(db, u);
+  const rbac = await getUserRbacContext(db, u);
+  let linkedProviders = [];
+  if (Number.isInteger(Number(u.id)) && Number(u.id) > 0) {
+    try {
+      const identityRows = await db
+        .prepare('SELECT provider, provider_email, linked_at FROM user_identities WHERE user_id = ? ORDER BY provider ASC')
+        .all(Number(u.id));
+      linkedProviders = identityRows.map((row) => ({
+        provider: row.provider,
+        email: row.provider_email || null,
+        linkedAt: row.linked_at || null,
+      }));
+    } catch {
+      linkedProviders = [];
+    }
+  }
 
   return {
     id: u.id,
@@ -564,6 +593,7 @@ export function formatUserPayload(u) {
     adminContactEmail: rbac.adminContactEmail || getAdminContactEmail(),
     isSiteDemo: rbac.roleCode === SITE_DEMO_ROLE_CODE,
     authProvider: u.auth_provider || 'email',
+    linkedProviders,
     defaultCloset: u.default_closet,
     closetName: u.closet_name || null,
     verifiedAt: u.verified_at || null,
@@ -611,7 +641,7 @@ function getAuthToken(req) {
   }
 }
 
-function createGuestDemoUser() {
+async function createGuestDemoUser() {
   const demoRow = {
     id: 0,
     username: 'sample_guest',
@@ -629,7 +659,7 @@ function createGuestDemoUser() {
     body_shape: 'standard_balanced',
     handedness: 'right',
   };
-  return { row: demoRow, payload: { ...formatUserPayload(demoRow), isSampleDemo: true } };
+  return { row: demoRow, payload: { ...(await formatUserPayload(demoRow)), isSampleDemo: true } };
 }
 
 /**
@@ -800,10 +830,10 @@ function buildClosetInClause(closets, column = 'closet_owner') {
   };
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const token = getAuthToken(req);
   if (token) {
-    const session = db
+    const session = await db
       .prepare(`
         SELECT s.token, s.expires_at, u.*
         FROM sessions s
@@ -815,7 +845,7 @@ function requireAuth(req, res, next) {
     if (session && new Date(session.expires_at) >= new Date()) {
       // If caller explicitly sent X-Demo-Mode: sample while logged in, keep user auth but mark sample header if needed
       req.userRow = session;
-      req.user = formatUserPayload(session);
+      req.user = await formatUserPayload(session);
       req.token = token;
       req.isSampleGuest = false;
       req.isSampleDemo = false;
@@ -843,7 +873,7 @@ function requireAuth(req, res, next) {
     isReadOnlyAnalyze ||
     (isProfileConfigRoute && (isDemoHeader || hasProfileKeyHeader || req.method === 'GET'))
   ) {
-    const guest = createGuestDemoUser();
+    const guest = await createGuestDemoUser();
     req.userRow = guest.row;
     req.user = guest.payload;
     req.isSampleGuest = true;
@@ -897,11 +927,11 @@ function requirePermission(permissionCode, customMessage) {
 }
 
 function blockIfSessionLacksPermission(permissionCode, customMessage) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const token = getAuthToken(req);
     if (!token) return next();
     try {
-      const session = db
+      const session = await db
         .prepare(`
           SELECT s.expires_at, u.*
           FROM sessions s
@@ -910,7 +940,7 @@ function blockIfSessionLacksPermission(permissionCode, customMessage) {
         `)
         .get(token);
       if (session && new Date(session.expires_at) >= new Date()) {
-        const rbac = getUserRbacContext(db, session);
+        const rbac = await getUserRbacContext(db, session);
         if (!hasPermission(rbac.permissions, permissionCode)) {
           return res.status(403).json({
             error:
@@ -939,20 +969,29 @@ function isHttpsRequest(req) {
   return forwardedProto === 'https';
 }
 
-function issueUserSession(req, res, userRow, options = {}) {
+function appendSetCookieHeader(res, cookieStr) {
+  const existing = res.getHeader('Set-Cookie');
+  if (!existing) {
+    res.setHeader('Set-Cookie', cookieStr);
+  } else if (Array.isArray(existing)) {
+    res.setHeader('Set-Cookie', [...existing, cookieStr]);
+  } else {
+    res.setHeader('Set-Cookie', [String(existing), cookieStr]);
+  }
+}
+
+async function issueUserSession(req, res, userRow, options = {}) {
   const { ttlMs = 30 * 24 * 60 * 60 * 1000, setCookie = true } = options;
   const token = crypto.randomBytes(32).toString('hex');
   const expires = new Date(Date.now() + ttlMs).toISOString();
-  db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(
-    token,
-    userRow.id,
-    expires
-  );
+  await db
+    .prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)')
+    .run(token, userRow.id, expires);
   if (setCookie) {
     const secureAttr = isHttpsRequest(req) ? '; Secure' : '';
     const maxAgeSec = Math.max(60, Math.floor(ttlMs / 1000));
-    res.setHeader(
-      'Set-Cookie',
+    appendSetCookieHeader(
+      res,
       `ainventory_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}${secureAttr}`
     );
   }
@@ -961,8 +1000,8 @@ function issueUserSession(req, res, userRow, options = {}) {
 
 function clearSessionCookie(req, res) {
   const secureAttr = isHttpsRequest(req) ? '; Secure' : '';
-  res.setHeader(
-    'Set-Cookie',
+  appendSetCookieHeader(
+    res,
     `ainventory_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureAttr}`
   );
 }
@@ -1031,78 +1070,19 @@ async function verifyAppleIdentityToken(idToken, expectedClientId) {
 }
 
 /**
- * Verifies a Google ID Token (credential JWT) via Google's tokeninfo API.
- * Validates audience, issuer, expiration, email_verified, and subject.
+ * Verifies a Google ID Token (credential JWT) locally via Google OIDC JWKS (RS256).
+ * Validates algorithm, key id, cryptographic signature, audience, azp, issuer,
+ * expiration, email_verified, subject, and optional nonce.
  */
-export async function verifyGoogleIdToken(credential, expectedClientId) {
-  if (!credential || typeof credential !== 'string') {
-    throw new Error('Missing Google identity token');
-  }
-  if (credential.length > 4096) {
-    throw new Error('Google credential exceeds maximum allowed length');
-  }
-  const parts = credential.split('.');
-  if (parts.length !== 3) {
-    throw new Error('Malformed Google identity token');
-  }
-
-  const endpoint = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-
-  try {
-    const res = await fetch(endpoint, { signal: controller.signal });
-    if (!res.ok) {
-      throw new Error(`Google tokeninfo endpoint returned status ${res.status}`);
-    }
-    const claims = await res.json();
-    clearTimeout(timer);
-
-    if (!claims || typeof claims !== 'object') {
-      throw new Error('Invalid response from Google tokeninfo');
-    }
-
-    // Verify audience
-    const aud = String(claims.aud || '').trim();
-    if (!expectedClientId || aud !== expectedClientId) {
-      throw new Error('Google token audience mismatch');
-    }
-
-    // Verify issuer
-    const allowedIssuers = ['accounts.google.com', 'https://accounts.google.com'];
-    if (!allowedIssuers.includes(String(claims.iss || ''))) {
-      throw new Error('Invalid Google token issuer');
-    }
-
-    // Verify expiry
-    const nowSec = Math.floor(Date.now() / 1000);
-    const exp = Number(claims.exp || 0);
-    if (!exp || exp <= nowSec) {
-      throw new Error('Google identity token has expired');
-    }
-
-    // Verify email_verified
-    const isEmailVerified = claims.email_verified === true || claims.email_verified === 'true';
-    if (!isEmailVerified) {
-      throw new Error('Google email is not verified');
-    }
-
-    // Verify subject
-    if (!claims.sub || typeof claims.sub !== 'string') {
-      throw new Error('Google token missing subject');
-    }
-
-    return claims;
-  } catch (err) {
-    clearTimeout(timer);
-    throw err;
-  }
+export async function verifyGoogleIdToken(credential, expectedClientId, options = {}) {
+  return verifyGoogleIdTokenJwks(credential, expectedClientId, options);
 }
 
 export function createApiRouter(options = {}) {
   const router = express.Router();
   router.use(express.json({ limit: '24mb' }));
   const googleVerifier = options.verifyGoogleIdToken || verifyGoogleIdToken;
+  const googleCodeExchanger = options.exchangeGoogleAuthCode || exchangeGoogleAuthCode;
 
   // Health check
   router.get('/health', (_req, res) => {
@@ -1174,7 +1154,7 @@ export function createApiRouter(options = {}) {
   }
 
   async function issueNewsletterVerificationChallenge(req, res, { email, lang, source, isResend }) {
-    const existing = db
+    const existing = await db
       .prepare(
         `SELECT id, status, lang, source, verification_sent_at
          FROM newsletter_subscribers WHERE email = ?`
@@ -1182,9 +1162,11 @@ export function createApiRouter(options = {}) {
       .get(email);
 
     if (existing && existing.status === 'subscribed') {
-      db.prepare(
-        "UPDATE newsletter_subscribers SET lang = ?, source = ?, updated_at = datetime('now') WHERE id = ?"
-      ).run(lang, source, existing.id);
+      await db
+        .prepare(
+          "UPDATE newsletter_subscribers SET lang = ?, source = ?, updated_at = datetime('now') WHERE id = ?"
+        )
+        .run(lang, source, existing.id);
       return res.status(200).json({
         ok: true,
         status: 'already_subscribed',
@@ -1256,28 +1238,32 @@ export function createApiRouter(options = {}) {
     }
 
     if (existing) {
-      db.prepare(
-        `UPDATE newsletter_subscribers
-         SET status = 'pending',
-             lang = ?,
-             source = ?,
-             consent_at = datetime('now'),
-             verification_code_hash = ?,
-             verification_token_hash = ?,
-             verification_expires_at = ?,
-             verification_sent_at = ?,
-             verification_fail_count = 0,
-             updated_at = datetime('now')
-         WHERE id = ?`
-      ).run(lang, source, codeHash, tokenHash, expiresIso, nowIso, existing.id);
+      await db
+        .prepare(
+          `UPDATE newsletter_subscribers
+           SET status = 'pending',
+               lang = ?,
+               source = ?,
+               consent_at = datetime('now'),
+               verification_code_hash = ?,
+               verification_token_hash = ?,
+               verification_expires_at = ?,
+               verification_sent_at = ?,
+               verification_fail_count = 0,
+               updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(lang, source, codeHash, tokenHash, expiresIso, nowIso, existing.id);
     } else {
-      db.prepare(
-        `INSERT INTO newsletter_subscribers (
-           email, lang, source, status,
-           verification_code_hash, verification_token_hash,
-           verification_expires_at, verification_sent_at, verification_fail_count
-         ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, 0)`
-      ).run(email, lang, source, codeHash, tokenHash, expiresIso, nowIso);
+      await db
+        .prepare(
+          `INSERT INTO newsletter_subscribers (
+             email, lang, source, status,
+             verification_code_hash, verification_token_hash,
+             verification_expires_at, verification_sent_at, verification_fail_count
+           ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, 0)`
+        )
+        .run(email, lang, source, codeHash, tokenHash, expiresIso, nowIso);
     }
 
     rateBuckets.delete(`newsletter:vfail:${email}`);
@@ -1303,7 +1289,7 @@ export function createApiRouter(options = {}) {
     return res.json({
       ok: true,
       service: 'ainventory-express-newsletter',
-      storage: 'sqlite',
+      storage: DB_DIALECT === 'postgres' ? 'postgres' : 'sqlite',
       verificationRequired: true,
       emailConfigured: Boolean(String(process.env.RESEND_API_KEY || '').trim()),
       webhookConfigured: Boolean(resolveSafeWebhookUrl(process.env.NEWSLETTER_WEBHOOK_URL)),
@@ -1392,7 +1378,7 @@ export function createApiRouter(options = {}) {
       });
     }
 
-    const existing = db
+    const existing = await db
       .prepare('SELECT lang, source FROM newsletter_subscribers WHERE email = ?')
       .get(email);
     const lang = body.lang === 'en' ? 'en' : existing?.lang === 'en' ? 'en' : 'ko';
@@ -1417,7 +1403,7 @@ export function createApiRouter(options = {}) {
     }
   });
 
-  router.post('/newsletter/verify', (req, res) => {
+  router.post('/newsletter/verify', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 64);
     const ipRate = checkRateLimit(`newsletter:verifyip:${clientIp}`, MAX_NEWSLETTER_SUBSCRIBES_PER_WINDOW * 2);
@@ -1466,7 +1452,7 @@ export function createApiRouter(options = {}) {
     const notifyHandledAtEdge = String(req.headers['x-newsletter-notify-handled'] || '') === '1';
 
     try {
-      const row = db
+      const row = await db
         .prepare(
           `SELECT id, email, lang, source, status, unsubscribed_at,
                   verification_code_hash, verification_token_hash,
@@ -1502,11 +1488,13 @@ export function createApiRouter(options = {}) {
 
       const expiresMs = parseSqliteUtcMs(row.verification_expires_at);
       if (!expiresMs || Date.now() > expiresMs) {
-        db.prepare(
-          `UPDATE newsletter_subscribers
-           SET verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
-           WHERE id = ?`
-        ).run(row.id);
+        await db
+          .prepare(
+            `UPDATE newsletter_subscribers
+             SET verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
+             WHERE id = ?`
+          )
+          .run(row.id);
         return res.status(400).json({
           ok: false,
           error: '인증 유효시간(10분)이 만료되었습니다. 인증코드를 다시 요청해 주세요.',
@@ -1516,11 +1504,13 @@ export function createApiRouter(options = {}) {
 
       const currentFails = Number(row.verification_fail_count || 0);
       if (currentFails >= NEWSLETTER_MAX_VERIFY_FAILS) {
-        db.prepare(
-          `UPDATE newsletter_subscribers
-           SET verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
-           WHERE id = ?`
-        ).run(row.id);
+        await db
+          .prepare(
+            `UPDATE newsletter_subscribers
+             SET verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
+             WHERE id = ?`
+          )
+          .run(row.id);
         return res.status(429).json({
           ok: false,
           error: `인증 시도 횟수(${NEWSLETTER_MAX_VERIFY_FAILS}회)를 초과했습니다. 인증코드를 다시 발송해 주세요.`,
@@ -1541,11 +1531,13 @@ export function createApiRouter(options = {}) {
         const nextFails = currentFails + 1;
         const failRes = checkRateLimit(`newsletter:vfail:${email}`, NEWSLETTER_MAX_VERIFY_FAILS);
         if (nextFails >= NEWSLETTER_MAX_VERIFY_FAILS) {
-          db.prepare(
-            `UPDATE newsletter_subscribers
-             SET verification_fail_count = ?, verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
-             WHERE id = ?`
-          ).run(nextFails, row.id);
+          await db
+            .prepare(
+              `UPDATE newsletter_subscribers
+               SET verification_fail_count = ?, verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
+               WHERE id = ?`
+            )
+            .run(nextFails, row.id);
           return res.status(429).json({
             ok: false,
             error: `인증 시도 횟수(${NEWSLETTER_MAX_VERIFY_FAILS}회)를 초과했습니다. 인증코드를 다시 발송해 주세요.`,
@@ -1553,9 +1545,11 @@ export function createApiRouter(options = {}) {
             remainingAttempts: 0,
           });
         }
-        db.prepare(
-          "UPDATE newsletter_subscribers SET verification_fail_count = ?, updated_at = datetime('now') WHERE id = ?"
-        ).run(nextFails, row.id);
+        await db
+          .prepare(
+            "UPDATE newsletter_subscribers SET verification_fail_count = ?, updated_at = datetime('now') WHERE id = ?"
+          )
+          .run(nextFails, row.id);
         const remainingAttempts = Math.max(0, NEWSLETTER_MAX_VERIFY_FAILS - nextFails);
         return res.status(400).json({
           ok: false,
@@ -1566,19 +1560,21 @@ export function createApiRouter(options = {}) {
       }
 
       const wasResubscribed = Boolean(row.unsubscribed_at);
-      db.prepare(
-        `UPDATE newsletter_subscribers
-         SET status = 'subscribed',
-             verified_at = datetime('now'),
-             consent_at = datetime('now'),
-             unsubscribed_at = NULL,
-             verification_code_hash = NULL,
-             verification_token_hash = NULL,
-             verification_expires_at = NULL,
-             verification_fail_count = 0,
-             updated_at = datetime('now')
-         WHERE id = ?`
-      ).run(row.id);
+      await db
+        .prepare(
+          `UPDATE newsletter_subscribers
+           SET status = 'subscribed',
+               verified_at = datetime('now'),
+               consent_at = datetime('now'),
+               unsubscribed_at = NULL,
+               verification_code_hash = NULL,
+               verification_token_hash = NULL,
+               verification_expires_at = NULL,
+               verification_fail_count = 0,
+               updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(row.id);
 
       rateBuckets.delete(`newsletter:vfail:${email}`);
 
@@ -1615,7 +1611,7 @@ export function createApiRouter(options = {}) {
   });
 
   // Optional HMAC-authenticated sync endpoint for Edge-verified Cloudflare Worker mirrors
-  router.post('/newsletter/sync-verified', (req, res) => {
+  router.post('/newsletter/sync-verified', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const syncSecret = String(process.env.NEWSLETTER_SYNC_SECRET || '').trim();
     if (syncSecret.length < 16) {
@@ -1638,25 +1634,31 @@ export function createApiRouter(options = {}) {
     const lang = body.lang === 'en' ? 'en' : 'ko';
     const rawSource = typeof body.source === 'string' ? body.source.trim() : 'site_modal';
     const source = NEWSLETTER_ALLOWED_SOURCES.has(rawSource) ? rawSource : 'site_modal';
-    const existing = db.prepare('SELECT id FROM newsletter_subscribers WHERE email = ?').get(email);
+    const existing = await db
+      .prepare('SELECT id FROM newsletter_subscribers WHERE email = ?')
+      .get(email);
     if (existing) {
-      db.prepare(
-        `UPDATE newsletter_subscribers
-         SET status = 'subscribed', lang = ?, source = ?, verified_at = COALESCE(verified_at, datetime('now')),
-             unsubscribed_at = NULL, verification_code_hash = NULL, verification_token_hash = NULL,
-             updated_at = datetime('now')
-         WHERE id = ?`
-      ).run(lang, source, existing.id);
+      await db
+        .prepare(
+          `UPDATE newsletter_subscribers
+           SET status = 'subscribed', lang = ?, source = ?, verified_at = COALESCE(verified_at, datetime('now')),
+               unsubscribed_at = NULL, verification_code_hash = NULL, verification_token_hash = NULL,
+               updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(lang, source, existing.id);
     } else {
-      db.prepare(
-        `INSERT INTO newsletter_subscribers (email, lang, source, status, verified_at)
-         VALUES (?, ?, ?, 'subscribed', datetime('now'))`
-      ).run(email, lang, source);
+      await db
+        .prepare(
+          `INSERT INTO newsletter_subscribers (email, lang, source, status, verified_at)
+           VALUES (?, ?, ?, 'subscribed', datetime('now'))`
+        )
+        .run(email, lang, source);
     }
     return res.status(200).json({ ok: true, status: 'subscribed', verified: true, email });
   });
 
-  router.post('/newsletter/unsubscribe', (req, res) => {
+  router.post('/newsletter/unsubscribe', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 64);
     const rate = checkRateLimit(
@@ -1686,7 +1688,7 @@ export function createApiRouter(options = {}) {
     const notifyHandledAtEdge = String(req.headers['x-newsletter-notify-handled'] || '') === '1';
 
     try {
-      const updated = db
+      const updated = await db
         .prepare(
           `UPDATE newsletter_subscribers
            SET status = 'unsubscribed',
@@ -1771,7 +1773,7 @@ export function createApiRouter(options = {}) {
   };
 
   // Pre-registration Email OTP Step 1: Send 6-digit OTP with 60s cooldown & rate limiting (Req 5 & 10.b)
-  router.post('/auth/send-verification', (req, res) => {
+  router.post('/auth/send-verification', async (req, res) => {
     sweepBoundedMap(emailOtpPending, OTP_TTL_MS);
 
     const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
@@ -1788,7 +1790,7 @@ export function createApiRouter(options = {}) {
       });
     }
 
-    const existingVerified = db
+    const existingVerified = await db
       .prepare('SELECT id FROM users WHERE lower(email) = ? AND verified_at IS NOT NULL')
       .get(cleanEmail);
     if (existingVerified) {
@@ -1913,7 +1915,7 @@ export function createApiRouter(options = {}) {
   });
 
   // Pre-registration Email OTP Step 3: Complete sign-up with EMPTY personal closet (Req 5 & 8.a)
-  router.post('/auth/register-email', (req, res) => {
+  router.post('/auth/register-email', async (req, res) => {
     sweepBoundedMap(emailOtpPending, OTP_TTL_MS);
 
     const ipRate = checkRateLimit(`regemail:${req.ip || 'local'}`, 12);
@@ -1973,7 +1975,9 @@ export function createApiRouter(options = {}) {
       });
     }
 
-    const existingEmail = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(cleanEmail);
+    const existingEmail = await db
+      .prepare('SELECT id FROM users WHERE lower(email) = ?')
+      .get(cleanEmail);
     if (existingEmail) {
       return res.status(409).json({ error: '이미 가입된 이메일 주소입니다.' });
     }
@@ -1981,7 +1985,7 @@ export function createApiRouter(options = {}) {
     let baseUsername = sanitizeSafeSlug(cleanEmail.split('@')[0], 'member').slice(0, 20);
     if (baseUsername.length < 2) baseUsername = `user_${baseUsername}`;
     let cleanUsername = baseUsername;
-    while (db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername)) {
+    while (await db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername)) {
       cleanUsername = `${baseUsername}_${crypto.randomInt(100, 9999)}`;
     }
 
@@ -2003,43 +2007,45 @@ export function createApiRouter(options = {}) {
     const nowIso = new Date().toISOString();
     const vHash = computeVerificationHash(cleanUsername, cleanEmail, nowIso);
 
-    const createdUser = db.transaction(() => {
-      db.prepare(`
-        INSERT INTO users (
-          username, email, password_hash, display_name, role, default_closet,
-          closet_name, verification_token, verification_code, verified_at, verification_hash,
-          gender, height_cm, weight_kg, body_shape, profile_completed, auth_provider, verify_last_sent_at, verify_send_count, verify_fail_count
-        ) VALUES (?, ?, ?, ?, 'member', ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 1, 'email', ?, 1, 0)
-      `).run(
-        cleanUsername,
-        cleanEmail,
-        hashPassword(pwStr),
-        cleanDisplayName,
-        closetKey,
-        cleanClosetName,
-        nowIso,
-        vHash,
-        cleanGender,
-        cleanHeightCm,
-        cleanWeightKg,
-        cleanBodyShape,
-        nowIso
-      );
+    const createdUser = await db.transaction(async () => {
+      await db
+        .prepare(`
+          INSERT INTO users (
+            username, email, password_hash, display_name, role, default_closet,
+            closet_name, verification_token, verification_code, verified_at, verification_hash,
+            gender, height_cm, weight_kg, body_shape, profile_completed, auth_provider, verify_last_sent_at, verify_send_count, verify_fail_count
+          ) VALUES (?, ?, ?, ?, 'member', ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 1, 'email', ?, 1, 0)
+        `)
+        .run(
+          cleanUsername,
+          cleanEmail,
+          hashPassword(pwStr),
+          cleanDisplayName,
+          closetKey,
+          cleanClosetName,
+          nowIso,
+          vHash,
+          cleanGender,
+          cleanHeightCm,
+          cleanWeightKg,
+          cleanBodyShape,
+          nowIso
+        );
       return db.prepare('SELECT * FROM users WHERE username = ?').get(cleanUsername);
     });
 
     emailOtpPending.delete(cleanEmail);
-    const sessionToken = issueUserSession(req, res, createdUser);
+    const sessionToken = await issueUserSession(req, res, createdUser);
 
     res.status(201).json({
       ok: true,
       token: sessionToken,
-      user: formatUserPayload(createdUser),
+      user: await formatUserPayload(createdUser),
     });
   });
 
   // 1. Email-verified registration (creates EMPTY personal closet_<username>, enforces dispatch rate limit)
-  router.post('/auth/register', (req, res) => {
+  router.post('/auth/register', async (req, res) => {
     const {
       username = '',
       email = '',
@@ -2080,11 +2086,13 @@ export function createApiRouter(options = {}) {
       });
     }
 
-    const exists = db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername);
+    const exists = await db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername);
     if (exists) {
       return res.status(409).json({ error: '이미 사용 중인 아이디입니다.' });
     }
-    const emailExists = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(cleanEmail);
+    const emailExists = await db
+      .prepare('SELECT id FROM users WHERE lower(email) = ?')
+      .get(cleanEmail);
     if (emailExists) {
       return res.status(409).json({ error: '이미 가입된 이메일 주소입니다.' });
     }
@@ -2094,23 +2102,25 @@ export function createApiRouter(options = {}) {
     const verificationCode = String(crypto.randomInt(100000, 1000000));
     const nowIso = new Date().toISOString();
 
-    db.prepare(`
-      INSERT INTO users (
-        username, email, password_hash, display_name, role, default_closet,
-        closet_name, verification_token, verification_code, verified_at, verification_hash,
-        profile_completed, auth_provider, verify_last_sent_at, verify_send_count, verify_fail_count
-      ) VALUES (?, ?, ?, ?, 'member', ?, ?, ?, ?, NULL, NULL, 0, 'email', ?, 1, 0)
-    `).run(
-      cleanUsername,
-      cleanEmail,
-      hashPassword(pwStr),
-      cleanDisplayName,
-      closetKey,
-      cleanClosetName,
-      verifyToken,
-      verificationCode,
-      nowIso
-    );
+    await db
+      .prepare(`
+        INSERT INTO users (
+          username, email, password_hash, display_name, role, default_closet,
+          closet_name, verification_token, verification_code, verified_at, verification_hash,
+          profile_completed, auth_provider, verify_last_sent_at, verify_send_count, verify_fail_count
+        ) VALUES (?, ?, ?, ?, 'member', ?, ?, ?, ?, NULL, NULL, 0, 'email', ?, 1, 0)
+      `)
+      .run(
+        cleanUsername,
+        cleanEmail,
+        hashPassword(pwStr),
+        cleanDisplayName,
+        closetKey,
+        cleanClosetName,
+        verifyToken,
+        verificationCode,
+        nowIso
+      );
 
     const verifyUrl = `/?verify_token=${verifyToken}`;
     writeVerificationOutboxHtml({
@@ -2161,7 +2171,7 @@ export function createApiRouter(options = {}) {
   });
 
   // 1b. Resend email verification with 60s cooldown & window rate limiting (Requirement 10.b)
-  router.post('/auth/resend-verification', (req, res) => {
+  router.post('/auth/resend-verification', async (req, res) => {
     const ipRate = checkRateLimit(`resendip:${req.ip || 'local'}`, MAX_DISPATCH_PER_WINDOW * 3);
     if (!ipRate.allowed) {
       return res.status(429).json({
@@ -2177,7 +2187,7 @@ export function createApiRouter(options = {}) {
     if (!identifier) {
       return res.status(400).json({ error: '아이디 또는 이메일을 입력해 주세요.' });
     }
-    const user = db
+    const user = await db
       .prepare('SELECT * FROM users WHERE lower(username) = ? OR lower(email) = ?')
       .get(identifier, identifier);
     if (!user) {
@@ -2211,15 +2221,17 @@ export function createApiRouter(options = {}) {
     const verifyToken = crypto.randomBytes(24).toString('hex');
     const verificationCode = String(crypto.randomInt(100000, 1000000));
     const nowIso = new Date().toISOString();
-    db.prepare(`
-      UPDATE users
-      SET verification_token = ?,
-          verification_code = ?,
-          verify_last_sent_at = ?,
-          verify_send_count = COALESCE(verify_send_count, 0) + 1,
-          verify_fail_count = 0
-      WHERE id = ?
-    `).run(verifyToken, verificationCode, nowIso, user.id);
+    await db
+      .prepare(`
+        UPDATE users
+        SET verification_token = ?,
+            verification_code = ?,
+            verify_last_sent_at = ?,
+            verify_send_count = COALESCE(verify_send_count, 0) + 1,
+            verify_fail_count = 0
+        WHERE id = ?
+      `)
+      .run(verifyToken, verificationCode, nowIso, user.id);
     rateBuckets.delete(`otpfail:${user.id}`);
 
     const verifyUrl = `/?verify_token=${verifyToken}`;
@@ -2263,12 +2275,12 @@ export function createApiRouter(options = {}) {
   });
 
   // 2. Verify landing info
-  router.get('/auth/verify-info', (req, res) => {
+  router.get('/auth/verify-info', async (req, res) => {
     const token = String(req.query.token || '').trim();
     if (!token) {
       return res.status(400).json({ error: '인증 토큰이 누락되었습니다.' });
     }
-    const user = db.prepare('SELECT * FROM users WHERE verification_token = ?').get(token);
+    const user = await db.prepare('SELECT * FROM users WHERE verification_token = ?').get(token);
     if (!user || !timingSafeStringEquals(user.verification_token || '', token)) {
       return res.status(404).json({ error: '유효하지 않거나 만료된 이메일 인증 링크입니다.' });
     }
@@ -2302,7 +2314,7 @@ export function createApiRouter(options = {}) {
   });
 
   // 3. Complete email verification with OTP TTL & attempt rate limiting (Requirement 10.b)
-  router.post('/auth/verify-email', (req, res) => {
+  router.post('/auth/verify-email', async (req, res) => {
     const token = String(req.body?.token || '').trim();
     const code = String(req.body?.code || '').trim();
     const identifier = String(req.body?.identifier || req.body?.email || req.body?.username || '')
@@ -2312,7 +2324,7 @@ export function createApiRouter(options = {}) {
 
     let user = null;
     if (code && identifier) {
-      const candidate = db
+      const candidate = await db
         .prepare('SELECT * FROM users WHERE lower(username) = ? OR lower(email) = ?')
         .get(identifier, identifier);
       if (!candidate) {
@@ -2341,9 +2353,9 @@ export function createApiRouter(options = {}) {
 
       if (!timingSafeStringEquals(candidate.verification_code || '', code)) {
         const failRes = checkRateLimit(`otpfail:${candidate.id}`, MAX_VERIFY_FAILS_PER_WINDOW);
-        db.prepare(
-          'UPDATE users SET verify_fail_count = COALESCE(verify_fail_count, 0) + 1 WHERE id = ?'
-        ).run(candidate.id);
+        await db
+          .prepare('UPDATE users SET verify_fail_count = COALESCE(verify_fail_count, 0) + 1 WHERE id = ?')
+          .run(candidate.id);
         return res.status(400).json({
           error: `인증코드 6자리가 일치하지 않습니다. (남은 시도 ${failRes.remaining}회)`,
           remainingAttempts: failRes.remaining,
@@ -2351,7 +2363,9 @@ export function createApiRouter(options = {}) {
       }
       user = candidate;
     } else if (token) {
-      const candidate = db.prepare('SELECT * FROM users WHERE verification_token = ?').get(token);
+      const candidate = await db
+        .prepare('SELECT * FROM users WHERE verification_token = ?')
+        .get(token);
       if (!candidate || !timingSafeStringEquals(candidate.verification_token || '', token)) {
         return res.status(404).json({ error: '유효하지 않은 이메일 인증 토큰입니다.' });
       }
@@ -2374,18 +2388,21 @@ export function createApiRouter(options = {}) {
     const verificationHash =
       user.verification_hash || computeVerificationHash(user.username, user.email, verifiedAt);
 
-    db.prepare(`
-      UPDATE users
-      SET verified_at = ?,
-          verification_hash = ?,
-          verification_code = NULL,
-          verification_token = NULL,
-          verify_fail_count = 0
-      WHERE id = ?
-    `).run(verifiedAt, verificationHash, user.id);
+    await db
+      .prepare(`
+        UPDATE users
+        SET verified_at = ?,
+            verification_hash = ?,
+            verification_code = NULL,
+            verification_token = NULL,
+            verify_fail_count = 0
+        WHERE id = ?
+      `)
+      .run(verifiedAt, verificationHash, user.id);
 
-    const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
-    const sessionToken = issueSession && updatedUser ? issueUserSession(req, res, updatedUser) : null;
+    const updatedUser = await db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    const sessionToken =
+      issueSession && updatedUser ? await issueUserSession(req, res, updatedUser) : null;
 
     res.json({
       ok: true,
@@ -2395,12 +2412,12 @@ export function createApiRouter(options = {}) {
       verifiedAt,
       verificationHash,
       sessionToken,
-      user: sessionToken ? formatUserPayload(updatedUser) : undefined,
+      user: sessionToken ? await formatUserPayload(updatedUser) : undefined,
     });
   });
 
   // 4. Login by username OR email with brute-force rate limiting
-  router.post('/auth/login', (req, res) => {
+  router.post('/auth/login', async (req, res) => {
     const { username = '', password = '' } = req.body || {};
     const idClean = String(username).trim();
     const pwStr = typeof password === 'string' ? password : '';
@@ -2416,7 +2433,7 @@ export function createApiRouter(options = {}) {
     }
 
     const user = idClean
-      ? db
+      ? await db
           .prepare('SELECT * FROM users WHERE username = ? OR lower(email) = lower(?)')
           .get(idClean, idClean)
       : null;
@@ -2445,15 +2462,15 @@ export function createApiRouter(options = {}) {
     }
 
     rateBuckets.delete(loginBucketKey);
-    const token = issueUserSession(req, res, user);
+    const token = await issueUserSession(req, res, user);
     res.json({
       token,
-      user: formatUserPayload(user),
+      user: await formatUserPayload(user),
     });
   });
 
   // 4a. One-Tap Site Demo Session (RBAC-scoped read-only 'site_demo' user; never exposes secret password)
-  router.post('/auth/site-demo', (req, res) => {
+  router.post('/auth/site-demo', async (req, res) => {
     const rate = checkRateLimit(`site-demo:${req.ip || 'local'}`, 60);
     if (!rate.allowed) {
       return res.status(429).json({
@@ -2463,14 +2480,14 @@ export function createApiRouter(options = {}) {
       });
     }
 
-    const demoUser = ensureSiteDemoAccount();
+    const demoUser = await ensureSiteDemoAccount();
     if (!demoUser) {
       return res.status(503).json({ error: '사이트 데모 계정을 초기화할 수 없습니다.' });
     }
 
     const isEmbedRequest = Boolean(req.body?.embed);
     // Keep site_demo sessions short-lived (2 hours) and avoid overwriting standalone cookies when embedded
-    const token = issueUserSession(req, res, demoUser, {
+    const token = await issueUserSession(req, res, demoUser, {
       ttlMs: 2 * 60 * 60 * 1000,
       setCookie: !isEmbedRequest,
     });
@@ -2478,7 +2495,7 @@ export function createApiRouter(options = {}) {
     res.setHeader('Cache-Control', 'private, no-store');
     return res.json({
       token,
-      user: formatUserPayload(demoUser),
+      user: await formatUserPayload(demoUser),
     });
   });
 
@@ -2565,10 +2582,24 @@ export function createApiRouter(options = {}) {
       resolvedEmail = `apple_${subHash}@privaterelay.appleid.com`;
     }
 
-    // Strictly match ONLY Apple-authenticated accounts by apple_sub — NEVER auto-link by email!
-    let user = db
-      .prepare("SELECT * FROM users WHERE apple_sub = ? AND auth_provider = 'apple'")
+    // Strictly match ONLY Apple-authenticated accounts via user_identities or legacy apple_sub — NEVER auto-link by email!
+    const appleIdentity = await db
+      .prepare("SELECT user_id FROM user_identities WHERE provider = 'apple' AND provider_sub = ?")
       .get(resolvedSub);
+    let user = appleIdentity
+      ? await db.prepare('SELECT * FROM users WHERE id = ?').get(appleIdentity.user_id)
+      : await db
+          .prepare("SELECT * FROM users WHERE apple_sub = ? AND auth_provider = 'apple'")
+          .get(resolvedSub);
+
+    if (user && !appleIdentity) {
+      await db
+        .prepare(
+          `INSERT OR IGNORE INTO user_identities (user_id, provider, provider_sub, provider_email, email_verified)
+           VALUES (?, 'apple', ?, ?, 1)`
+        )
+        .run(user.id, resolvedSub, resolvedEmail || user.email || null);
+    }
 
     if (user && user.role === 'admin') {
       return res.status(403).json({ error: '관리자 계정은 소셜 로그인 연동이 허용되지 않습니다.' });
@@ -2576,7 +2607,7 @@ export function createApiRouter(options = {}) {
 
     if (!user) {
       // Prevent claiming or colliding with an existing email-registered or admin user's email
-      const emailOwner = db
+      const emailOwner = await db
         .prepare('SELECT id, role, auth_provider FROM users WHERE lower(email) = ?')
         .get(resolvedEmail);
       if (emailOwner) {
@@ -2588,7 +2619,7 @@ export function createApiRouter(options = {}) {
 
       const shortHash = crypto.createHash('sha256').update(resolvedSub).digest('hex').slice(0, 10);
       let username = `apple_${shortHash}`;
-      while (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
+      while (await db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
         username = `apple_${shortHash}_${crypto.randomInt(100, 999)}`;
       }
       const displayName =
@@ -2597,39 +2628,327 @@ export function createApiRouter(options = {}) {
       const nowIso = new Date().toISOString();
       const vHash = computeVerificationHash(username, resolvedEmail, nowIso);
 
-      user = db.transaction(() => {
-        db.prepare(`
-          INSERT INTO users (
-            username, email, password_hash, display_name, role, default_closet,
-            closet_name, verified_at, verification_hash, profile_completed,
-            apple_sub, auth_provider
-          ) VALUES (?, ?, ?, ?, 'member', ?, ?, ?, ?, 1, ?, 'apple')
-        `).run(
-          username,
-          resolvedEmail,
-          hashPassword(crypto.randomBytes(24).toString('hex')),
-          displayName,
-          closetKey,
-          '내 옷장',
-          nowIso,
-          vHash,
-          resolvedSub
-        );
+      user = await db.transaction(async () => {
+        const inserted = await db
+          .prepare(`
+            INSERT INTO users (
+              username, email, password_hash, display_name, role, default_closet,
+              closet_name, verified_at, verification_hash, profile_completed,
+              apple_sub, auth_provider
+            ) VALUES (?, ?, ?, ?, 'member', ?, ?, ?, ?, 1, ?, 'apple')
+          `)
+          .run(
+            username,
+            resolvedEmail,
+            hashPassword(crypto.randomBytes(24).toString('hex')),
+            displayName,
+            closetKey,
+            '내 옷장',
+            nowIso,
+            vHash,
+            resolvedSub
+          );
+        const createdId = Number(inserted?.lastInsertRowid || 0);
+        if (createdId > 0) {
+          await db
+            .prepare(
+              `INSERT OR IGNORE INTO user_identities (user_id, provider, provider_sub, provider_email, email_verified)
+               VALUES (?, 'apple', ?, ?, 1)`
+            )
+            .run(createdId, resolvedSub, resolvedEmail);
+          await assignUserRole(db, createdId, 'member');
+        }
         return db
           .prepare("SELECT * FROM users WHERE apple_sub = ? AND auth_provider = 'apple'")
           .get(resolvedSub);
       });
     }
 
-    const token = issueUserSession(req, res, user);
+    const token = await issueUserSession(req, res, user);
     res.json({
       ok: true,
       token,
-      user: formatUserPayload(user),
+      user: await formatUserPayload(user),
     });
   });
 
-  // 4c. Sign in with Google (OAuth 2.0 OpenID Connect ID Token verification)
+  // 4c-0. Public Auth Provider Capabilities Discovery (never exposes secrets)
+  router.get('/auth/config', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const googleClientId = String(
+      process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || ''
+    ).trim();
+    const googleClientSecret = String(process.env.GOOGLE_CLIENT_SECRET || '').trim();
+    const appleClientId = String(process.env.APPLE_CLIENT_ID || '').trim();
+    res.json({
+      ok: true,
+      googleEnabled: Boolean(googleClientId),
+      googleClientId: googleClientId || null,
+      googleOAuthCodeFlowEnabled: Boolean(
+        googleClientId && (googleClientSecret || options.exchangeGoogleAuthCode)
+      ),
+      appleEnabled: Boolean(appleClientId || isMockAppleAuthAllowed()),
+      dbDialect: DB_DIALECT,
+      storageMode: storage.mode,
+    });
+  });
+
+  const OAUTH_STATE_COOKIE_NAME = 'ainv_google_oauth';
+
+  function getNamedCookie(req, name) {
+    const cookieHeader = String(req?.headers?.cookie || '');
+    if (!cookieHeader) return null;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`));
+    if (!match) return null;
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return null;
+    }
+  }
+
+  function clearGoogleOAuthStateCookie(req, res) {
+    const secureAttr = isHttpsRequest(req) ? '; Secure' : '';
+    appendSetCookieHeader(
+      res,
+      `${OAUTH_STATE_COOKIE_NAME}=; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=0${secureAttr}`
+    );
+  }
+
+  function buildAuthRedirectUrl(basePath, paramName, paramValue) {
+    const safePath = sanitizeAppReturnTo(basePath, '/app');
+    const sep = safePath.includes('?') ? '&' : '?';
+    return `${safePath}${sep}${encodeURIComponent(paramName)}=${encodeURIComponent(paramValue)}`;
+  }
+
+  // 4c-1. Google OAuth 2.0 Authorization Code + PKCE (S256) Start
+  router.get('/auth/google/start', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const rate = checkRateLimit(`google-start:${req.ip || 'local'}`, 30);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        ok: false,
+        error: `요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해 주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: rate.retryAfterSec,
+      });
+    }
+
+    const googleClientId = String(
+      process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || ''
+    ).trim();
+    const googleClientSecret = String(process.env.GOOGLE_CLIENT_SECRET || '').trim();
+    const stateSecret = resolveOAuthStateSecret();
+
+    if (
+      !googleClientId ||
+      (!googleClientSecret && !options.exchangeGoogleAuthCode) ||
+      !stateSecret
+    ) {
+      return res.status(503).json({
+        ok: false,
+        error: 'google_sign_in_not_configured',
+        code: 'GOOGLE_AUTH_NOT_CONFIGURED',
+      });
+    }
+
+    const returnTo = sanitizeAppReturnTo(
+      typeof req.query?.returnTo === 'string' ? req.query.returnTo : '/app',
+      '/app'
+    );
+    const mode = String(req.query?.mode || '').trim().toLowerCase();
+    let linkUserId = null;
+
+    if (mode === 'link') {
+      const token = getAuthToken(req);
+      if (!token) {
+        return res.status(401).json({
+          ok: false,
+          error: '계정 연결을 위해 먼저 로그인해 주세요.',
+          code: 'AUTH_REQUIRED',
+        });
+      }
+      const session = await db
+        .prepare(`
+          SELECT s.expires_at, u.id, u.role, u.username
+          FROM sessions s
+          JOIN users u ON u.id = s.user_id
+          WHERE s.token = ?
+        `)
+        .get(token);
+      if (!session || new Date(session.expires_at) < new Date()) {
+        return res.status(401).json({
+          ok: false,
+          error: '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.',
+          code: 'AUTH_REQUIRED',
+        });
+      }
+      if (session.role === 'admin') {
+        return res.status(403).json({
+          ok: false,
+          error: '관리자 계정은 소셜 로그인 연동이 허용되지 않습니다.',
+          code: 'ADMIN_SOCIAL_FORBIDDEN',
+        });
+      }
+      if (session.role === SITE_DEMO_ROLE_CODE || session.username === 'sample_guest') {
+        return res.status(403).json({
+          ok: false,
+          error: '데모 계정에는 Google 계정을 연결할 수 없습니다.',
+          code: 'DEMO_LINK_FORBIDDEN',
+        });
+      }
+      linkUserId = Number(session.id);
+    }
+
+    const state = crypto.randomBytes(24).toString('base64url');
+    const nonce = crypto.randomBytes(24).toString('base64url');
+    const { codeVerifier, codeChallenge } = createPkceChallenge();
+    const redirectUri = `${resolvePublicOrigin(req)}/api/auth/google/callback`;
+
+    const signedCookie = signOAuthStateCookie(
+      {
+        state,
+        nonce,
+        codeVerifier,
+        returnTo,
+        linkUserId,
+        redirectUri,
+      },
+      stateSecret
+    );
+    const secureAttr = isHttpsRequest(req) ? '; Secure' : '';
+    appendSetCookieHeader(
+      res,
+      `${OAUTH_STATE_COOKIE_NAME}=${encodeURIComponent(signedCookie)}; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=600${secureAttr}`
+    );
+
+    const authorizationUrl = buildGoogleAuthorizationUrl({
+      clientId: googleClientId,
+      redirectUri,
+      state,
+      nonce,
+      codeChallenge,
+    });
+    return res.redirect(302, authorizationUrl);
+  });
+
+  // 4c-2. Google OAuth 2.0 Authorization Code + PKCE Callback
+  router.get('/auth/google/callback', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    clearGoogleOAuthStateCookie(req, res);
+
+    const rate = checkRateLimit(`google-cb:${req.ip || 'local'}`, 30);
+    if (!rate.allowed) {
+      return res.redirect(302, buildAuthRedirectUrl('/app/login', 'auth_error', 'rate_limited'));
+    }
+
+    const oauthError = String(req.query?.error || '').trim();
+    if (oauthError) {
+      const normalizedErr = oauthError === 'access_denied' ? 'access_denied' : 'google_oauth_error';
+      return res.redirect(302, buildAuthRedirectUrl('/app/login', 'auth_error', normalizedErr));
+    }
+
+    const googleClientId = String(
+      process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || ''
+    ).trim();
+    const googleClientSecret = String(process.env.GOOGLE_CLIENT_SECRET || '').trim();
+    const stateSecret = resolveOAuthStateSecret();
+
+    if (
+      !googleClientId ||
+      (!googleClientSecret && !options.exchangeGoogleAuthCode) ||
+      !stateSecret
+    ) {
+      return res.redirect(
+        302,
+        buildAuthRedirectUrl('/app/login', 'auth_error', 'google_not_configured')
+      );
+    }
+
+    const rawStateCookie = getNamedCookie(req, OAUTH_STATE_COOKIE_NAME);
+    const oauthState = verifyOAuthStateCookie(rawStateCookie, stateSecret);
+    if (!oauthState || !oauthState.state || !oauthState.nonce || !oauthState.codeVerifier) {
+      return res.redirect(
+        302,
+        buildAuthRedirectUrl('/app/login', 'auth_error', 'oauth_state_invalid')
+      );
+    }
+
+    const returnTo = sanitizeAppReturnTo(oauthState.returnTo, '/app');
+    const errorBasePath = oauthState.linkUserId ? returnTo : '/app/login';
+    const returnedState = String(req.query?.state || '').trim();
+    if (!timingSafeStringEquals(oauthState.state, returnedState)) {
+      return res.redirect(
+        302,
+        buildAuthRedirectUrl(errorBasePath, 'auth_error', 'oauth_state_mismatch')
+      );
+    }
+
+    const authCode = String(req.query?.code || '').trim();
+    if (!authCode || authCode.length > 2048) {
+      return res.redirect(
+        302,
+        buildAuthRedirectUrl(errorBasePath, 'auth_error', 'missing_auth_code')
+      );
+    }
+
+    let idToken;
+    try {
+      const exchanged = await googleCodeExchanger({
+        code: authCode,
+        clientId: googleClientId,
+        clientSecret: googleClientSecret,
+        redirectUri: oauthState.redirectUri || `${resolvePublicOrigin(req)}/api/auth/google/callback`,
+        codeVerifier: oauthState.codeVerifier,
+      });
+      idToken = exchanged?.idToken;
+    } catch {
+      return res.redirect(
+        302,
+        buildAuthRedirectUrl(errorBasePath, 'auth_error', 'token_exchange_failed')
+      );
+    }
+
+    let claims;
+    try {
+      claims = await googleVerifier(idToken, googleClientId, {
+        expectedNonce: oauthState.nonce,
+      });
+    } catch {
+      return res.redirect(
+        302,
+        buildAuthRedirectUrl(errorBasePath, 'auth_error', 'invalid_google_token')
+      );
+    }
+
+    const resolved = await resolveOrCreateGoogleUser(db, claims, {
+      hashPassword,
+      computeVerificationHash,
+      assignUserRole,
+      linkUserId: oauthState.linkUserId || null,
+    });
+    if (!resolved.ok) {
+      return res.redirect(
+        302,
+        buildAuthRedirectUrl(
+          errorBasePath,
+          'auth_error',
+          String(resolved.code || 'google_auth_failed').toLowerCase()
+        )
+      );
+    }
+
+    await issueUserSession(req, res, resolved.user);
+    const resultTag = resolved.linked
+      ? 'google_linked'
+      : resolved.isNewUser
+        ? 'google_new'
+        : 'google_ok';
+    return res.redirect(302, buildAuthRedirectUrl(returnTo, 'auth_result', resultTag));
+  });
+
+  // 4c-3. Sign in with Google (GIS One Tap / Direct ID Token JWKS verification)
   router.post('/auth/google', async (req, res) => {
     const rate = checkRateLimit(`google:${req.ip || 'local'}`, MAX_AUTH_ATTEMPTS_PER_WINDOW);
     if (!rate.allowed) {
@@ -2683,86 +3002,32 @@ export function createApiRouter(options = {}) {
       });
     }
 
-    const resolvedSub = String(claims.sub || '').trim();
-    const resolvedEmail = String(claims.email || '').trim().toLowerCase();
-    const displayName = String(claims.name || '').trim().slice(0, 60) || 'Google 사용자';
-
-    if (!resolvedSub || resolvedSub.length > 128) {
-      return res.status(400).json({
+    const resolved = await resolveOrCreateGoogleUser(db, claims, {
+      hashPassword,
+      computeVerificationHash,
+      assignUserRole,
+    });
+    if (!resolved.ok) {
+      return res.status(resolved.status || 400).json({
         success: false,
-        error: '유효하지 않은 Google 계정 식별자입니다.',
+        error: resolved.error,
+        code: resolved.code,
       });
     }
 
-    // Match strictly by apple_sub column storing social sub or matching google email
-    let user = db
-      .prepare("SELECT * FROM users WHERE apple_sub = ? AND auth_provider = 'google'")
-      .get(resolvedSub);
-
-    if (user && user.role === 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: '관리자 계정은 소셜 로그인 연동이 허용되지 않습니다.',
-      });
-    }
-
-    if (!user) {
-      const emailOwner = db
-        .prepare('SELECT id, role, auth_provider FROM users WHERE lower(email) = ?')
-        .get(resolvedEmail);
-      if (emailOwner) {
-        return res.status(409).json({
-          success: false,
-          error: '이미 다른 방식으로 가입된 이메일 계정입니다. 기존 로그인 방식을 이용해 주세요.',
-          code: 'ACCOUNT_EMAIL_CONFLICT',
-        });
-      }
-
-      const shortHash = crypto.createHash('sha256').update(resolvedSub).digest('hex').slice(0, 10);
-      let username = `google_${shortHash}`;
-      while (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
-        username = `google_${shortHash}_${crypto.randomInt(100, 999)}`;
-      }
-      const closetKey = `closet_${username}`;
-      const nowIso = new Date().toISOString();
-      const vHash = computeVerificationHash(username, resolvedEmail, nowIso);
-
-      user = db.transaction(() => {
-        db.prepare(`
-          INSERT INTO users (
-            username, email, password_hash, display_name, role, default_closet,
-            closet_name, verified_at, verification_hash, profile_completed,
-            apple_sub, auth_provider
-          ) VALUES (?, ?, ?, ?, 'member', ?, ?, ?, ?, 1, ?, 'google')
-        `).run(
-          username,
-          resolvedEmail,
-          hashPassword(crypto.randomBytes(24).toString('hex')),
-          displayName,
-          closetKey,
-          '내 옷장',
-          nowIso,
-          vHash,
-          resolvedSub
-        );
-        return db
-          .prepare("SELECT * FROM users WHERE apple_sub = ? AND auth_provider = 'google'")
-          .get(resolvedSub);
-      });
-    }
-
-    const token = issueUserSession(req, res, user);
+    const token = await issueUserSession(req, res, resolved.user);
     res.json({
       ok: true,
       token,
-      user: formatUserPayload(user),
+      isNewUser: resolved.isNewUser,
+      user: await formatUserPayload(resolved.user),
     });
   });
 
-  router.post('/auth/logout', (req, res) => {
+  router.post('/auth/logout', async (req, res) => {
     const token = getAuthToken(req);
     if (token) {
-      db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
     }
     clearSessionCookie(req, res);
     res.json({ ok: true });
@@ -2992,7 +3257,138 @@ export function createApiRouter(options = {}) {
     });
   });
 
-  const handleChangePassword = (req, res) => {
+  // Linked OAuth identity providers for the authenticated user
+  router.get('/auth/providers', requireStrictUserAuth, async (req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    const userRow = await db
+      .prepare('SELECT id, auth_provider, email FROM users WHERE id = ?')
+      .get(req.user.id);
+    if (!userRow) {
+      return res.status(404).json({ ok: false, error: '계정 정보를 찾을 수 없습니다.', code: 'USER_NOT_FOUND' });
+    }
+    const identities = await db
+      .prepare(
+        `SELECT provider, provider_email, email_verified, linked_at
+         FROM user_identities
+         WHERE user_id = ?
+         ORDER BY linked_at ASC`
+      )
+      .all(req.user.id);
+
+    const hasPassword = userRow.auth_provider === 'email' || !userRow.auth_provider;
+    const hasGoogle = identities.some((row) => row.provider === 'google');
+    const otherIdentityCount = identities.filter((row) => row.provider !== 'google').length;
+    const canUnlinkGoogle = hasGoogle && (hasPassword || otherIdentityCount > 0);
+
+    return res.json({
+      ok: true,
+      authProvider: userRow.auth_provider || 'email',
+      hasPassword,
+      canUnlinkGoogle,
+      providers: identities.map((row) => ({
+        provider: row.provider,
+        email: row.provider_email || null,
+        emailVerified: Boolean(row.email_verified),
+        linkedAt: row.linked_at || null,
+      })),
+    });
+  });
+
+  router.delete(
+    '/auth/providers/google',
+    requireStrictUserAuth,
+    requirePermission('profile:write', '사이트 데모 계정은 로그인 연동 설정을 변경할 수 없습니다.'),
+    async (req, res) => {
+      res.setHeader('Cache-Control', 'private, no-store');
+      const userRow = await db
+        .prepare('SELECT id, auth_provider FROM users WHERE id = ?')
+        .get(req.user.id);
+      if (!userRow) {
+        return res.status(404).json({ ok: false, error: '계정 정보를 찾을 수 없습니다.', code: 'USER_NOT_FOUND' });
+      }
+      const identities = await db
+        .prepare('SELECT id, provider FROM user_identities WHERE user_id = ?')
+        .all(req.user.id);
+      const googleRow = identities.find((row) => row.provider === 'google');
+      if (!googleRow) {
+        return res.status(404).json({
+          ok: false,
+          error: '연결된 Google 계정이 없습니다.',
+          code: 'PROVIDER_NOT_LINKED',
+        });
+      }
+      const hasPassword = userRow.auth_provider === 'email' || !userRow.auth_provider;
+      const otherProviders = identities.filter((row) => row.provider !== 'google');
+      if (!hasPassword && otherProviders.length === 0) {
+        return res.status(400).json({
+          ok: false,
+          error: '유일한 로그인 수단인 Google 계정은 연결을 해제할 수 없습니다.',
+          code: 'LAST_AUTH_METHOD',
+        });
+      }
+
+      await db.transaction(async () => {
+        await db
+          .prepare("DELETE FROM user_identities WHERE user_id = ? AND provider = 'google'")
+          .run(req.user.id);
+        if (userRow.auth_provider === 'google') {
+          const fallbackProvider = otherProviders[0]?.provider || 'email';
+          await db
+            .prepare('UPDATE users SET auth_provider = ?, apple_sub = NULL WHERE id = ?')
+            .run(fallbackProvider, req.user.id);
+        }
+      });
+
+      return res.json({ ok: true, unlinked: 'google' });
+    }
+  );
+
+  // Zone B Private Storage Signed URL issuer with strict closet ownership verification (<= 15m TTL)
+  router.get('/uploads/signed-url/:filename', requireStrictUserAuth, async (req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    const filename = String(req.params.filename || '').trim();
+    if (!/^[a-zA-Z0-9._-]{4,160}$/.test(filename) || filename.includes('..')) {
+      return res.status(400).json({ ok: false, error: '유효하지 않은 파일 이름입니다.', code: 'INVALID_FILENAME' });
+    }
+
+    const authz = resolveAuthorizedClosets(req, undefined, { mode: 'read' });
+    if (!authz.ok) {
+      return res.status(authz.status).json({ ok: false, error: authz.error });
+    }
+    const uploadUrl = `/uploads/${filename}`;
+    const inSpec = buildClosetInClause(authz.closets, 'closet_owner');
+    const garmentOwner = await db
+      .prepare(
+        `SELECT id FROM garments
+         WHERE ${inSpec.clause}
+           AND (image_url = ? OR back_image_url = ? OR original_front_url = ?)
+         LIMIT 1`
+      )
+      .get(...inSpec.params, uploadUrl, uploadUrl, uploadUrl);
+    const checkOwner = garmentOwner
+      ? garmentOwner
+      : await db
+          .prepare(
+            `SELECT id FROM shopping_checks
+             WHERE ${inSpec.clause} AND image_url = ?
+             LIMIT 1`
+          )
+          .get(...inSpec.params, uploadUrl);
+
+    if (!checkOwner) {
+      return res.status(404).json({ ok: false, error: '요청한 이미지를 찾을 수 없습니다.', code: 'NOT_FOUND' });
+    }
+
+    const signed = await storage.getSignedUploadUrl(filename, 900);
+    return res.json({
+      ok: true,
+      url: signed.url,
+      expiresAt: signed.expiresAt,
+      mode: storage.mode,
+    });
+  });
+
+  const handleChangePassword = async (req, res) => {
     res.setHeader('Cache-Control', 'private, no-store');
 
     if (req.user?.isSiteDemo || String(req.user?.username || '').toLowerCase() === 'site_demo') {
@@ -3043,7 +3439,7 @@ export function createApiRouter(options = {}) {
       });
     }
 
-    const userRow = db
+    const userRow = await db
       .prepare('SELECT id, username, password_hash, role FROM users WHERE id = ?')
       .get(req.user.id);
     if (!userRow) {
@@ -3069,14 +3465,14 @@ export function createApiRouter(options = {}) {
     }
 
     const nextHash = hashPassword(newPassword);
-    db.transaction(() => {
-      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(nextHash, userRow.id);
-      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userRow.id);
+    await db.transaction(async () => {
+      await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(nextHash, userRow.id);
+      await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userRow.id);
     });
 
     rateBuckets.delete(rateKey);
 
-    const token = issueUserSession(req, res, userRow);
+    const token = await issueUserSession(req, res, userRow);
     return res.json({ ok: true, token });
   };
 
@@ -3094,7 +3490,7 @@ export function createApiRouter(options = {}) {
   );
 
   // Server-side Profile Configuration (stores handedness, default: 'right')
-  router.get('/profile/config', (req, res) => {
+  router.get('/profile/config', async (req, res) => {
     const readRate = checkRateLimit(
       `profilecfg:read:${req.user?.id || req.ip || 'local'}`,
       MAX_ANALYTICS_READS_PER_WINDOW
@@ -3110,12 +3506,12 @@ export function createApiRouter(options = {}) {
     const userId =
       req.user && !req.isSampleGuest && !req.isSampleDemo && req.user.id > 0 ? req.user.id : null;
     const rawProfileKey = req.headers['x-profile-key'] || req.query?.profileKey || null;
-    const config = getServerProfileConfig({ userId, profileKey: rawProfileKey });
+    const config = await getServerProfileConfig({ userId, profileKey: rawProfileKey });
     res.setHeader('Cache-Control', 'private, no-store');
     return res.json({ ok: true, config });
   });
 
-  const handleSaveProfileConfig = (req, res) => {
+  const handleSaveProfileConfig = async (req, res) => {
     const writeRate = checkRateLimit(
       `profilecfg:write:${req.user?.id || req.ip || 'local'}`,
       MAX_GARMENT_WRITES_PER_WINDOW
@@ -3150,7 +3546,7 @@ export function createApiRouter(options = {}) {
       req.user && !req.isSampleGuest && !req.isSampleDemo && req.user.id > 0 ? req.user.id : null;
     const rawProfileKey =
       req.headers['x-profile-key'] || body.profileKey || body.profile_key || null;
-    const config = saveServerProfileConfig({
+    const config = await saveServerProfileConfig({
       userId,
       profileKey: rawProfileKey,
       handedness: rawHandedness,
@@ -3180,7 +3576,7 @@ export function createApiRouter(options = {}) {
     '/auth/account',
     requireStrictUserAuth,
     requirePermission('account:delete', '사이트 데모 계정은 삭제할 수 없습니다.'),
-    (req, res) => {
+    async (req, res) => {
     if (req.body?.confirmPermanentDelete !== true) {
       return res.status(400).json({
         error: '계정 영구 삭제를 위해 확인 플래그(confirmPermanentDelete: true)가 필요합니다.',
@@ -3189,7 +3585,7 @@ export function createApiRouter(options = {}) {
     }
 
     const userId = req.user.id;
-    const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    const userRow = await db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
     if (!userRow) {
       return res.status(404).json({ error: '계정을 찾을 수 없습니다.' });
     }
@@ -3210,15 +3606,17 @@ export function createApiRouter(options = {}) {
 
     const uploadUrlsToCleanup = new Set();
     if (isDedicatedCloset) {
-      const userGarments = db
-        .prepare('SELECT image_url FROM garments WHERE closet_owner = ?')
+      const userGarments = await db
+        .prepare('SELECT image_url, back_image_url, original_front_url FROM garments WHERE closet_owner = ?')
         .all(closetKey);
-      const userChecks = db
+      const userChecks = await db
         .prepare('SELECT image_url FROM shopping_checks WHERE closet_owner = ?')
         .all(closetKey);
       for (const g of userGarments) {
-        if (g.image_url && String(g.image_url).startsWith('/uploads/')) {
-          uploadUrlsToCleanup.add(g.image_url);
+        for (const u of [g.image_url, g.back_image_url, g.original_front_url]) {
+          if (u && String(u).startsWith('/uploads/')) {
+            uploadUrlsToCleanup.add(u);
+          }
         }
       }
       for (const c of userChecks) {
@@ -3228,28 +3626,36 @@ export function createApiRouter(options = {}) {
       }
     }
 
-    db.transaction(() => {
+    await db.transaction(async () => {
       if (isDedicatedCloset) {
-        db.prepare('DELETE FROM garments WHERE closet_owner = ?').run(closetKey);
-        db.prepare('DELETE FROM outfits WHERE closet_owner = ?').run(closetKey);
-        db.prepare('DELETE FROM wear_logs WHERE closet_owner = ?').run(closetKey);
-        db.prepare('DELETE FROM shopping_checks WHERE closet_owner = ?').run(closetKey);
-        db.prepare('DELETE FROM packing_lists WHERE closet_owner = ?').run(closetKey);
+        await db.prepare('DELETE FROM garments WHERE closet_owner = ?').run(closetKey);
+        await db.prepare('DELETE FROM outfits WHERE closet_owner = ?').run(closetKey);
+        await db.prepare('DELETE FROM wear_logs WHERE closet_owner = ?').run(closetKey);
+        await db.prepare('DELETE FROM shopping_checks WHERE closet_owner = ?').run(closetKey);
+        await db.prepare('DELETE FROM packing_lists WHERE closet_owner = ?').run(closetKey);
       }
-      db.prepare('DELETE FROM profile_configs WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+      await db.prepare('DELETE FROM user_identities WHERE user_id = ?').run(userId);
+      await db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(userId);
+      await db.prepare('DELETE FROM user_permission_overrides WHERE user_id = ?').run(userId);
+      await db.prepare('DELETE FROM profile_configs WHERE user_id = ?').run(userId);
+      await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+      await db.prepare('DELETE FROM users WHERE id = ?').run(userId);
     });
 
-    // Unlink physical uploaded photos on disk after DB commit (only if unreferenced)
+    // Unlink physical uploaded photos on disk / GCS Zone B after DB commit (only if unreferenced)
     for (const url of uploadUrlsToCleanup) {
-      unlinkUploadIfUnreferenced(url);
+      await unlinkUploadIfUnreferenced(url);
     }
 
-    // Purge user-scoped VTON cache artifacts if present
+    // Purge user-scoped VTON cache artifacts (local disk + GCS Zone C scratch bucket)
     if (isDedicatedCloset) {
-      const vtonCacheDir = path.resolve(DATA_DIR, 'vton-cache');
       const safeOwnerPrefix = sanitizeOwnerPrefix(closetKey);
+      try {
+        await storage.deleteVtonCacheByOwnerPrefix(safeOwnerPrefix);
+      } catch (err) {
+        console.warn('[AccountPurge] Failed to sweep storage vton-cache:', err?.message || err);
+      }
+      const vtonCacheDir = path.resolve(DATA_DIR, 'vton-cache');
       try {
         if (fs.existsSync(vtonCacheDir)) {
           for (const entry of fs.readdirSync(vtonCacheDir)) {
@@ -3308,7 +3714,7 @@ export function createApiRouter(options = {}) {
     '/auth/closet-setup',
     requireStrictUserAuth,
     requirePermission('profile:write'),
-    (req, res) => {
+    async (req, res) => {
     const closetName = String(req.body?.closet_name || req.body?.closetName || '')
       .trim()
       .slice(0, 80);
@@ -3317,23 +3723,23 @@ export function createApiRouter(options = {}) {
       return res.status(400).json({ error: '옷장 이름을 입력해 주세요.' });
     }
 
-    const updated = db.transaction(() => {
-      db.prepare('UPDATE users SET closet_name = ? WHERE id = ?').run(closetName, req.user.id);
-      const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    const updated = await db.transaction(async () => {
+      await db.prepare('UPDATE users SET closet_name = ? WHERE id = ?').run(closetName, req.user.id);
+      const u = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
       if (importStarter && u) {
-        generateStatisticalWardrobeForUser(db, u.default_closet, u);
+        await generateStatisticalWardrobeForUser(db, u.default_closet, u);
       }
       return u;
     });
 
     res.json({
       ok: true,
-      user: formatUserPayload(updated),
+      user: await formatUserPayload(updated),
     });
   });
 
   // 6. Styling Basic Info + Body Shapes + Personal Color setup (transactional + unlinks old uploads on regenerate)
-  const handleProfileSetup = (req, res) => {
+  const handleProfileSetup = async (req, res) => {
     const body = req.body || {};
     if (body.regenerate_wardrobe || body.regenerateWardrobe) {
       const regenRate = checkRateLimit(
@@ -3421,8 +3827,8 @@ export function createApiRouter(options = {}) {
     }
 
     const ownedUploadsToRemove = [];
-    const { updated, generatedWardrobe } = db.transaction(() => {
-      const prevRow = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) || {};
+    const { updated, generatedWardrobe } = await db.transaction(async () => {
+      const prevRow = (await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id)) || {};
       const nextAge = age !== null ? Math.round(age) : (prevRow.age ?? null);
       const nextAgeGroup =
         body.age_group || body.ageGroup || age !== null
@@ -3456,75 +3862,77 @@ export function createApiRouter(options = {}) {
           ? normalizeHandednessConfig(rawHandednessInput, 'right')
           : normalizeHandednessConfig(prevRow.handedness, 'right');
 
-      db.prepare(`
-        UPDATE users
-        SET age_group = ?,
-            age = ?,
-            height_cm = ?,
-            weight_kg = ?,
-            gender = ?,
-            personal_color = ?,
-            skin_tone_hex = ?,
-            skin_undertone_lab = ?,
-            body_shape = ?,
-            body_fat_pct = ?,
-            chest_cm = ?,
-            waist_cm = ?,
-            hip_cm = ?,
-            head_cm = ?,
-            handedness = ?,
-            profile_completed = 1
-        WHERE id = ?
-      `).run(
-        nextAgeGroup,
-        nextAge,
-        nextHeightCm,
-        nextWeightKg,
-        nextGender,
-        nextPersonalColor,
-        nextSkinToneHex,
-        nextSkinLab,
-        nextBodyShape,
-        nextBodyFat,
-        nextChest,
-        nextWaist,
-        nextHip,
-        nextHead,
-        nextHandedness,
-        req.user.id
-      );
+      await db
+        .prepare(`
+          UPDATE users
+          SET age_group = ?,
+              age = ?,
+              height_cm = ?,
+              weight_kg = ?,
+              gender = ?,
+              personal_color = ?,
+              skin_tone_hex = ?,
+              skin_undertone_lab = ?,
+              body_shape = ?,
+              body_fat_pct = ?,
+              chest_cm = ?,
+              waist_cm = ?,
+              hip_cm = ?,
+              head_cm = ?,
+              handedness = ?,
+              profile_completed = 1
+          WHERE id = ?
+        `)
+        .run(
+          nextAgeGroup,
+          nextAge,
+          nextHeightCm,
+          nextWeightKg,
+          nextGender,
+          nextPersonalColor,
+          nextSkinToneHex,
+          nextSkinLab,
+          nextBodyShape,
+          nextBodyFat,
+          nextChest,
+          nextWaist,
+          nextHip,
+          nextHead,
+          nextHandedness,
+          req.user.id
+        );
 
-      saveServerProfileConfig({
+      await saveServerProfileConfig({
         userId: req.user.id,
         profileKey: req.headers['x-profile-key'] || body.profileKey || null,
         handedness: nextHandedness,
       });
 
-      const userAfter = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+      const userAfter = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
       const closetKey = userAfter.default_closet;
 
       let generated = null;
       if (regenerateWardrobe && closetKey && closetKey !== 'sample') {
-        const priorGarments = db
+        const priorGarments = await db
           .prepare("SELECT image_url FROM garments WHERE closet_owner = ? AND image_url LIKE '/uploads/%'")
           .all(closetKey);
         for (const g of priorGarments) {
           if (g.image_url) ownedUploadsToRemove.push(g.image_url);
         }
-        db.prepare('DELETE FROM garments WHERE closet_owner = ?').run(closetKey);
-        generated = generateStatisticalWardrobeForUser(db, closetKey, userAfter);
+        await db.prepare('DELETE FROM garments WHERE closet_owner = ?').run(closetKey);
+        generated = await generateStatisticalWardrobeForUser(db, closetKey, userAfter);
       }
 
       return { updated: userAfter, generatedWardrobe: generated };
     });
 
     for (const url of ownedUploadsToRemove) {
-      unlinkUploadIfUnreferenced(url);
+      await unlinkUploadIfUnreferenced(url);
     }
 
     res.json({
       ok: true,
-      user: formatUserPayload(updated),
+      user: await formatUserPayload(updated),
       generatedWardrobe,
     });
   };
@@ -3542,12 +3950,12 @@ export function createApiRouter(options = {}) {
   );
 
   // Statistical wardrobe benchmarks endpoint
-  router.get('/wardrobe/benchmarks', (req, res) => {
+  router.get('/wardrobe/benchmarks', async (req, res) => {
     const ageGroup = normalizeAgeGroupKey(
       req.query.age_group || req.user.ageGroup,
       req.user.age
     );
-    const rows = db
+    const rows = await db
       .prepare('SELECT * FROM wardrobe_statistics_benchmarks WHERE age_group = ?')
       .all(ageGroup);
     res.json({
@@ -3577,7 +3985,7 @@ export function createApiRouter(options = {}) {
     '/garments/import-samples',
     requireStrictUserAuth,
     requirePermission('closet:write'),
-    (req, res) => {
+    async (req, res) => {
     const requestedCloset = req.body?.closet_owner || req.user.defaultCloset;
     const authz = resolveAuthorizedClosets(req, requestedCloset, { mode: 'write' });
     if (!authz.ok) {
@@ -3594,7 +4002,7 @@ export function createApiRouter(options = {}) {
         ? SAMPLE_CAPSULE_CATALOG.filter((s) => normalizedKeySet.has(s.key))
         : SAMPLE_CAPSULE_CATALOG;
 
-    const imported = db.transaction(() => {
+    const imported = await db.transaction(async () => {
       const insertStmt = db.prepare(`
         INSERT INTO garments (
           closet_owner, name, category, subcategory, color_name, color_hex,
@@ -3607,7 +4015,7 @@ export function createApiRouter(options = {}) {
       const rows = [];
       for (const item of selected) {
         const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
-        const r = insertStmt.run(
+        const r = await insertStmt.run(
           closetOwner,
           item.name,
           item.category,
@@ -3627,7 +4035,7 @@ export function createApiRouter(options = {}) {
           spec.baseGlb,
           spec.physicsPreset
         );
-        const row = db.prepare('SELECT * FROM garments WHERE id = ?').get(r.lastInsertRowid);
+        const row = await db.prepare('SELECT * FROM garments WHERE id = ?').get(r.lastInsertRowid);
         if (row) rows.push(parseGarmentRow(row));
       }
       return rows;
@@ -3779,7 +4187,7 @@ export function createApiRouter(options = {}) {
   });
 
   // Garments CRUD
-  router.get('/garments', (req, res) => {
+  router.get('/garments', async (req, res) => {
     const authz = resolveAuthorizedClosets(req, req.query.closet, { mode: 'read' });
     if (!authz.ok) {
       return res.status(authz.status).json({ error: authz.error });
@@ -3787,15 +4195,15 @@ export function createApiRouter(options = {}) {
 
     for (const c of authz.closets) {
       if (c === 'sample' || c === 'husband' || c === 'wife') {
-        ensureNewSubcategoryMaterialSeeds(c);
-        ensureLuxuryStreetSeeds(c);
-        ensureUnderwearAndSocksSeeds(c);
-        ensureCyberDemoLookSeeds(c);
+        await ensureNewSubcategoryMaterialSeeds(c);
+        await ensureLuxuryStreetSeeds(c);
+        await ensureUnderwearAndSocksSeeds(c);
+        await ensureCyberDemoLookSeeds(c);
       } else {
-        const hasAny = db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(c);
+        const hasAny = await db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(c);
         if (hasAny) {
-          ensureNewSubcategoryMaterialSeeds(c);
-          ensureUnderwearAndSocksSeeds(c);
+          await ensureNewSubcategoryMaterialSeeds(c);
+          await ensureUnderwearAndSocksSeeds(c);
         }
       }
     }
@@ -3816,7 +4224,7 @@ export function createApiRouter(options = {}) {
     }
     sql += ' ORDER BY is_favorite DESC, id DESC';
 
-    const rows = db.prepare(sql).all(...params).map(parseGarmentRow);
+    const rows = (await db.prepare(sql).all(...params)).map(parseGarmentRow);
     res.json({ garments: rows, isSampleDemo: Boolean(req.isSampleDemo || authz.primaryCloset === 'sample') });
   });
 
@@ -3833,7 +4241,7 @@ export function createApiRouter(options = {}) {
       }
       return next();
     },
-    (req, res) => {
+    async (req, res) => {
     const requestedCloset = req.body?.closet_owner || req.query.closet;
     const authz = resolveAuthorizedClosets(req, requestedCloset, { mode: 'read' });
     if (!authz.ok) {
@@ -3847,16 +4255,17 @@ export function createApiRouter(options = {}) {
       }
     }
     const insertedCount =
-      ensureNewSubcategoryMaterialSeeds(targetCloset) +
-      ensureLuxuryStreetSeeds(targetCloset) +
-      ensureUnderwearAndSocksSeeds(targetCloset) +
+      (await ensureNewSubcategoryMaterialSeeds(targetCloset)) +
+      (await ensureLuxuryStreetSeeds(targetCloset)) +
+      (await ensureUnderwearAndSocksSeeds(targetCloset)) +
       (targetCloset === 'sample' || targetCloset === 'husband' || targetCloset === 'wife'
-        ? ensureCyberDemoLookSeeds(targetCloset)
+        ? await ensureCyberDemoLookSeeds(targetCloset)
         : 0);
-    const rows = db
-      .prepare('SELECT * FROM garments WHERE closet_owner = ? ORDER BY is_favorite DESC, id DESC')
-      .all(targetCloset)
-      .map(parseGarmentRow);
+    const rows = (
+      await db
+        .prepare('SELECT * FROM garments WHERE closet_owner = ? ORDER BY is_favorite DESC, id DESC')
+        .all(targetCloset)
+    ).map(parseGarmentRow);
     res.json({ ok: true, inserted: insertedCount, insertedCount, garments: rows });
   });
 
@@ -3864,7 +4273,7 @@ export function createApiRouter(options = {}) {
     '/garments',
     requireStrictUserAuth,
     requirePermission('closet:write'),
-    (req, res) => {
+    async (req, res) => {
     const writeRate = checkRateLimit(
       `garmentwrite:${req.user?.id || req.ip || 'local'}`,
       MAX_GARMENT_WRITES_PER_WINDOW
@@ -3948,7 +4357,7 @@ export function createApiRouter(options = {}) {
       .slice(0, 500);
 
     const fallbackSeed = getStudioSeedImageForGarment(resolvedCategory, resolvedSubcategory);
-    const uploadRes = saveDataUrlImage(image_data || image_url, targetCloset, fallbackSeed);
+    const uploadRes = await saveDataUrlImage(image_data || image_url, targetCloset, fallbackSeed);
     if (!uploadRes.ok) {
       return res.status(uploadRes.status).json({ error: uploadRes.error });
     }
@@ -3956,7 +4365,11 @@ export function createApiRouter(options = {}) {
 
     let savedBackUrl = null;
     if (back_image_data || back_image_url) {
-      const backUploadRes = saveDataUrlImage(back_image_data || back_image_url, targetCloset, '');
+      const backUploadRes = await saveDataUrlImage(
+        back_image_data || back_image_url,
+        targetCloset,
+        ''
+      );
       if (!backUploadRes.ok) {
         return res.status(backUploadRes.status).json({ error: backUploadRes.error });
       }
@@ -3965,7 +4378,11 @@ export function createApiRouter(options = {}) {
 
     let savedOriginalFrontUrl = null;
     if (original_front_data || original_front_url) {
-      const origRes = saveDataUrlImage(original_front_data || original_front_url, targetCloset, '');
+      const origRes = await saveDataUrlImage(
+        original_front_data || original_front_url,
+        targetCloset,
+        ''
+      );
       if (origRes.ok && origRes.url) {
         savedOriginalFrontUrl = origRes.url;
       }
@@ -3987,61 +4404,63 @@ export function createApiRouter(options = {}) {
     });
     const cleanDetails = sanitizeGarmentDetailsInput(garment_details);
 
-    const result = db.prepare(`
-      INSERT INTO garments (
-        closet_owner, name, category, subcategory, color_name, color_hex,
-        seasons, min_temp, max_temp, water_resistant, formality,
-        brand, size, price, wear_count, status, image_url, notes,
-        fabric, slot_key, base_glb, physics_preset, custom_texture,
-        has_strap, bag_carry_style,
-        back_image_url, original_front_url, fit, texture_feel, material_composition,
-        thickness, style_mood, purchase_date, purchase_store, product_code,
-        care_tip, fit_note, garment_details_json, official_source_url, cutout_source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      targetCloset,
-      String(name).trim().slice(0, 120),
-      resolvedCategory,
-      resolvedSubcategory,
-      String(color_name).trim().slice(0, 32),
-      String(color_hex).trim().slice(0, 16),
-      JSON.stringify(Array.isArray(seasons) ? seasons : ['봄', '가을']),
-      Number.isFinite(Number(min_temp)) ? Number(min_temp) : 8,
-      Number.isFinite(Number(max_temp)) ? Number(max_temp) : 20,
-      water_resistant ? 1 : 0,
-      String(formality || 'smart').trim().slice(0, 24),
-      String(brand || '').trim().slice(0, 80),
-      String(size || '').trim().slice(0, 32),
-      Math.max(0, Number(price) || 0),
-      Math.max(0, Number(wear_count) || 0),
-      String(status || 'active').trim(),
-      savedUrl,
-      resolvedNotes,
-      String(fabric || 'cotton').trim().slice(0, 48),
-      slot_key || spec.slotKey,
-      base_glb || spec.baseGlb,
-      physics_preset || spec.physicsPreset,
-      isCustomTex ? 1 : 0,
-      bagSpec.isBag ? (bagSpec.has_strap ? 1 : 0) : null,
-      bagSpec.isBag ? bagSpec.bag_carry_style : null,
-      savedBackUrl,
-      savedOriginalFrontUrl,
-      String(fit || '').trim().slice(0, 32),
-      String(texture_feel || '').trim().slice(0, 32),
-      String(material_composition || '').trim().slice(0, 140),
-      String(thickness || 'medium').trim().slice(0, 24),
-      String(style_mood || 'minimal').trim().slice(0, 32),
-      String(purchase_date || '').trim().slice(0, 20),
-      String(purchase_store || '').trim().slice(0, 80),
-      String(product_code || '').trim().slice(0, 64),
-      String(care_tip || '').trim().slice(0, 240),
-      String(fit_note || '').trim().slice(0, 300),
-      JSON.stringify(cleanDetails),
-      sanitizeSafeHttpsUrl(official_source_url),
-      String(cutout_source || 'local').trim().slice(0, 32)
-    );
+    const result = await db
+      .prepare(`
+        INSERT INTO garments (
+          closet_owner, name, category, subcategory, color_name, color_hex,
+          seasons, min_temp, max_temp, water_resistant, formality,
+          brand, size, price, wear_count, status, image_url, notes,
+          fabric, slot_key, base_glb, physics_preset, custom_texture,
+          has_strap, bag_carry_style,
+          back_image_url, original_front_url, fit, texture_feel, material_composition,
+          thickness, style_mood, purchase_date, purchase_store, product_code,
+          care_tip, fit_note, garment_details_json, official_source_url, cutout_source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        targetCloset,
+        String(name).trim().slice(0, 120),
+        resolvedCategory,
+        resolvedSubcategory,
+        String(color_name).trim().slice(0, 32),
+        String(color_hex).trim().slice(0, 16),
+        JSON.stringify(Array.isArray(seasons) ? seasons : ['봄', '가을']),
+        Number.isFinite(Number(min_temp)) ? Number(min_temp) : 8,
+        Number.isFinite(Number(max_temp)) ? Number(max_temp) : 20,
+        water_resistant ? 1 : 0,
+        String(formality || 'smart').trim().slice(0, 24),
+        String(brand || '').trim().slice(0, 80),
+        String(size || '').trim().slice(0, 32),
+        Math.max(0, Number(price) || 0),
+        Math.max(0, Number(wear_count) || 0),
+        String(status || 'active').trim(),
+        savedUrl,
+        resolvedNotes,
+        String(fabric || 'cotton').trim().slice(0, 48),
+        slot_key || spec.slotKey,
+        base_glb || spec.baseGlb,
+        physics_preset || spec.physicsPreset,
+        isCustomTex ? 1 : 0,
+        bagSpec.isBag ? (bagSpec.has_strap ? 1 : 0) : null,
+        bagSpec.isBag ? bagSpec.bag_carry_style : null,
+        savedBackUrl,
+        savedOriginalFrontUrl,
+        String(fit || '').trim().slice(0, 32),
+        String(texture_feel || '').trim().slice(0, 32),
+        String(material_composition || '').trim().slice(0, 140),
+        String(thickness || 'medium').trim().slice(0, 24),
+        String(style_mood || 'minimal').trim().slice(0, 32),
+        String(purchase_date || '').trim().slice(0, 20),
+        String(purchase_store || '').trim().slice(0, 80),
+        String(product_code || '').trim().slice(0, 64),
+        String(care_tip || '').trim().slice(0, 240),
+        String(fit_note || '').trim().slice(0, 300),
+        JSON.stringify(cleanDetails),
+        sanitizeSafeHttpsUrl(official_source_url),
+        String(cutout_source || 'local').trim().slice(0, 32)
+      );
 
-    const created = db.prepare('SELECT * FROM garments WHERE id = ?').get(result.lastInsertRowid);
+    const created = await db.prepare('SELECT * FROM garments WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ garment: parseGarmentRow(created) });
   });
 
@@ -4049,9 +4468,9 @@ export function createApiRouter(options = {}) {
     '/garments/:id',
     requireStrictUserAuth,
     requirePermission('closet:write'),
-    (req, res) => {
+    async (req, res) => {
     const id = Number(req.params.id);
-    const existing = db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
+    const existing = await db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '아이템을 찾을 수 없습니다.' });
     if (!canWriteClosetOwner(req, existing.closet_owner)) {
       return res.status(403).json({ error: '다른 사용자의 옷장 아이템은 수정할 수 없습니다.' });
@@ -4176,53 +4595,55 @@ export function createApiRouter(options = {}) {
         body.bag_carry_style !== undefined ? body.bag_carry_style : existing.bag_carry_style,
     });
 
-    db.prepare(`
-      UPDATE garments
-      SET name = ?, category = ?, subcategory = ?, slot_key = ?, status = ?, is_favorite = ?,
-          price = ?, brand = ?, size = ?, notes = ?, wear_count = ?,
-          has_strap = ?, bag_carry_style = ?,
-          color_name = ?, color_hex = ?, fabric = ?, seasons = ?, min_temp = ?, max_temp = ?,
-          formality = ?, fit = ?, texture_feel = ?, material_composition = ?, thickness = ?,
-          style_mood = ?, purchase_date = ?, purchase_store = ?, product_code = ?,
-          care_tip = ?, fit_note = ?, garment_details_json = ?, official_source_url = ?
-      WHERE id = ?
-    `).run(
-      nextName,
-      nextCategory,
-      nextSubcategory,
-      nextSlotKey,
-      nextStatus,
-      nextFav,
-      nextPrice,
-      nextBrand,
-      nextSize,
-      nextNotes,
-      nextWearCount,
-      nextBagSpec.isBag ? (nextBagSpec.has_strap ? 1 : 0) : null,
-      nextBagSpec.isBag ? nextBagSpec.bag_carry_style : null,
-      nextColorName,
-      nextColorHex,
-      nextFabric,
-      nextSeasons,
-      nextMinTemp,
-      nextMaxTemp,
-      nextFormality,
-      nextFit,
-      nextTextureFeel,
-      nextComposition,
-      nextThickness,
-      nextStyleMood,
-      nextPurchaseDate,
-      nextPurchaseStore,
-      nextProductCode,
-      nextCareTip,
-      nextFitNote,
-      nextDetailsJson,
-      nextOfficialUrl,
-      id
-    );
+    await db
+      .prepare(`
+        UPDATE garments
+        SET name = ?, category = ?, subcategory = ?, slot_key = ?, status = ?, is_favorite = ?,
+            price = ?, brand = ?, size = ?, notes = ?, wear_count = ?,
+            has_strap = ?, bag_carry_style = ?,
+            color_name = ?, color_hex = ?, fabric = ?, seasons = ?, min_temp = ?, max_temp = ?,
+            formality = ?, fit = ?, texture_feel = ?, material_composition = ?, thickness = ?,
+            style_mood = ?, purchase_date = ?, purchase_store = ?, product_code = ?,
+            care_tip = ?, fit_note = ?, garment_details_json = ?, official_source_url = ?
+        WHERE id = ?
+      `)
+      .run(
+        nextName,
+        nextCategory,
+        nextSubcategory,
+        nextSlotKey,
+        nextStatus,
+        nextFav,
+        nextPrice,
+        nextBrand,
+        nextSize,
+        nextNotes,
+        nextWearCount,
+        nextBagSpec.isBag ? (nextBagSpec.has_strap ? 1 : 0) : null,
+        nextBagSpec.isBag ? nextBagSpec.bag_carry_style : null,
+        nextColorName,
+        nextColorHex,
+        nextFabric,
+        nextSeasons,
+        nextMinTemp,
+        nextMaxTemp,
+        nextFormality,
+        nextFit,
+        nextTextureFeel,
+        nextComposition,
+        nextThickness,
+        nextStyleMood,
+        nextPurchaseDate,
+        nextPurchaseStore,
+        nextProductCode,
+        nextCareTip,
+        nextFitNote,
+        nextDetailsJson,
+        nextOfficialUrl,
+        id
+      );
 
-    const updated = db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
     res.json({ garment: parseGarmentRow(updated) });
   });
 
@@ -4230,26 +4651,28 @@ export function createApiRouter(options = {}) {
     '/garments/:id/wear',
     requireStrictUserAuth,
     requirePermission('closet:write'),
-    (req, res) => {
+    async (req, res) => {
     const id = Number(req.params.id);
-    const existing = db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
+    const existing = await db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '아이템을 찾을 수 없습니다.' });
     if (!canWriteClosetOwner(req, existing.closet_owner)) {
       return res.status(403).json({ error: '다른 사용자의 옷장 아이템은 착용 기록할 수 없습니다.' });
     }
 
     const todayStr = new Date().toISOString().slice(0, 10);
-    db.prepare(`
-      UPDATE garments
-      SET wear_count = wear_count + 1,
-          last_worn_date = CASE
-            WHEN last_worn_date IS NULL OR last_worn_date < ? THEN ?
-            ELSE last_worn_date
-          END
-      WHERE id = ?
-    `).run(todayStr, todayStr, id);
+    await db
+      .prepare(`
+        UPDATE garments
+        SET wear_count = wear_count + 1,
+            last_worn_date = CASE
+              WHEN last_worn_date IS NULL OR last_worn_date < ? THEN ?
+              ELSE last_worn_date
+            END
+        WHERE id = ?
+      `)
+      .run(todayStr, todayStr, id);
 
-    const updated = db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
     res.json({ garment: parseGarmentRow(updated) });
   });
 
@@ -4257,9 +4680,9 @@ export function createApiRouter(options = {}) {
     '/garments/:id',
     requireStrictUserAuth,
     requirePermission('closet:write'),
-    (req, res) => {
+    async (req, res) => {
     const id = Number(req.params.id);
-    const existing = db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
+    const existing = await db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
     if (!existing) {
       return res.status(404).json({ error: '아이템을 찾을 수 없습니다.' });
     }
@@ -4270,15 +4693,15 @@ export function createApiRouter(options = {}) {
     const imageUrl = existing.image_url;
     const backImageUrl = existing.back_image_url;
     const originalFrontUrl = existing.original_front_url;
-    db.prepare('DELETE FROM garments WHERE id = ?').run(id);
-    unlinkUploadIfUnreferenced(imageUrl);
-    unlinkUploadIfUnreferenced(backImageUrl);
-    unlinkUploadIfUnreferenced(originalFrontUrl);
+    await db.prepare('DELETE FROM garments WHERE id = ?').run(id);
+    await unlinkUploadIfUnreferenced(imageUrl);
+    await unlinkUploadIfUnreferenced(backImageUrl);
+    await unlinkUploadIfUnreferenced(originalFrontUrl);
     res.json({ ok: true });
   });
 
   // Offline Shopping Assistant (Supports both authenticated users AND read-only X-Demo-Mode: sample!)
-  router.post('/shopping/analyze', (req, res) => {
+  router.post('/shopping/analyze', async (req, res) => {
     const shopRate = checkRateLimit(
       `shopanalyze:${req.user?.id || req.ip || 'local'}`,
       MAX_SHOPPING_ANALYSES_PER_WINDOW
@@ -4322,7 +4745,7 @@ export function createApiRouter(options = {}) {
       image_url,
     } = req.body || {};
 
-    const uploadRes = saveDataUrlImage(
+    const uploadRes = await saveDataUrlImage(
       image_data || image_url,
       closetOwner,
       '/seed/store-navy-sweater.jpg',
@@ -4333,19 +4756,17 @@ export function createApiRouter(options = {}) {
     }
     const savedUrl = uploadRes.url;
 
-    const closetItems = db
-      .prepare('SELECT * FROM garments WHERE closet_owner = ?')
-      .all(closetOwner)
-      .map(parseGarmentRow);
+    const closetItems = (
+      await db.prepare('SELECT * FROM garments WHERE closet_owner = ?').all(closetOwner)
+    ).map(parseGarmentRow);
 
     // Only compare partner closet when inside the husband/wife couple closets
     let partnerItems = [];
     if (closetOwner === 'husband' || closetOwner === 'wife') {
       const partnerClosetKey = closetOwner === 'husband' ? 'wife' : 'husband';
-      partnerItems = db
-        .prepare('SELECT * FROM garments WHERE closet_owner = ?')
-        .all(partnerClosetKey)
-        .map(parseGarmentRow);
+      partnerItems = (
+        await db.prepare('SELECT * FROM garments WHERE closet_owner = ?').all(partnerClosetKey)
+      ).map(parseGarmentRow);
     }
 
     const analysis = analyzeShoppingCandidate(
@@ -4363,24 +4784,26 @@ export function createApiRouter(options = {}) {
 
     let checkId = null;
     if (shouldPersistHistory) {
-      const insert = db.prepare(`
-        INSERT INTO shopping_checks (
-          closet_owner, image_url, candidate_name, category, subcategory,
-          color_name, color_hex, price, verdict, similar_count, max_similarity, decision
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'undecided')
-      `).run(
-        closetOwner,
-        savedUrl,
-        String(candidate_name).trim().slice(0, 120),
-        String(category).trim(),
-        String(subcategory).trim(),
-        String(color_name).trim(),
-        String(color_hex).trim(),
-        Math.max(0, Number(price) || 0),
-        analysis.verdict,
-        analysis.similarCount,
-        analysis.maxSimilarity
-      );
+      const insert = await db
+        .prepare(`
+          INSERT INTO shopping_checks (
+            closet_owner, image_url, candidate_name, category, subcategory,
+            color_name, color_hex, price, verdict, similar_count, max_similarity, decision
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'undecided')
+        `)
+        .run(
+          closetOwner,
+          savedUrl,
+          String(candidate_name).trim().slice(0, 120),
+          String(category).trim(),
+          String(subcategory).trim(),
+          String(color_name).trim(),
+          String(color_hex).trim(),
+          Math.max(0, Number(price) || 0),
+          analysis.verdict,
+          analysis.similarCount,
+          analysis.maxSimilarity
+        );
       checkId = insert.lastInsertRowid;
     }
 
@@ -4401,13 +4824,13 @@ export function createApiRouter(options = {}) {
     });
   });
 
-  router.get('/shopping/history', (req, res) => {
+  router.get('/shopping/history', async (req, res) => {
     const authz = resolveAuthorizedClosets(req, req.query.closet, { mode: 'read' });
     if (!authz.ok) {
       return res.status(authz.status).json({ error: authz.error });
     }
     const inSpec = buildClosetInClause(authz.closets, 'closet_owner');
-    const rows = db
+    const rows = await db
       .prepare(`SELECT * FROM shopping_checks WHERE ${inSpec.clause} ORDER BY id DESC LIMIT 20`)
       .all(...inSpec.params);
     res.json({ history: rows });
@@ -4417,9 +4840,9 @@ export function createApiRouter(options = {}) {
     '/shopping/decision',
     requireStrictUserAuth,
     requirePermission('shopping:write'),
-    (req, res) => {
+    async (req, res) => {
     const { checkId, decision, addToCloset = false, brand = '' } = req.body || {};
-    const check = db.prepare('SELECT * FROM shopping_checks WHERE id = ?').get(Number(checkId));
+    const check = await db.prepare('SELECT * FROM shopping_checks WHERE id = ?').get(Number(checkId));
     if (!check) return res.status(404).json({ error: '판독 기록을 찾을 수 없습니다.' });
     if (!canWriteClosetOwner(req, check.closet_owner)) {
       return res.status(403).json({ error: '다른 사용자의 쇼핑 판독 기록은 변경할 수 없습니다.' });
@@ -4427,8 +4850,8 @@ export function createApiRouter(options = {}) {
 
     const safeDecision = String(decision || 'undecided').trim().slice(0, 32);
 
-    const createdGarment = db.transaction(() => {
-      db.prepare('UPDATE shopping_checks SET decision = ? WHERE id = ?').run(
+    const createdGarment = await db.transaction(async () => {
+      await db.prepare('UPDATE shopping_checks SET decision = ? WHERE id = ?').run(
         safeDecision,
         check.id
       );
@@ -4442,33 +4865,35 @@ export function createApiRouter(options = {}) {
           : check.image_url;
 
       const spec = resolveManifestSlotAndGlb(check.category, check.subcategory);
-      const insert = db.prepare(`
-        INSERT INTO garments (
-          closet_owner, name, category, subcategory, color_name, color_hex,
-          seasons, min_temp, max_temp, water_resistant, formality,
-          brand, price, wear_count, status, image_url, notes,
-          fabric, slot_key, base_glb, physics_preset, custom_texture
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'smart', ?, ?, 0, 'active', ?, '오프라인 쇼핑 판독 후 구매 등록', 'cotton', ?, ?, ?, ?)
-      `).run(
-        check.closet_owner,
-        check.candidate_name,
-        check.category,
-        check.subcategory,
-        check.color_name,
-        check.color_hex,
-        JSON.stringify(['봄', '가을']),
-        8,
-        20,
-        String(brand || '').trim().slice(0, 80),
-        check.price,
-        closetImageUrl,
-        spec.slotKey,
-        spec.baseGlb,
-        spec.physicsPreset,
-        closetImageUrl.startsWith('/uploads/') ? 1 : 0
-      );
+      const insert = await db
+        .prepare(`
+          INSERT INTO garments (
+            closet_owner, name, category, subcategory, color_name, color_hex,
+            seasons, min_temp, max_temp, water_resistant, formality,
+            brand, price, wear_count, status, image_url, notes,
+            fabric, slot_key, base_glb, physics_preset, custom_texture
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'smart', ?, ?, 0, 'active', ?, '오프라인 쇼핑 판독 후 구매 등록', 'cotton', ?, ?, ?, ?)
+        `)
+        .run(
+          check.closet_owner,
+          check.candidate_name,
+          check.category,
+          check.subcategory,
+          check.color_name,
+          check.color_hex,
+          JSON.stringify(['봄', '가을']),
+          8,
+          20,
+          String(brand || '').trim().slice(0, 80),
+          check.price,
+          closetImageUrl,
+          spec.slotKey,
+          spec.baseGlb,
+          spec.physicsPreset,
+          closetImageUrl.startsWith('/uploads/') ? 1 : 0
+        );
       return parseGarmentRow(
-        db.prepare('SELECT * FROM garments WHERE id = ?').get(insert.lastInsertRowid)
+        await db.prepare('SELECT * FROM garments WHERE id = ?').get(insert.lastInsertRowid)
       );
     });
 
@@ -4503,25 +4928,25 @@ export function createApiRouter(options = {}) {
     const closetOwner = authz.primaryCloset;
 
     if (closetOwner === 'sample' || closetOwner === 'husband' || closetOwner === 'wife') {
-      ensureNewSubcategoryMaterialSeeds(closetOwner);
-      ensureLuxuryStreetSeeds(closetOwner);
-      ensureUnderwearAndSocksSeeds(closetOwner);
+      await ensureNewSubcategoryMaterialSeeds(closetOwner);
+      await ensureLuxuryStreetSeeds(closetOwner);
+      await ensureUnderwearAndSocksSeeds(closetOwner);
     } else if (
-      db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(closetOwner)
+      await db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(closetOwner)
     ) {
-      ensureNewSubcategoryMaterialSeeds(closetOwner);
-      ensureUnderwearAndSocksSeeds(closetOwner);
+      await ensureNewSubcategoryMaterialSeeds(closetOwner);
+      await ensureUnderwearAndSocksSeeds(closetOwner);
     }
 
-    const garments = db
-      .prepare('SELECT * FROM garments WHERE closet_owner = ?')
-      .all(closetOwner)
-      .map(parseGarmentRow);
+    const garments = (
+      await db.prepare('SELECT * FROM garments WHERE closet_owner = ?').all(closetOwner)
+    ).map(parseGarmentRow);
 
     const baseOwnerUser =
       closetOwner === 'sample'
         ? req.userRow
-        : db.prepare('SELECT * FROM users WHERE default_closet = ?').get(closetOwner) || req.userRow;
+        : (await db.prepare('SELECT * FROM users WHERE default_closet = ?').get(closetOwner)) ||
+          req.userRow;
 
     const ownerUser = {
       ...(baseOwnerUser || {}),
@@ -4553,7 +4978,7 @@ export function createApiRouter(options = {}) {
       });
     }
 
-    const recentLogs = db
+    const recentLogs = await db
       .prepare(
         "SELECT * FROM wear_logs WHERE closet_owner = ? AND status = 'worn' ORDER BY worn_date DESC LIMIT 3"
       )
@@ -4568,22 +4993,20 @@ export function createApiRouter(options = {}) {
   });
 
   // Outfits
-  router.get('/outfits', (req, res) => {
+  router.get('/outfits', async (req, res) => {
     const authz = resolveAuthorizedClosets(req, req.query.closet, { mode: 'read' });
     if (!authz.ok) {
       return res.status(authz.status).json({ error: authz.error });
     }
     const inSpec = buildClosetInClause(authz.closets, 'closet_owner');
-    const rows = db
+    const rows = await db
       .prepare(`SELECT * FROM outfits WHERE ${inSpec.clause} ORDER BY id DESC`)
       .all(...inSpec.params);
 
-    const garmentMap = new Map(
-      db
-        .prepare(`SELECT * FROM garments WHERE ${inSpec.clause}`)
-        .all(...inSpec.params)
-        .map((g) => [g.id, parseGarmentRow(g)])
-    );
+    const garmentRows = await db
+      .prepare(`SELECT * FROM garments WHERE ${inSpec.clause}`)
+      .all(...inSpec.params);
+    const garmentMap = new Map(garmentRows.map((g) => [g.id, parseGarmentRow(g)]));
 
     const outfits = rows.map((o) => {
       const ids = safeParseJsonArray(o.item_ids, []).map(Number).filter(Boolean);
@@ -4601,7 +5024,7 @@ export function createApiRouter(options = {}) {
     '/outfits',
     requireStrictUserAuth,
     requirePermission('outfit:write'),
-    (req, res) => {
+    async (req, res) => {
     const {
       closet_owner = req.user.defaultCloset,
       title,
@@ -4622,12 +5045,10 @@ export function createApiRouter(options = {}) {
     }
 
     const readAuthz = resolveAuthorizedClosets(req, targetCloset, { mode: 'read' });
-    const allowedGarmentIds = new Set(
-      db
-        .prepare(`SELECT id FROM garments WHERE ${buildClosetInClause(readAuthz.closets).clause}`)
-        .all(...readAuthz.closets)
-        .map((r) => Number(r.id))
-    );
+    const allowedGarmentRows = await db
+      .prepare(`SELECT id FROM garments WHERE ${buildClosetInClause(readAuthz.closets).clause}`)
+      .all(...readAuthz.closets);
+    const allowedGarmentIds = new Set(allowedGarmentRows.map((r) => Number(r.id)));
     const cleanIds = item_ids
       .map(Number)
       .filter((id) => Number.isFinite(id) && allowedGarmentIds.has(id));
@@ -4635,17 +5056,19 @@ export function createApiRouter(options = {}) {
       return res.status(400).json({ error: '선택한 의류 권한을 확인할 수 없습니다.' });
     }
 
-    const result = db.prepare(`
-      INSERT INTO outfits (closet_owner, title, occasion, season, item_ids, memo)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      targetCloset,
-      String(title).trim().slice(0, 120),
-      String(occasion || '데일리').trim().slice(0, 40),
-      String(season || '봄/가을').trim().slice(0, 40),
-      JSON.stringify(cleanIds),
-      String(memo || '').trim().slice(0, 500)
-    );
+    const result = await db
+      .prepare(`
+        INSERT INTO outfits (closet_owner, title, occasion, season, item_ids, memo)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        targetCloset,
+        String(title).trim().slice(0, 120),
+        String(occasion || '데일리').trim().slice(0, 40),
+        String(season || '봄/가을').trim().slice(0, 40),
+        JSON.stringify(cleanIds),
+        String(memo || '').trim().slice(0, 500)
+      );
 
     res.status(201).json({ id: result.lastInsertRowid });
   });
@@ -4654,36 +5077,34 @@ export function createApiRouter(options = {}) {
     '/outfits/:id',
     requireStrictUserAuth,
     requirePermission('outfit:write'),
-    (req, res) => {
+    async (req, res) => {
     const id = Number(req.params.id);
-    const existing = db.prepare('SELECT * FROM outfits WHERE id = ?').get(id);
+    const existing = await db.prepare('SELECT * FROM outfits WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '코디를 찾을 수 없습니다.' });
     if (!canWriteClosetOwner(req, existing.closet_owner)) {
       return res.status(403).json({ error: '다른 사용자의 코디는 삭제할 수 없습니다.' });
     }
-    db.prepare('DELETE FROM outfits WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM outfits WHERE id = ?').run(id);
     res.json({ ok: true });
   });
 
   // Calendar / OOTD Wear Logs + Future Outfit Reservations (Requirement 7.a)
-  router.get('/calendar', (req, res) => {
+  router.get('/calendar', async (req, res) => {
     const authz = resolveAuthorizedClosets(req, req.query.closet, { mode: 'read' });
     if (!authz.ok) {
       return res.status(authz.status).json({ error: authz.error });
     }
     const inSpec = buildClosetInClause(authz.closets, 'closet_owner');
-    const rows = db
+    const rows = await db
       .prepare(
         `SELECT * FROM wear_logs WHERE ${inSpec.clause} ORDER BY worn_date DESC, id DESC LIMIT 120`
       )
       .all(...inSpec.params);
 
-    const garmentMap = new Map(
-      db
-        .prepare(`SELECT * FROM garments WHERE ${inSpec.clause}`)
-        .all(...inSpec.params)
-        .map((g) => [g.id, parseGarmentRow(g)])
-    );
+    const garmentRows = await db
+      .prepare(`SELECT * FROM garments WHERE ${inSpec.clause}`)
+      .all(...inSpec.params);
+    const garmentMap = new Map(garmentRows.map((g) => [g.id, parseGarmentRow(g)]));
 
     const logs = rows.map((log) => {
       const ids = safeParseJsonArray(log.item_ids, []).map(Number).filter(Boolean);
@@ -4698,14 +5119,14 @@ export function createApiRouter(options = {}) {
     res.json({ logs });
   });
 
-  router.get('/calendar/ics', (req, res) => {
+  router.get('/calendar/ics', async (req, res) => {
     const requestedCloset = req.query.closet ?? req.query.owner;
     const authz = resolveAuthorizedClosets(req, requestedCloset, { mode: 'read' });
     if (!authz.ok) {
       return res.status(authz.status).json({ error: authz.error });
     }
     const inSpec = buildClosetInClause(authz.closets, 'closet_owner');
-    const rows = db
+    const rows = await db
       .prepare(`SELECT * FROM wear_logs WHERE ${inSpec.clause} ORDER BY worn_date DESC LIMIT 90`)
       .all(...inSpec.params);
 
@@ -4740,7 +5161,7 @@ export function createApiRouter(options = {}) {
     '/calendar',
     requireStrictUserAuth,
     requirePermission('calendar:write'),
-    (req, res) => {
+    async (req, res) => {
     const todayStr = new Date().toISOString().slice(0, 10);
     const {
       closet_owner = req.body?.owner || req.user.defaultCloset,
@@ -4765,7 +5186,7 @@ export function createApiRouter(options = {}) {
       : [];
 
     if (outfit_id) {
-      const outfitRow = db.prepare('SELECT * FROM outfits WHERE id = ?').get(Number(outfit_id));
+      const outfitRow = await db.prepare('SELECT * FROM outfits WHERE id = ?').get(Number(outfit_id));
       if (!outfitRow) {
         return res.status(404).json({ error: '선택한 코디를 찾을 수 없습니다.' });
       }
@@ -4782,12 +5203,10 @@ export function createApiRouter(options = {}) {
 
     // Filter item_ids to caller's authorized garments — NEVER fabricate 3 random garments when empty!
     if (resolvedIds.length > 0) {
-      const ownedGarments = new Set(
-        db
-          .prepare('SELECT id FROM garments WHERE closet_owner = ?')
-          .all(targetCloset)
-          .map((r) => Number(r.id))
-      );
+      const ownedRows = await db
+        .prepare('SELECT id FROM garments WHERE closet_owner = ?')
+        .all(targetCloset);
+      const ownedGarments = new Set(ownedRows.map((r) => Number(r.id)));
       resolvedIds = resolvedIds.filter((gid) => ownedGarments.has(gid));
     }
 
@@ -4799,41 +5218,51 @@ export function createApiRouter(options = {}) {
           ? 'planned'
           : 'worn';
 
-    const insertedId = db.transaction(() => {
-      const insert = db.prepare(`
-        INSERT INTO wear_logs (closet_owner, worn_date, outfit_id, item_ids, weather_summary, temp_c, note, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        targetCloset,
-        cleanDate,
-        validOutfitId,
-        JSON.stringify(resolvedIds),
-        String(weather_summary || '').slice(0, 120),
-        temp_c !== null && temp_c !== undefined && temp_c !== '' ? Number(temp_c) : null,
-        String(note || '').trim().slice(0, 500),
-        resolvedStatus
-      );
+    const insertedId = await db.transaction(async () => {
+      const insert = await db
+        .prepare(`
+          INSERT INTO wear_logs (closet_owner, worn_date, outfit_id, item_ids, weather_summary, temp_c, note, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          targetCloset,
+          cleanDate,
+          validOutfitId,
+          JSON.stringify(resolvedIds),
+          String(weather_summary || '').slice(0, 120),
+          temp_c !== null && temp_c !== undefined && temp_c !== '' ? Number(temp_c) : null,
+          String(note || '').trim().slice(0, 500),
+          resolvedStatus
+        );
 
       if (resolvedStatus === 'worn') {
         if (resolvedIds.length > 0) {
           const updateGarment = db.prepare(`
             UPDATE garments
             SET wear_count = wear_count + 1,
-                last_worn_date = MAX(COALESCE(last_worn_date, ''), ?)
+                last_worn_date = CASE
+                  WHEN last_worn_date IS NULL OR last_worn_date < ? THEN ?
+                  ELSE last_worn_date
+                END
             WHERE id = ? AND closet_owner = ?
           `);
           for (const gid of resolvedIds) {
-            updateGarment.run(cleanDate, gid, targetCloset);
+            await updateGarment.run(cleanDate, cleanDate, gid, targetCloset);
           }
         }
 
         if (validOutfitId) {
-          db.prepare(`
-            UPDATE outfits
-            SET wear_count = wear_count + 1,
-                last_worn_date = MAX(COALESCE(last_worn_date, ''), ?)
-            WHERE id = ? AND closet_owner = ?
-          `).run(cleanDate, validOutfitId, targetCloset);
+          await db
+            .prepare(`
+              UPDATE outfits
+              SET wear_count = wear_count + 1,
+                  last_worn_date = CASE
+                    WHEN last_worn_date IS NULL OR last_worn_date < ? THEN ?
+                    ELSE last_worn_date
+                  END
+              WHERE id = ? AND closet_owner = ?
+            `)
+            .run(cleanDate, cleanDate, validOutfitId, targetCloset);
         }
       }
 
@@ -4847,9 +5276,9 @@ export function createApiRouter(options = {}) {
     '/calendar/:id',
     requireStrictUserAuth,
     requirePermission('calendar:write'),
-    (req, res) => {
+    async (req, res) => {
     const id = Number(req.params.id);
-    const existing = db.prepare('SELECT * FROM wear_logs WHERE id = ?').get(id);
+    const existing = await db.prepare('SELECT * FROM wear_logs WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '일정 기록을 찾을 수 없습니다.' });
     if (!canWriteClosetOwner(req, existing.closet_owner)) {
       return res.status(403).json({ error: '다른 사용자의 일정 기록은 수정할 수 없습니다.' });
@@ -4857,7 +5286,7 @@ export function createApiRouter(options = {}) {
 
     const nextStatus = req.body?.status === 'planned' ? 'planned' : 'worn';
 
-    db.transaction(() => {
+    await db.transaction(async () => {
       if (existing.status === 'planned' && nextStatus === 'worn') {
         const ids = safeParseJsonArray(existing.item_ids, [])
           .map(Number)
@@ -4865,22 +5294,35 @@ export function createApiRouter(options = {}) {
         const updateGarment = db.prepare(`
           UPDATE garments
           SET wear_count = wear_count + 1,
-              last_worn_date = MAX(COALESCE(last_worn_date, ''), ?)
+              last_worn_date = CASE
+                WHEN last_worn_date IS NULL OR last_worn_date < ? THEN ?
+                ELSE last_worn_date
+              END
           WHERE id = ? AND closet_owner = ?
         `);
         for (const gid of ids) {
-          updateGarment.run(existing.worn_date, gid, existing.closet_owner);
+          await updateGarment.run(existing.worn_date, existing.worn_date, gid, existing.closet_owner);
         }
         if (existing.outfit_id) {
-          db.prepare(`
-            UPDATE outfits
-            SET wear_count = wear_count + 1,
-                last_worn_date = MAX(COALESCE(last_worn_date, ''), ?)
-            WHERE id = ? AND closet_owner = ?
-          `).run(existing.worn_date, Number(existing.outfit_id), existing.closet_owner);
+          await db
+            .prepare(`
+              UPDATE outfits
+              SET wear_count = wear_count + 1,
+                  last_worn_date = CASE
+                    WHEN last_worn_date IS NULL OR last_worn_date < ? THEN ?
+                    ELSE last_worn_date
+                  END
+              WHERE id = ? AND closet_owner = ?
+            `)
+            .run(
+              existing.worn_date,
+              existing.worn_date,
+              Number(existing.outfit_id),
+              existing.closet_owner
+            );
         }
       }
-      db.prepare('UPDATE wear_logs SET status = ? WHERE id = ?').run(nextStatus, id);
+      await db.prepare('UPDATE wear_logs SET status = ? WHERE id = ?').run(nextStatus, id);
     });
 
     res.json({ ok: true, status: nextStatus });
@@ -4890,25 +5332,25 @@ export function createApiRouter(options = {}) {
     '/calendar/:id',
     requireStrictUserAuth,
     requirePermission('calendar:write'),
-    (req, res) => {
+    async (req, res) => {
     const id = Number(req.params.id);
-    const existing = db.prepare('SELECT * FROM wear_logs WHERE id = ?').get(id);
+    const existing = await db.prepare('SELECT * FROM wear_logs WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '일정 기록을 찾을 수 없습니다.' });
     if (!canWriteClosetOwner(req, existing.closet_owner)) {
       return res.status(403).json({ error: '다른 사용자의 일정 기록은 삭제할 수 없습니다.' });
     }
-    db.prepare('DELETE FROM wear_logs WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM wear_logs WHERE id = ?').run(id);
     res.json({ ok: true });
   });
 
   // Trip Packing Lists CRUD (Requirement 7.a)
-  router.get('/packing-lists', (req, res) => {
+  router.get('/packing-lists', async (req, res) => {
     const authz = resolveAuthorizedClosets(req, req.query.closet, { mode: 'read' });
     if (!authz.ok) {
       return res.status(authz.status).json({ error: authz.error });
     }
     const inSpec = buildClosetInClause(authz.closets, 'closet_owner');
-    const rows = db
+    const rows = await db
       .prepare(`SELECT * FROM packing_lists WHERE ${inSpec.clause} ORDER BY id DESC LIMIT 30`)
       .all(...inSpec.params);
 
@@ -4923,7 +5365,7 @@ export function createApiRouter(options = {}) {
     '/packing-lists',
     requireStrictUserAuth,
     requirePermission('packing:write'),
-    (req, res) => {
+    async (req, res) => {
     const {
       closet_owner = req.user.defaultCloset,
       title = '',
@@ -4942,10 +5384,9 @@ export function createApiRouter(options = {}) {
 
     let finalItems = Array.isArray(items) ? items : null;
     if (!finalItems) {
-      const garments = db
-        .prepare('SELECT * FROM garments WHERE closet_owner = ?')
-        .all(targetCloset)
-        .map(parseGarmentRow);
+      const garments = (
+        await db.prepare('SELECT * FROM garments WHERE closet_owner = ?').all(targetCloset)
+      ).map(parseGarmentRow);
       finalItems = buildTripPackingList({
         destination,
         startDate: start_date,
@@ -4956,20 +5397,22 @@ export function createApiRouter(options = {}) {
     }
 
     const cleanTitle = String(title || `${destination} 패킹 리스트`).trim().slice(0, 120);
-    const r = db.prepare(`
-      INSERT INTO packing_lists (closet_owner, title, destination, start_date, end_date, climate, items_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      targetCloset,
-      cleanTitle,
-      String(destination).trim().slice(0, 80),
-      String(start_date).slice(0, 10),
-      String(end_date).slice(0, 10),
-      String(climate || 'mild').slice(0, 24),
-      JSON.stringify(finalItems)
-    );
+    const r = await db
+      .prepare(`
+        INSERT INTO packing_lists (closet_owner, title, destination, start_date, end_date, climate, items_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        targetCloset,
+        cleanTitle,
+        String(destination).trim().slice(0, 80),
+        String(start_date).slice(0, 10),
+        String(end_date).slice(0, 10),
+        String(climate || 'mild').slice(0, 24),
+        JSON.stringify(finalItems)
+      );
 
-    const created = db.prepare('SELECT * FROM packing_lists WHERE id = ?').get(r.lastInsertRowid);
+    const created = await db.prepare('SELECT * FROM packing_lists WHERE id = ?').get(r.lastInsertRowid);
     res.status(201).json({
       list: {
         ...created,
@@ -4982,9 +5425,9 @@ export function createApiRouter(options = {}) {
     '/packing-lists/:id',
     requireStrictUserAuth,
     requirePermission('packing:write'),
-    (req, res) => {
+    async (req, res) => {
     const id = Number(req.params.id);
-    const existing = db.prepare('SELECT * FROM packing_lists WHERE id = ?').get(id);
+    const existing = await db.prepare('SELECT * FROM packing_lists WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '패킹 리스트를 찾을 수 없습니다.' });
     if (!canWriteClosetOwner(req, existing.closet_owner)) {
       return res.status(403).json({ error: '다른 사용자의 패킹 리스트는 수정할 수 없습니다.' });
@@ -5000,10 +5443,9 @@ export function createApiRouter(options = {}) {
       );
     }
 
-    db.prepare('UPDATE packing_lists SET items_json = ? WHERE id = ?').run(
-      JSON.stringify(items),
-      id
-    );
+    await db
+      .prepare('UPDATE packing_lists SET items_json = ? WHERE id = ?')
+      .run(JSON.stringify(items), id);
     res.json({ ok: true, items });
   });
 
@@ -5011,19 +5453,19 @@ export function createApiRouter(options = {}) {
     '/packing-lists/:id',
     requireStrictUserAuth,
     requirePermission('packing:write'),
-    (req, res) => {
+    async (req, res) => {
     const id = Number(req.params.id);
-    const existing = db.prepare('SELECT * FROM packing_lists WHERE id = ?').get(id);
+    const existing = await db.prepare('SELECT * FROM packing_lists WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '패킹 리스트를 찾을 수 없습니다.' });
     if (!canWriteClosetOwner(req, existing.closet_owner)) {
       return res.status(403).json({ error: '다른 사용자의 패킹 리스트는 삭제할 수 없습니다.' });
     }
-    db.prepare('DELETE FROM packing_lists WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM packing_lists WHERE id = ?').run(id);
     res.json({ ok: true });
   });
 
   // Wardrobe Insights & CPW Dashboard (Requirement 7.c & 12.d)
-  router.get('/analytics', (req, res) => {
+  router.get('/analytics', async (req, res) => {
     const analyticsRate = checkRateLimit(
       `analytics:${req.user?.id || req.ip || 'local'}`,
       MAX_ANALYTICS_READS_PER_WINDOW
@@ -5040,10 +5482,9 @@ export function createApiRouter(options = {}) {
       return res.status(authz.status).json({ error: authz.error });
     }
     const inSpec = buildClosetInClause(authz.closets, 'closet_owner');
-    const garments = db
-      .prepare(`SELECT * FROM garments WHERE ${inSpec.clause}`)
-      .all(...inSpec.params)
-      .map(parseGarmentRow);
+    const garments = (
+      await db.prepare(`SELECT * FROM garments WHERE ${inSpec.clause}`).all(...inSpec.params)
+    ).map(parseGarmentRow);
 
     const totalItems = garments.length;
     const totalValue = garments.reduce((acc, g) => acc + (g.price || 0), 0);
@@ -5096,10 +5537,8 @@ export function createApiRouter(options = {}) {
       }))
       .sort((a, b) => b.count - a.count);
 
-    const passedChecks = db
-      .prepare(
-        `SELECT * FROM shopping_checks WHERE ${inSpec.clause} AND decision = 'passed'`
-      )
+    const passedChecks = await db
+      .prepare(`SELECT * FROM shopping_checks WHERE ${inSpec.clause} AND decision = 'passed'`)
       .all(...inSpec.params);
     const savedMoney = passedChecks.reduce((acc, c) => acc + (c.price || 0), 0);
 
@@ -5128,32 +5567,37 @@ export function createApiRouter(options = {}) {
   });
 
   // Admin routes
-  router.get('/admin/overview', requireStrictUserAuth, requireAdmin, (_req, res) => {
-    const users = db
+  router.get('/admin/overview', requireStrictUserAuth, requireAdmin, async (_req, res) => {
+    const users = await db
       .prepare(
         'SELECT id, username, email, display_name, role, default_closet, closet_name, verified_at, personal_color, body_shape, created_at FROM users ORDER BY id ASC'
       )
       .all();
+    const [husbandRow, wifeRow, outfitsRow, wearLogsRow, checksRow] = await Promise.all([
+      db.prepare("SELECT COUNT(*) as c FROM garments WHERE closet_owner = 'husband'").get(),
+      db.prepare("SELECT COUNT(*) as c FROM garments WHERE closet_owner = 'wife'").get(),
+      db.prepare('SELECT COUNT(*) as c FROM outfits').get(),
+      db.prepare('SELECT COUNT(*) as c FROM wear_logs').get(),
+      db.prepare('SELECT COUNT(*) as c FROM shopping_checks').get(),
+    ]);
     const counts = {
-      husbandGarments: db
-        .prepare("SELECT COUNT(*) as c FROM garments WHERE closet_owner = 'husband'")
-        .get().c,
-      wifeGarments: db
-        .prepare("SELECT COUNT(*) as c FROM garments WHERE closet_owner = 'wife'")
-        .get().c,
-      outfits: db.prepare('SELECT COUNT(*) as c FROM outfits').get().c,
-      wearLogs: db.prepare('SELECT COUNT(*) as c FROM wear_logs').get().c,
-      shoppingChecks: db.prepare('SELECT COUNT(*) as c FROM shopping_checks').get().c,
+      husbandGarments: Number(husbandRow?.c || 0),
+      wifeGarments: Number(wifeRow?.c || 0),
+      outfits: Number(outfitsRow?.c || 0),
+      wearLogs: Number(wearLogsRow?.c || 0),
+      shoppingChecks: Number(checksRow?.c || 0),
     };
 
     let dbSizeBytes = 0;
     try {
-      dbSizeBytes = fs.statSync(DB_PATH).size;
+      if (DB_DIALECT !== 'postgres') {
+        dbSizeBytes = fs.statSync(DB_PATH).size;
+      }
     } catch {
       dbSizeBytes = 0;
     }
 
-    // Omit hostname and server filesystem dbPath; expose sqliteDriver instead
+    // Omit hostname and server filesystem dbPath; expose sqliteDriver / dbDialect instead
     res.json({
       users,
       counts,
@@ -5161,13 +5605,15 @@ export function createApiRouter(options = {}) {
         nodeVersion: process.version,
         platform: `${process.platform} (${process.arch})`,
         sqliteDriver: SQLITE_DRIVER,
+        dbDialect: DB_DIALECT,
+        storageMode: storage.mode,
         dbSizeKb: Math.round(dbSizeBytes / 1024),
         uptimeSec: Math.round(process.uptime()),
       },
     });
   });
 
-  router.post('/admin/users', requireStrictUserAuth, requireAdmin, (req, res) => {
+  router.post('/admin/users', requireStrictUserAuth, requireAdmin, async (req, res) => {
     const {
       username,
       password,
@@ -5200,30 +5646,32 @@ export function createApiRouter(options = {}) {
     const nowIso = new Date().toISOString();
     const vHash = computeVerificationHash(cleanU, `${cleanU}@ainventory.kr`, nowIso);
     try {
-      const inserted = db.prepare(`
-        INSERT INTO users (
-          username, email, password_hash, display_name, role, default_closet,
-          closet_name, verified_at, verification_hash
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        cleanU,
-        `${cleanU}@ainventory.kr`,
-        hashPassword(pwStr),
-        String(display_name).trim().slice(0, 60),
-        assignedRole,
-        assignedCloset,
-        `${String(display_name).trim().slice(0, 60)}의 옷장`,
-        nowIso,
-        vHash
-      );
+      const inserted = await db
+        .prepare(`
+          INSERT INTO users (
+            username, email, password_hash, display_name, role, default_closet,
+            closet_name, verified_at, verification_hash
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          cleanU,
+          `${cleanU}@ainventory.kr`,
+          hashPassword(pwStr),
+          String(display_name).trim().slice(0, 60),
+          assignedRole,
+          assignedCloset,
+          `${String(display_name).trim().slice(0, 60)}의 옷장`,
+          nowIso,
+          vHash
+        );
       const insertedId = Number(inserted?.lastInsertRowid || 0);
       if (insertedId > 0) {
-        assignUserRole(db, insertedId, assignedRole);
+        await assignUserRole(db, insertedId, assignedRole);
       }
       res.status(201).json({ ok: true, id: insertedId, role: assignedRole });
     } catch (err) {
       const msg = String(err?.message || '');
-      if (/UNIQUE constraint failed/i.test(msg)) {
+      if (err?.code === '23505' || /UNIQUE constraint failed|duplicate key value/i.test(msg)) {
         res.status(409).json({ error: '이미 존재하는 아이디입니다.' });
         return;
       }
@@ -5237,9 +5685,9 @@ export function createApiRouter(options = {}) {
     '/admin/roles',
     requireStrictUserAuth,
     requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
-    (_req, res) => {
+    async (_req, res) => {
       res.setHeader('Cache-Control', 'private, no-store');
-      res.json(listRbacOverview(db));
+      res.json(await listRbacOverview(db));
     }
   );
 
@@ -5247,8 +5695,8 @@ export function createApiRouter(options = {}) {
     '/admin/roles/:roleCode/permissions',
     requireStrictUserAuth,
     requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
-    (req, res) => {
-      const result = updateRolePermissions(db, req.params.roleCode, req.body?.permissions);
+    async (req, res) => {
+      const result = await updateRolePermissions(db, req.params.roleCode, req.body?.permissions);
       if (!result.ok) {
         return res.status(result.status || 400).json({ error: result.error });
       }
@@ -5264,9 +5712,9 @@ export function createApiRouter(options = {}) {
     '/admin/users/:userId/role',
     requireStrictUserAuth,
     requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
-    (req, res) => {
+    async (req, res) => {
       const targetRole = req.body?.roleCode ?? req.body?.role;
-      const result = assignUserRole(db, req.params.userId, targetRole);
+      const result = await assignUserRole(db, req.params.userId, targetRole);
       if (!result.ok) {
         return res.status(result.status || 400).json({ error: result.error });
       }
@@ -5284,8 +5732,8 @@ export function createApiRouter(options = {}) {
     '/admin/users/:userId/permissions',
     requireStrictUserAuth,
     requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
-    (req, res) => {
-      const result = setUserPermissionOverrides(db, req.params.userId, req.body?.overrides);
+    async (req, res) => {
+      const result = await setUserPermissionOverrides(db, req.params.userId, req.body?.overrides);
       if (!result.ok) {
         return res.status(result.status || 400).json({ error: result.error });
       }
@@ -5305,8 +5753,8 @@ export function createApiRouter(options = {}) {
     '/admin/users/:userId/permissions',
     requireStrictUserAuth,
     requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
-    (req, res) => {
-      const result = resetUserPermissionOverrides(db, req.params.userId);
+    async (req, res) => {
+      const result = await resetUserPermissionOverrides(db, req.params.userId);
       if (!result.ok) {
         return res.status(result.status || 400).json({ error: result.error });
       }
@@ -5322,14 +5770,18 @@ export function createApiRouter(options = {}) {
     }
   );
 
-  router.post('/admin/reset-demo', requireStrictUserAuth, requireAdmin, (_req, res) => {
-    seedIfEmpty(true);
+  router.post('/admin/reset-demo', requireStrictUserAuth, requireAdmin, async (_req, res) => {
+    await seedIfEmpty(true);
     res.json({ ok: true });
   });
 
-  router.get('/admin/newsletter/subscribers', requireStrictUserAuth, requireAdmin, (_req, res) => {
+  router.get(
+    '/admin/newsletter/subscribers',
+    requireStrictUserAuth,
+    requireAdmin,
+    async (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store');
-    const rows = db
+    const rows = await db
       .prepare(
         `SELECT id, email, lang, source, status, consent_at, verified_at, created_at, updated_at, unsubscribed_at
          FROM newsletter_subscribers
@@ -5355,7 +5807,7 @@ export function createApiRouter(options = {}) {
     '/admin/newsletter/subscribers/:id',
     requireStrictUserAuth,
     requireAdmin,
-    (req, res) => {
+    async (req, res) => {
       res.setHeader('Cache-Control', 'private, no-store');
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id <= 0) {
@@ -5368,30 +5820,34 @@ export function createApiRouter(options = {}) {
           code: 'INVALID_STATUS',
         });
       }
-      const existing = db
+      const existing = await db
         .prepare('SELECT id, email, status FROM newsletter_subscribers WHERE id = ?')
         .get(id);
       if (!existing) {
         return res.status(404).json({ error: '구독자를 찾을 수 없습니다.', code: 'NOT_FOUND' });
       }
       if (nextStatus === 'unsubscribed') {
-        db.prepare(
-          `UPDATE newsletter_subscribers
-           SET status = 'unsubscribed', unsubscribed_at = datetime('now'),
-               verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
-           WHERE id = ?`
-        ).run(id);
+        await db
+          .prepare(
+            `UPDATE newsletter_subscribers
+             SET status = 'unsubscribed', unsubscribed_at = datetime('now'),
+                 verification_code_hash = NULL, verification_token_hash = NULL, updated_at = datetime('now')
+             WHERE id = ?`
+          )
+          .run(id);
       } else {
-        db.prepare(
-          `UPDATE newsletter_subscribers
-           SET status = 'subscribed', consent_at = datetime('now'),
-               verified_at = COALESCE(verified_at, datetime('now')),
-               unsubscribed_at = NULL, verification_code_hash = NULL, verification_token_hash = NULL,
-               updated_at = datetime('now')
-           WHERE id = ?`
-        ).run(id);
+        await db
+          .prepare(
+            `UPDATE newsletter_subscribers
+             SET status = 'subscribed', consent_at = datetime('now'),
+                 verified_at = COALESCE(verified_at, datetime('now')),
+                 unsubscribed_at = NULL, verification_code_hash = NULL, verification_token_hash = NULL,
+                 updated_at = datetime('now')
+             WHERE id = ?`
+          )
+          .run(id);
       }
-      const updated = db
+      const updated = await db
         .prepare(
           `SELECT id, email, lang, source, status, consent_at, verified_at, created_at, updated_at, unsubscribed_at
            FROM newsletter_subscribers WHERE id = ?`
@@ -5405,13 +5861,13 @@ export function createApiRouter(options = {}) {
     '/admin/newsletter/subscribers/:id',
     requireStrictUserAuth,
     requireAdmin,
-    (req, res) => {
+    async (req, res) => {
       res.setHeader('Cache-Control', 'private, no-store');
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id <= 0) {
         return res.status(400).json({ error: '유효하지 않은 구독자 ID입니다.', code: 'INVALID_ID' });
       }
-      const info = db.prepare('DELETE FROM newsletter_subscribers WHERE id = ?').run(id);
+      const info = await db.prepare('DELETE FROM newsletter_subscribers WHERE id = ?').run(id);
       if (Number(info?.changes || 0) === 0) {
         return res.status(404).json({ error: '구독자를 찾을 수 없습니다.', code: 'NOT_FOUND' });
       }

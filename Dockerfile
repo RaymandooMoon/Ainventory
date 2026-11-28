@@ -6,7 +6,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
-ENV PORT=3000
+ENV PORT=8080
+ENV TRUST_PROXY=1
 
 # Install production runtime dependencies only (skips Playwright, Vite, TypeScript, oxlint)
 COPY package.json package-lock.json ./
@@ -20,15 +21,15 @@ COPY src/shared ./src/shared
 COPY src/utils ./src/utils
 COPY public/seed ./public/seed
 
-# Prepare writable data/uploads/cache directory owned by unprivileged node user
+# Prepare writable data/uploads/cache directory owned by unprivileged node user (local fallback / tmp)
 RUN mkdir -p /app/data/uploads /app/data/outbox /app/data/vton-cache \
   && chown -R node:node /app/data
 
 USER node
 
-EXPOSE 3000
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/build-info').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 8080) + '/api/build-info').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["node", "server/start.js"]

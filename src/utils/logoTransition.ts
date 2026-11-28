@@ -97,7 +97,17 @@ export function computeLogoFlipTransform(
 }
 
 export function resolveInitialTabFromPath(pathname: string): AppNavTab {
-  const normalized = String(pathname || '/').trim() || '/';
+  const raw = String(pathname || '/').trim() || '/';
+  const normalized =
+    raw === '/app' || raw === '/app/'
+      ? '/'
+      : raw.startsWith('/app/')
+        ? raw.slice('/app'.length)
+        : raw === '/Ainventory' || raw === '/Ainventory/'
+          ? '/'
+          : raw.startsWith('/Ainventory/')
+            ? raw.slice('/Ainventory'.length)
+            : raw;
   if (normalized === '/' || normalized.startsWith('/outfits')) {
     return 'outfits';
   }
@@ -116,12 +126,19 @@ export function resolveInitialTabFromPath(pathname: string): AppNavTab {
   return 'outfits';
 }
 
-export function getPathForTab(tab: AppNavTab): string {
-  if (tab === 'closet') return '/closet';
-  if (tab === 'calendar') return '/calendar';
-  if (tab === 'stats') return '/stats';
-  if (tab === 'admin') return '/admin';
-  return '/';
+export function getPathForTab(tab: AppNavTab, basePath: string = ''): string {
+  const sub =
+    tab === 'closet'
+      ? '/closet'
+      : tab === 'calendar'
+        ? '/calendar'
+        : tab === 'stats'
+          ? '/stats'
+          : tab === 'admin'
+            ? '/admin'
+            : '/';
+  if (!basePath) return sub;
+  return sub === '/' ? basePath : `${basePath}${sub}`;
 }
 
 export const MAX_POST_LOGIN_REVEAL_AGE_MS = 12000;

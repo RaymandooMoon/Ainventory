@@ -82,6 +82,12 @@ function rootPublicAssetFallbackPlugin(): Plugin {
           req.url = `/ir/index.html${search ? `?${search}` : ''}`;
         } else if (pathname === '/minigame' || pathname === '/minigame/') {
           req.url = `/minigame/index.html${search ? `?${search}` : ''}`;
+        } else if (
+          pathname === '/app' ||
+          pathname === '/app/' ||
+          (pathname.startsWith('/app/') && !/\.[a-zA-Z0-9]{2,8}$/.test(pathname))
+        ) {
+          req.url = `/app/index.html${search ? `?${search}` : ''}`;
         }
       }
       next();
@@ -154,7 +160,7 @@ export default defineConfig(({ mode }) => {
       rootPublicAssetFallbackPlugin(),
     ],
     optimizeDeps: {
-      entries: ['site/index.html', 'site/app.html', 'site/minigame/index.html'],
+      entries: ['site/index.html', 'site/app.html', 'site/app/index.html', 'site/minigame/index.html'],
       include: [
         'react',
         'react-dom',
@@ -198,6 +204,7 @@ export default defineConfig(({ mode }) => {
         input: {
           main: path.resolve(rootDir, 'index.html'),
           app: path.resolve(rootDir, 'app.html'),
+          appFull: path.resolve(rootDir, 'app/index.html'),
           minigame: path.resolve(rootDir, 'minigame/index.html'),
         },
         output: {
