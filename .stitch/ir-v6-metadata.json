@@ -1,0 +1,164 @@
+{
+  "projectId": "17500831115017553962",
+  "url": "https://stitch.withgoogle.com/projects/17500831115017553962",
+  "revision": "v6.0-audit-remediation-ab",
+  "designSystem": "assets/3651991771177497085",
+  "colorMode": "LIGHT",
+  "lastSyncTime": "2026-11-28T09:11:59.889Z",
+  "directions": {
+    "A": "Swiss Institutional Minimal (12-column hairline paper keynote)",
+    "B": "Editorial Gallery Split (two-pane luxury monograph split)"
+  },
+  "screens": {
+    "ir-v6-s01-cover-a": {
+      "id": "2361e715eef348f7b9e6793c913fe6b9",
+      "sourceScreen": "projects/17500831115017553962/screens/2361e715eef348f7b9e6793c913fe6b9",
+      "slide": "S01 표지",
+      "direction": "A",
+      "title": "[Slide 01] Cover — Swiss Institutional Minimal (Atelier Paper v6.0)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2048,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s01-cover-a.html",
+        "png": ".stitch/designs/ir-v6-s01-cover-a.png"
+      }
+    },
+    "ir-v6-s01-cover-b": {
+      "id": "1e5fa8d8dd8243c3802b0d4dcc812c5a",
+      "sourceScreen": "projects/17500831115017553962/screens/1e5fa8d8dd8243c3802b0d4dcc812c5a",
+      "slide": "S01 표지",
+      "direction": "B",
+      "title": "[Slide 01] Cover — Editorial Gallery Split (Atelier Paper v6.0)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2048,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s01-cover-b.html",
+        "png": ".stitch/designs/ir-v6-s01-cover-b.png"
+      }
+    },
+    "ir-v6-s02-summary-a": {
+      "id": "8807844707174a9a90bbee70c222f99e",
+      "sourceScreen": "projects/17500831115017553962/screens/8807844707174a9a90bbee70c222f99e",
+      "slide": "S02 핵심 요약",
+      "direction": "A",
+      "title": "[Slide 02] 한눈에 보는 iNVTRY 사업계획서 (Swiss Institutional Minimal · Light)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2048,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s02-summary-a.html",
+        "png": ".stitch/designs/ir-v6-s02-summary-a.png"
+      }
+    },
+    "ir-v6-s02-summary-b": {
+      "id": "1fff468538014b429327b656ff1c1d16",
+      "sourceScreen": "projects/17500831115017553962/screens/1fff468538014b429327b656ff1c1d16",
+      "slide": "S02 핵심 요약",
+      "direction": "B",
+      "title": "[Slide 02] Executive Summary — Editorial Gallery Split (Atelier Paper)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2048,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s02-summary-b.html",
+        "png": ".stitch/designs/ir-v6-s02-summary-b.png"
+      }
+    },
+    "ir-v6-s08-market-a": {
+      "id": "ee6c6deedca445829365fa892feaa55f",
+      "sourceScreen": "projects/17500831115017553962/screens/ee6c6deedca445829365fa892feaa55f",
+      "slide": "S08 시장 규모",
+      "direction": "A",
+      "title": "[Slide 08] Market Size — 분리형 TAM & 수익풀 SAM·SOM (Swiss Minimal Edition)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2048,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s08-market-a.html",
+        "png": ".stitch/designs/ir-v6-s08-market-a.png"
+      }
+    },
+    "ir-v6-s08-market-b": {
+      "id": "ce6fe87b0dc742c29388ff434c2bf61c",
+      "sourceScreen": "projects/17500831115017553962/screens/ce6fe87b0dc742c29388ff434c2bf61c",
+      "slide": "S08 시장 규모",
+      "direction": "B",
+      "title": "[Slide 08] Market Size — 분리형 TAM & 바텀업 수익풀 SAM·SOM (Atelier Paper Keynote)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2048,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s08-market-b.html",
+        "png": ".stitch/designs/ir-v6-s08-market-b.png"
+      }
+    },
+    "ir-v6-s10-revenue-a": {
+      "id": "369fb16c58a24a7984df3f6b2c43257a",
+      "sourceScreen": "projects/17500831115017553962/screens/369fb16c58a24a7984df3f6b2c43257a",
+      "slide": "S10 수익 모델과 단위경제",
+      "direction": "A",
+      "title": "[Slide 10] Revenue Model & Unit Economics (Atelier Paper Keynote)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2494,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s10-revenue-a.html",
+        "png": ".stitch/designs/ir-v6-s10-revenue-a.png"
+      }
+    },
+    "ir-v6-s10-revenue-b": {
+      "id": "9dbe02e79c734340b384aad003325710",
+      "sourceScreen": "projects/17500831115017553962/screens/9dbe02e79c734340b384aad003325710",
+      "slide": "S10 수익 모델과 단위경제",
+      "direction": "B",
+      "title": "[Slide 10] Revenue Model & Unit Economics (Atelier Paper Keynote)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2048,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s10-revenue-b.html",
+        "png": ".stitch/designs/ir-v6-s10-revenue-b.png"
+      }
+    },
+    "ir-v6-s14-ask-a": {
+      "id": "20ac995182134ad2bbc63f4f833d6e80",
+      "sourceScreen": "projects/17500831115017553962/screens/20ac995182134ad2bbc63f4f833d6e80",
+      "slide": "S14 투자 제안",
+      "direction": "A",
+      "title": "[Slide 14] 투자 제안 & 마일스톤 (Swiss Institutional Minimal)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2048,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s14-ask-a.html",
+        "png": ".stitch/designs/ir-v6-s14-ask-a.png"
+      }
+    },
+    "ir-v6-s14-ask-b": {
+      "id": "53539aef6136414680fecaf4d3729bdb",
+      "sourceScreen": "projects/17500831115017553962/screens/53539aef6136414680fecaf4d3729bdb",
+      "slide": "S14 투자 제안",
+      "direction": "B",
+      "title": "[Slide 14] 투자 제안 & 마일스톤 (Atelier Paper Daylight · Direction B)",
+      "deviceType": "DESKTOP",
+      "designSystem": "assets/3651991771177497085",
+      "renderWidth": 2560,
+      "renderHeight": 2048,
+      "localFiles": {
+        "html": ".stitch/designs/ir-v6-s14-ask-b.html",
+        "png": ".stitch/designs/ir-v6-s14-ask-b.png"
+      }
+    }
+  }
+}

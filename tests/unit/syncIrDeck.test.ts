@@ -38,11 +38,11 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
 
     assert.equal(matchedCount, 2);
     assert.ok(html.includes(`data-ir-bind="tests.roundedPlus">${snapshot.tests.roundedPlus}</strong>`));
-    assert.ok(html.includes('class="badge badge--live" data-ir-bind="journey.buy.badge">LIVE</span>'));
+    assert.ok(html.includes('class="badge badge--live" data-ir-bind="journey.buy.badge">출시</span>'));
     assert.ok(html.includes('[TBD] 억원'), 'manual [TBD] investor placeholders must never be overwritten');
   });
 
-  test('IR deck strictly restricts "3D" terminology to Three.js contexts only', () => {
+  test('IR deck strictly restricts "3D" terminology and enforces v6.0 glossary guardrails', () => {
     const html = fs.readFileSync(DECK_HTML_PATH, 'utf8');
     const lines = html.split('\n');
     const violations: string[] = [];
@@ -59,6 +59,8 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
       `Non-Three.js "3D" wording detected in docs/ir-deck/index.html:\n${violations.join('\n')}`
     );
     assert.ok(!html.includes('누끼'), 'docs/ir-deck/index.html must not contain informal "누끼" slang');
+    assert.ok(!/\[TBD\]|\[기입 예정\]|\[이력 기입 예정\]/.test(html), 'v6.0 deck must not leave [TBD] placeholders');
+    assert.ok(!/Painpoint|LIVE\+|360°|\$417B|결핍률|₩0|리셀/.test(html), 'v6.0 deck must exclude forbidden v5.4 terms');
   });
 
   test('committed docs/ir-deck/index.html and hosted site/public/ir/index.html are in zero-drift sync with live codebase', async () => {
@@ -108,7 +110,7 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
     assert.ok(i18nSrc.includes('RICH_HTML_EN') && i18nSrc.includes('TEXT_EN') && i18nSrc.includes('formatBoundEn'));
   });
 
-  test('Slide 01 mounts live official site Hero via iframe and syncs lang/theme/mood', () => {
+  test('Slide 01 mounts live official site Hero via iframe and v6.0 deck enforces layout & metric guardrails', () => {
     const html = fs.readFileSync(DECK_HTML_PATH, 'utf8');
     const js = fs.readFileSync(path.join(REPO_ROOT, 'docs', 'ir-deck', 'ir-deck.js'), 'utf8');
     assert.ok(html.includes('id="ir-live-hero-frame"'), 'Slide 01 must include live official site iframe');
@@ -118,8 +120,8 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
     assert.ok(!/420\+|410\+|428개|data-ir-bind="tests\./.test(html), 'IR deck must not display internal 420+ test count metrics');
     const ninetySixMatches = html.match(/96%/g) ?? [];
     assert.equal(ninetySixMatches.length, 1, 'IR deck must mention 96% image-size reduction strictly once');
-    const slide08Match = html.match(/<section id="slide-08"[\s\S]*?<\/section>/);
-    assert.ok(slide08Match && slide08Match[0].includes('96%'), 'the sole 96% reduction mention must live inside Slide 08 core tech');
+    const slide07Match = html.match(/<section id="slide-07"[\s\S]*?<\/section>/);
+    assert.ok(slide07Match && slide07Match[0].includes('96%'), 'the sole 96% reduction mention must live inside Slide 07 tech & privacy');
     assert.ok(html.includes('id="ir-mobile-bottom-nav"') && html.includes('id="ir-mobile-sheet"'), 'IR deck must include single-DOM synced mobile nav and settings sheet');
     assert.ok(js.includes('MOBILE_BREAKPOINT') && js.includes('data-layout'), 'ir-deck.js must auto-sync desktop and mobile layouts from the same single DOM');
   });
